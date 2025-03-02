@@ -64,7 +64,7 @@ export default function MenuSideBar() {
                   {showProductSubmenu && (
                      <div className='ml-6 mt-2 border-l-2 border-gray-200 pl-2'>
                         <Link
-                           href='/products/all'
+                           href='/seller/products'
                            className='flex items-center p-2 text-gray-600 hover:bg-gray-100 rounded'
                         >
                            <span className='text-sm'>Tất cả sản phẩm</span>
