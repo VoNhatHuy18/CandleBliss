@@ -155,17 +155,16 @@ export default function Dashboard() {
    ];
 
    return (
-      <div className='min-h-screen bg-gray-50 flex'>
+      <div className=' flex h-screen bg-gray-50'>
          {/* Sidebar */}
-         <MenuSideBar />
-
-         {/* Main Content */}
-         <div className='flex-1 flex flex-col'>
-            {/* Header */}
-            <Header />
+               <MenuSideBar/>
+       
+             <div className="flex-1 flex flex-col overflow-hidden">
+               {/* Header */}
+               <Header />
 
             {/* Dashboard Content */}
-            <main className='flex-1 p-6'>
+            <main className='flex-1 p-6 overflow-auto'>
                <div className='mb-6'>
                   <h2 className='text-xl font-semibold text-gray-800'>Tổng Quan</h2>
                   <div className='flex justify-between items-center mt-2'>
@@ -195,7 +194,7 @@ export default function Dashboard() {
                   <div className='p-4 border-b'>
                      <h3 className='text-lg font-medium text-gray-700'>Đơn Hàng</h3>
                   </div>
-                  <div className='overflow-x-auto'>
+                  <div className='overflow-hidden border border-gray-200 rounded-lg'>
                      <table className='min-w-full divide-y divide-gray-200'>
                         <thead className='bg-gray-50'>
                            <tr>

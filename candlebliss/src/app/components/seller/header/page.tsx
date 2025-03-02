@@ -1,17 +1,17 @@
-'use client'
+'use client';
 
 import React from 'react';
-
 import { useState, useEffect } from 'react';
-
-
 import { Calendar, Search, Bell } from 'lucide-react';
 
 export default function Header() {
    const [showDropdown, setShowDropdown] = useState(false);
    const [currentDateTime, setCurrentDateTime] = useState(new Date());
+   const [isMounted, setIsMounted] = useState(false);
 
    useEffect(() => {
+      setIsMounted(true);
+
       const timer = setInterval(() => {
          setCurrentDateTime(new Date());
       }, 1000);
@@ -53,10 +53,11 @@ export default function Header() {
 
       return `${hours}:${minutes}:${seconds}`;
    };
+
    return (
       <>
          {/* Header */}
-         <header className='bg-gradient-to-r from-amber-100 to-amber-700 shadow'>
+         <header className='bg-gradient-to-r from-[#F1EEE9] to-[#442C08] shadow'>
             <div className='flex justify-between items-center p-4'>
                {/* Today section with calendar icon */}
                <div className='flex items-center bg-amber-50 rounded-lg px-4 py-2'>
@@ -95,10 +96,11 @@ export default function Header() {
                         className='flex items-center bg-white rounded-lg p-1 shadow-sm'
                         onClick={() => setShowDropdown(!showDropdown)}
                      >
-                        
                         <div className='ml-2 mr-1'>
                            <div className='text-sm font-medium text-gray-700'>Thảo Vy</div>
-                           <div className='text-xs text-gray-500'>{formatTime()}</div>
+                           <div className='text-xs text-gray-500'>
+                              {isMounted ? formatTime() : ''}
+                           </div>
                         </div>
                      </button>
 
