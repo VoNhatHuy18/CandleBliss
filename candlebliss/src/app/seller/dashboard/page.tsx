@@ -157,11 +157,11 @@ export default function Dashboard() {
    return (
       <div className=' flex h-screen bg-gray-50'>
          {/* Sidebar */}
-               <MenuSideBar/>
-       
-             <div className="flex-1 flex flex-col overflow-hidden">
-               {/* Header */}
-               <Header />
+         <MenuSideBar />
+
+         <div className='flex-1 flex flex-col overflow-hidden'>
+            {/* Header */}
+            <Header />
 
             {/* Dashboard Content */}
             <main className='flex-1 p-6 overflow-auto'>

@@ -5,6 +5,8 @@ import Image from 'next/image';
 import Link from 'next/link';
 import Header from '@/app/components/seller/header/page';
 import MenuSideBar from '@/app/components/seller/menusidebar/page';
+import { useRouter } from 'next/navigation';
+import { useProductForm } from '@/app/context/ProductFormContext';
 
 // Define the variant interface
 interface Variant {
@@ -17,26 +19,17 @@ interface Variant {
 }
 
 export default function Step2() {
+   const router = useRouter();
+   const { formData, updateFormData } = useProductForm();
+
+   // Initialize variants from context if available
+   const [variants, setVariants] = useState<Variant[]>(
+      formData.variants.length > 0 ? formData.variants : [],
+   );
+
    // State for new variant type and value fields
    const [newVariantType, setNewVariantType] = useState<string>('');
    const [newVariantValue, setNewVariantValue] = useState<string>('');
-
-   // Track variants with state
-   const [variants, setVariants] = useState<Variant[]>([
-      {
-         type: 'Nến thơm hương cam',
-         value: '',
-         isExpanded: false,
-         size: 'M',
-         images: ['/candle1.jpg', '/candle1.jpg', '/candle1.jpg'],
-         quantity: 0,
-      },
-      {
-         type: 'Nến thơm hương cam',
-         value: '',
-         isExpanded: false,
-      },
-   ]);
 
    // Function to add a new variant row
    const addVariant = () => {
@@ -46,7 +39,7 @@ export default function Step2() {
    // Function to remove a variant row
    const removeVariant = (indexToRemove: number) => {
       // Don't remove if it's the last variant
-      if (variants.length <= 1) return;
+      if (variants.length <= 0) return;
 
       // Filter out the variant at the specified index
       setVariants(variants.filter((_, index) => index !== indexToRemove));
@@ -126,6 +119,15 @@ export default function Step2() {
          );
          setVariants(updatedVariants);
       }
+   };
+
+   // Handle next button click
+   const handleNext = () => {
+      // Save current variants to context
+      updateFormData({ variants });
+
+      // Navigate to next step
+      router.push('/seller/products/createproduct/step3');
    };
 
    return (
@@ -283,8 +285,8 @@ export default function Step2() {
                         {/* Chi tiết phiên bản */}
                         <div className='mt-8 mb-4'>
                            <h3 className='font-medium text-lg mb-4'>Chi tiết phiên bản</h3>
-
                            {/* Accordion items for variants */}
+
                            {variants.map((variant, index) => (
                               <div key={index} className='border border-gray-200 rounded-lg mb-4'>
                                  {/* Accordion Header */}
@@ -502,7 +504,10 @@ export default function Step2() {
                   </div>
 
                   <div className='flex justify-end'>
-                     <button className='px-4 py-2 bg-amber-100 text-amber-800 rounded hover:bg-amber-200 font-medium'>
+                     <button
+                        onClick={handleNext}
+                        className='px-4 py-2 bg-amber-100 text-amber-800 rounded hover:bg-amber-200 font-medium'
+                     >
                         Tiếp theo
                      </button>
                   </div>

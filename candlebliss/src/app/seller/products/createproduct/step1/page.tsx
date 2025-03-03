@@ -4,16 +4,24 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
+import { useRouter } from 'next/navigation';
+import { useProductForm } from '@/app/context/ProductFormContext';
 
 import Header from '@/app/components/seller/header/page';
 import MenuSideBar from '@/app/components/seller/menusidebar/page';
 import { X } from 'lucide-react';
 
 export default function Step1() {
+   const router = useRouter();
+   const { formData, updateFormData } = useProductForm();
+
+   const [name, setName] = useState(formData.name || '');
+   const [description, setDescription] = useState(formData.description || '');
+   const [category, setCategory] = useState(formData.category || '');
    const [productDescription, setProductDescription] = useState('');
    const [characterCount, setCharacterCount] = useState(0);
    // Add state for images
-   const [productImages, setProductImages] = useState<Array<{ file: File; preview: string }>>([]);
+   const [productImages, setProductImages] = useState<string[]>(formData.images || []);
    const [imageError, setImageError] = useState<string | null>(null);
 
    const handleDescriptionChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -49,12 +57,9 @@ export default function Step1() {
                return null;
             }
 
-            return {
-               file,
-               preview: URL.createObjectURL(file),
-            };
+            return URL.createObjectURL(file);
          })
-         .filter((image) => image !== null) as Array<{ file: File; preview: string }>;
+         .filter((image) => image !== null) as string[];
 
       setProductImages((prev) => [...prev, ...newImages]);
 
@@ -66,9 +71,22 @@ export default function Step1() {
    const removeImage = (indexToRemove: number) => {
       setProductImages((prev) => {
          // Revoke the object URL to avoid memory leaks
-         URL.revokeObjectURL(prev[indexToRemove].preview);
+         URL.revokeObjectURL(prev[indexToRemove]);
          return prev.filter((_, index) => index !== indexToRemove);
       });
+   };
+
+   const handleNext = () => {
+      // Save Step 1 data to context
+      updateFormData({
+         name,
+         description,
+         category,
+         images: productImages, // Save images to context
+      });
+
+      // Navigate to Step 2
+      router.push('/seller/products/createproduct/step2');
    };
 
    return (
@@ -176,6 +194,7 @@ export default function Step1() {
                            </label>
                            <input
                               type='text'
+                              value={name}
                               placeholder='Tên sản phẩm + Thương hiệu + Model + Thông số kỹ thuật'
                               className='w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500'
                            />
@@ -191,10 +210,10 @@ export default function Step1() {
                                  <option value='' className='hidden'>
                                     Chọn danh mục
                                  </option>
-                                 <option value=''>Nến thơm</option>
-                                 <option value=''>Phụ kiện nến</option>
-                                 <option value=''>Tinh dầu</option>
-                                 <option value=''>Quà tặng</option>
+                                 <option value={category}>Nến thơm</option>
+                                 <option value={category}>Phụ kiện nến</option>
+                                 <option value={category}>Tinh dầu</option>
+                                 <option value={category}>Quà tặng</option>
                               </select>
                               <div className='absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none'>
                                  <svg
@@ -226,7 +245,7 @@ export default function Step1() {
                                        <div key={index} className='relative group'>
                                           <div className='aspect-w-1 aspect-h-1 w-full overflow-hidden rounded-md bg-gray-100'>
                                              <Image
-                                                src={image.preview}
+                                                src={image}
                                                 alt={`Product image ${index + 1}`}
                                                 width={100}
                                                 height={100}
@@ -251,7 +270,7 @@ export default function Step1() {
                                     <>
                                        <label className='cursor-pointer flex flex-col items-center'>
                                           <svg
-                                             xmlns='http://www.w3.org/2000/svg'  
+                                             xmlns='http://www.w3.org/2000/svg'
                                              className='h-8 w-8 text-gray-400'
                                              fill='none'
                                              viewBox='0 0 24 24'
@@ -315,7 +334,7 @@ export default function Step1() {
                               rows={6}
                               placeholder=''
                               className='w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500'
-                              value={productDescription}
+                              value={description}
                               onChange={handleDescriptionChange}
                            ></textarea>
                            <div className='text-right text-xs text-gray-500 mt-1'>
@@ -327,7 +346,10 @@ export default function Step1() {
 
                   {/* Form Navigation */}
                   <div className='flex justify-end'>
-                     <button className='px-4 py-2 bg-amber-600 text-white rounded-md hover:bg-amber-700 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2'>
+                     <button
+                        className='px-4 py-2 bg-amber-600 text-white rounded-md hover:bg-amber-700 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2'
+                        onClick={handleNext}
+                     >
                         Tiếp theo
                      </button>
                   </div>
