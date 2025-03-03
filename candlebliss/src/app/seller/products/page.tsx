@@ -3,6 +3,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import Header from '@/app/components/seller/header/page';
 import MenuSideBar from '@/app/components/seller/menusidebar/page';
 import { fetchProducts, ApiResponse, Product } from '@/app/services/api';
@@ -38,16 +39,21 @@ export default function ProductManagement() {
             selectedCategory,
             activeTab,
          );
-         setProducts(response.data);
+         console.log(response);
+         setProducts(response.data || []);
+
+         // Safely access meta.total with fallback values
+         const total = response?.meta?.total || 0;
          setPagination({
             ...pagination,
-            totalPages: Math.ceil(response.meta.total / pagination.limit),
-            totalItems: response.meta.total,
+            totalPages: Math.ceil(total / pagination.limit) || 1,
+            totalItems: total,
          });
          setError(null);
       } catch (err) {
          setError('Failed to load products. Please try again later.');
          console.error(err);
+         setProducts([]); // Reset products on error
       } finally {
          setLoading(false);
       }
@@ -182,7 +188,42 @@ export default function ProductManagement() {
                            >
                               Hình ảnh
                            </th>
-                           {/* Other headers remain unchanged */}
+                           <th
+                              scope='col'
+                              className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'
+                           >
+                              Tên sản phẩm
+                           </th>
+                           <th
+                              scope='col'
+                              className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'
+                           >
+                              Danh mục
+                           </th>
+                           <th
+                              scope='col'
+                              className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'
+                           >
+                              Khuyến mãi
+                           </th>
+                           <th
+                              scope='col'
+                              className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'
+                           >
+                              Số lượng
+                           </th>
+                           <th
+                              scope='col'
+                              className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'
+                           >
+                              Trạng thái
+                           </th>
+                           <th
+                              scope='col'
+                              className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'
+                           >
+                              Hành động
+                           </th>
                         </tr>
                      </thead>
                      <tbody className='bg-white divide-y divide-gray-200'>
@@ -197,7 +238,53 @@ export default function ProductManagement() {
                         ) : products.length > 0 ? (
                            products.map((product) => (
                               <tr key={product.id} className='hover:bg-gray-50'>
-                                 {/* Table cells remain unchanged */}
+                                 <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-500'>
+                                    {product.id}
+                                 </td>
+                                 <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-500'></td>
+                                 <td className='px-6 py-4 whitespace-nowrap'>
+                                    <div className='h-12 w-12 rounded bg-gray-200 flex items-center justify-center overflow-hidden'>
+                                       {product.images?.length > 0 ? (
+                                          <Image
+                                             src={product.images[0].path}
+                                             alt={product.name}
+                                             width={48} // Kích thước tối đa của ảnh
+                                             height={48}
+                                             className='object-cover rounded'
+                                          />
+                                       ) : (
+                                          <span className='text-gray-500'>🕯️</span> // Placeholder nếu không có ảnh
+                                       )}
+                                    </div>
+                                 </td>
+                                 <td className='px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900'>
+                                    {product.name}
+                                 </td>
+                                 <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-500'>
+                                    {product.category}
+                                 </td>
+                                 <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-500'>
+                                    {product.discount && product.discount > 0
+                                       ? `${product.discount}%`
+                                       : '0%'}
+                                 </td>
+                                 <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-500'>
+                                    {(product.stock ?? 0).toLocaleString()}
+                                 </td>
+                                 <td className='px-6 py-4 whitespace-nowrap'>
+                                    <span
+                                       className={`px-2 py-1 w-28 justify-center inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(
+                                          product.status as ProductStatus,
+                                       )}`}
+                                    >
+                                       {product.status}
+                                    </span>
+                                 </td>
+                                 <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-500 hover:underline'>
+                                    <Link href='/'>
+                                       <span>Xem chi tiết</span>
+                                    </Link>
+                                 </td>
                               </tr>
                            ))
                         ) : (
