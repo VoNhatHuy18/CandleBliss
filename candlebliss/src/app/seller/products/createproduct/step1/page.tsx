@@ -9,7 +9,7 @@ import Header from '@/app/components/seller/header/page';
 import MenuSideBar from '@/app/components/seller/menusidebar/page';
 import { X } from 'lucide-react';
 
-export default function CreateProduct() {
+export default function Step1() {
    const [productDescription, setProductDescription] = useState('');
    const [characterCount, setCharacterCount] = useState(0);
    // Add state for images
@@ -195,7 +195,6 @@ export default function CreateProduct() {
                                  <option value=''>Phụ kiện nến</option>
                                  <option value=''>Tinh dầu</option>
                                  <option value=''>Quà tặng</option>
-
                               </select>
                               <div className='absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none'>
                                  <svg
@@ -252,7 +251,7 @@ export default function CreateProduct() {
                                     <>
                                        <label className='cursor-pointer flex flex-col items-center'>
                                           <svg
-                                             xmlns='http://www.w3.org/2000/svg'
+                                             xmlns='http://www.w3.org/2000/svg'  
                                              className='h-8 w-8 text-gray-400'
                                              fill='none'
                                              viewBox='0 0 24 24'

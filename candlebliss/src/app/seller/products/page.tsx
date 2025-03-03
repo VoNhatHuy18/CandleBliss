@@ -239,7 +239,7 @@ export default function ProductManagement() {
                   >
                      Đặt lại
                   </button>
-                  <Link href='/seller/products/createproduct'>
+                  <Link href='/seller/products/createproduct/step1'>
                      <button className='px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 flex items-center'>
                         <span className='mr-1'>+</span> Tạo sản phẩm mới
                      </button>
