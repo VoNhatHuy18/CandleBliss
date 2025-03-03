@@ -17,6 +17,7 @@ interface ProductFormData {
    description: string;
    category: string;
    images: string[];
+   videoUrl?: string;
    // Step 2 data
    variants: Variant[];
    // Step 3 data

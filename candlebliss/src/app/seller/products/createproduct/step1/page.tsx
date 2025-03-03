@@ -18,16 +18,10 @@ export default function Step1() {
    const [name, setName] = useState(formData.name || '');
    const [description, setDescription] = useState(formData.description || '');
    const [category, setCategory] = useState(formData.category || '');
-   const [productDescription, setProductDescription] = useState('');
-   const [characterCount, setCharacterCount] = useState(0);
    // Add state for images
    const [productImages, setProductImages] = useState<string[]>(formData.images || []);
    const [imageError, setImageError] = useState<string | null>(null);
-
-   const handleDescriptionChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-      setProductDescription(e.target.value);
-      setCharacterCount(e.target.value.length);
-   };
+   const [videoUrl, setVideoUrl] = useState(formData.videoUrl || '');
 
    // Handle image upload
    const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -83,6 +77,7 @@ export default function Step1() {
          description,
          category,
          images: productImages, // Save images to context
+         videoUrl,
       });
 
       // Navigate to Step 2
@@ -195,6 +190,7 @@ export default function Step1() {
                            <input
                               type='text'
                               value={name}
+                              onChange={(e) => setName(e.target.value)}
                               placeholder='Tên sản phẩm + Thương hiệu + Model + Thông số kỹ thuật'
                               className='w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500'
                            />
@@ -206,14 +202,18 @@ export default function Step1() {
                               <span className='text-red-500'>*</span> Danh mục
                            </label>
                            <div className='relative'>
-                              <select className='w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 appearance-none'>
+                              <select
+                                 value={category}
+                                 onChange={(e) => setCategory(e.target.value)}
+                                 className='w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 appearance-none'
+                              >
                                  <option value='' className='hidden'>
                                     Chọn danh mục
                                  </option>
-                                 <option value={category}>Nến thơm</option>
-                                 <option value={category}>Phụ kiện nến</option>
-                                 <option value={category}>Tinh dầu</option>
-                                 <option value={category}>Quà tặng</option>
+                                 <option value='candles'>Nến thơm</option>
+                                 <option value='accessories'>Phụ kiện nến</option>
+                                 <option value='oils'>Tinh dầu</option>
+                                 <option value='gifts'>Quà tặng</option>
                               </select>
                               <div className='absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none'>
                                  <svg
@@ -320,6 +320,8 @@ export default function Step1() {
                            </label>
                            <input
                               type='text'
+                              value={videoUrl}
+                              onChange={(e) => setVideoUrl(e.target.value)}
                               placeholder='Link video về sản phẩm'
                               className='w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500'
                            />
@@ -332,13 +334,13 @@ export default function Step1() {
                            </label>
                            <textarea
                               rows={6}
-                              placeholder=''
+                              placeholder='Mô tả chi tiết về sản phẩm'
                               className='w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500'
                               value={description}
-                              onChange={handleDescriptionChange}
+                              onChange={(e) => setDescription(e.target.value)}
                            ></textarea>
                            <div className='text-right text-xs text-gray-500 mt-1'>
-                              {characterCount}/3000
+                              {description.length}/3000
                            </div>
                         </div>
                      </div>
