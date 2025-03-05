@@ -12,6 +12,150 @@ import { fetchProducts, ApiResponse, Product } from '@/app/services/api';
 type ProductStatus = 'Hoạt động' | 'Không hoạt động';
 type TabType = 'Tất cả' | 'Khuyến Mãi' | 'Hết hàng';
 
+// Tạo component ProductTable riêng để dễ quản lý
+const ProductTable = ({ products, loading }: { products: Product[]; loading: boolean }) => {
+   const columns = [
+      { header: 'STT', key: 'id' },
+      { header: 'Mã SP', key: 'sku' },
+      { header: 'Hình ảnh', key: 'image' },
+      { header: 'Tên sản phẩm', key: 'name' },
+      { header: 'Danh mục', key: 'category' },
+      { header: 'Giá gốc', key: 'price' },
+      { header: 'Giá KM', key: 'discount' },
+      { header: 'Số lượng', key: 'quantity' },
+      { header: 'Trạng thái', key: 'status' },
+      { header: 'Thao tác', key: 'actions' },
+   ];
+
+   const formatCurrency = (amount: number) => {
+      return new Intl.NumberFormat('vi-VN', {
+         style: 'currency',
+         currency: 'VND',
+      }).format(amount);
+   };
+
+   if (loading) {
+      return (
+         <div className='w-full h-40 flex items-center justify-center'>
+            <div className='animate-spin rounded-full h-8 w-8 border-b-2 border-amber-500'></div>
+         </div>
+      );
+   }
+
+   return (
+      <div className='overflow-x-auto rounded-lg shadow'>
+         <table className='min-w-full divide-y divide-gray-200'>
+            <thead className='bg-gray-50'>
+               <tr>
+                  {columns.map((column) => (
+                     <th
+                        key={column.key}
+                        className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'
+                     >
+                        {column.header}
+                     </th>
+                  ))}
+               </tr>
+            </thead>
+            <tbody className='bg-white divide-y divide-gray-200'>
+               {products.length > 0 ? (
+                  products.map((product, index) => (
+                     <tr key={product.id} className='hover:bg-gray-50 transition-colors'>
+                        <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-500'>
+                           {index + 1}
+                        </td>
+                        <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-500'>
+                           {product.id.toString().padStart(2, '0')}
+                        </td>
+                        <td className='px-6 py-4 whitespace-nowrap'>
+                           <div className='h-12 w-12 rounded-lg bg-gray-200 flex items-center justify-center overflow-hidden'>
+                             {product.details.length > 0 ? (
+                                 <Image
+                                    src={product.details[0].images[0].path}
+                                    alt={product.name}
+                                    width={48}
+                                    height={48}
+                                    className='object-cover rounded-lg hover:scale-110 transition-transform'
+                                 />
+                              ) : (
+                                 <span className='text-gray-500 text-xl'>🕯️</span>
+                              )}
+                           </div>
+                        </td>
+                        <td className='px-6 py-4 whitespace-nowrap'>
+                           <div className='text-sm font-medium text-gray-900 hover:text-amber-600'>
+                              {product.name}
+                           </div>
+                        </td>
+                        <td className='px-6 py-4 whitespace-nowrap'>
+                           <div className='text-sm text-gray-500'>
+                              {Array.isArray(product.details)
+                                 ? [...new Set(product.details.map((detail) => detail.type))].join(
+                                      ', ',
+                                   )
+                                 : 'Không có'}
+                           </div>
+                        </td>
+                        <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-500'>
+                           {formatCurrency(product.pricing?.base_price || 0)}
+                        </td>
+                        <td className='px-6 py-4 whitespace-nowrap'>
+                           {product.pricing?.discount_price > 0 ? (
+                              <div className='flex flex-col'>
+                                 <span className='text-sm text-red-600 font-medium'>
+                                    {formatCurrency(product.pricing.discount_price)}
+                                 </span>
+                                 <span className='text-xs text-gray-400 line-through'>
+                                    {formatCurrency(product.pricing.base_price)}
+                                 </span>
+                              </div>
+                           ) : (
+                              <span className='text-sm text-gray-500'>-</span>
+                           )}
+                        </td>
+                        <td className='px-6 py-4 whitespace-nowrap'>
+                           {product.details.reduce((total, detail) => total + (detail.quantities || 0), 0)}
+                        </td>
+                        <td className='px-6 py-4 whitespace-nowrap'>
+                           <span
+                              className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full
+                                 ${
+                                    product.status === 'Hoạt động'
+                                       ? 'bg-green-100 text-green-800'
+                                       : 'bg-red-100 text-red-800'
+                                 }`}
+                           >
+                              {product.status}
+                           </span>
+                        </td>
+                        <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-500'>
+                           <div className='flex space-x-3'>
+                              <Link
+                                 href={`/seller/products/${product.id}`}
+                                 className='text-amber-600 hover:text-amber-900'
+                              >
+                                 Chi tiết
+                              </Link>
+                           </div>
+                        </td>
+                     </tr>
+                  ))
+               ) : (
+                  <tr>
+                     <td
+                        colSpan={columns.length}
+                        className='px-6 py-4 text-center text-sm text-gray-500'
+                     >
+                        Không có sản phẩm nào phù hợp với điều kiện tìm kiếm
+                     </td>
+                  </tr>
+               )}
+            </tbody>
+         </table>
+      </div>
+   );
+};
+
 export default function ProductManagement() {
    const [products, setProducts] = useState<Product[]>([]);
    const [loading, setLoading] = useState<boolean>(true);
@@ -25,6 +169,7 @@ export default function ProductManagement() {
       totalItems: 0,
       limit: 10,
    });
+   const [productTypes, setProductTypes] = useState<string[]>([]);
 
    const tabs: TabType[] = ['Tất cả', 'Khuyến Mãi', 'Hết hàng'];
 
@@ -80,6 +225,24 @@ export default function ProductManagement() {
       // eslint-disable-next-line react-hooks/exhaustive-deps
    }, [searchTerm, selectedCategory]);
 
+   // Hàm lấy danh sách type từ API
+   const loadProductTypes = async () => {
+      try {
+         const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/product-types`);
+         if (response.ok) {
+            const data = await response.json();
+            setProductTypes(data);
+         }
+      } catch (error) {
+         console.error('Error loading product types:', error);
+      }
+   };
+
+   // Load product types khi component mount
+   useEffect(() => {
+      loadProductTypes();
+   }, []);
+
    function getStatusColor(status: ProductStatus): string {
       if (status === 'Hoạt động') return 'bg-green-100 text-green-800';
       return 'bg-red-100 text-red-800';
@@ -120,43 +283,69 @@ export default function ProductManagement() {
                {/* Search and filters */}
                <div className='flex items-center mb-6 space-x-4'>
                   <div className='flex-1'>
-                     <input
-                        type='text'
-                        placeholder='Tìm kiếm'
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className='w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent'
-                     />
+                     <div className='relative'>
+                        <input
+                           type='text'
+                           placeholder='Tìm kiếm theo tên sản phẩm'
+                           value={searchTerm}
+                           onChange={(e) => setSearchTerm(e.target.value)}
+                           className='w-full px-4 py-2 pl-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent'
+                        />
+                        <div className='absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none'>
+                           <svg className='h-5 w-5 text-gray-400' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+                              <path strokeLinecap='round' strokeLinejoin='round' strokeWidth='2' d='M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z' />
+                           </svg>
+                        </div>
+                     </div>
                   </div>
+
                   <div className='flex-1'>
                      <select
                         className='w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent'
                         value={selectedCategory}
                         onChange={(e) => setSelectedCategory(e.target.value)}
                      >
-                        <option className='hidden'>Danh mục</option>
-                        <option>Nến thơm</option>
-                        <option>Tinh dầu</option>
-                        <option>Phụ kiện nến</option>
+                        <option value='' className='hidden'>Tất cả loại sản phẩm</option>
+                        {/* Hiển thị các type từ API */}
+                        {Array.from(new Set(products.flatMap(p => 
+                           p.details.map(d => d.type)
+                        ))).map((type) => (
+                           <option key={type} value={type}>
+                              {type}
+                           </option>
+                        ))}
                      </select>
                   </div>
-                  <button
-                     className='px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200'
-                     onClick={() => {
-                        // Reset filters
-                        setSearchTerm('');
-                        setSelectedCategory('');
-                        setPagination({ ...pagination, currentPage: 1 });
-                     }}
-                  >
-                     Đặt lại
-                  </button>
-                  <Link href='/seller/products/createproduct/step1'>
-                     <button className='px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 flex items-center'>
-                        <span className='mr-1'>+</span> Tạo sản phẩm mới
+
+                  <div className='flex space-x-2'>
+                     <button
+                        className='px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 flex items-center'
+                        onClick={() => {
+                           setSearchTerm('');
+                           setSelectedCategory('');
+                           setPagination({ ...pagination, currentPage: 1 });
+                        }}
+                     >
+                        <svg className='h-5 w-5 mr-1' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+                           <path strokeLinecap='round' strokeLinejoin='round' strokeWidth='2' d='M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15' />
+                        </svg>
+                        Đặt lại
                      </button>
-                  </Link>
+
+                     <Link href='/seller/products/createproduct/step1'>
+                        <button className='px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 flex items-center'>
+                           <span className='mr-1'>+</span> Tạo sản phẩm mới
+                        </button>
+                     </Link>
+                  </div>
                </div>
+
+               {/* Hiển thị số lượng kết quả tìm kiếm */}
+               {searchTerm && (
+                  <div className='mb-4 text-sm text-gray-600'>
+                     Tìm thấy {products.length} sản phẩm cho từ khóa "{searchTerm}"
+                  </div>
+               )}
 
                {/* Error message */}
                {error && (
@@ -166,140 +355,7 @@ export default function ProductManagement() {
                )}
 
                {/* Products table */}
-               <div className='overflow-hidden border border-gray-200 rounded-lg'>
-                  <table className='min-w-full divide-y divide-gray-200'>
-                     <thead className='bg-gray-50'>
-                        <tr>
-                           <th
-                              scope='col'
-                              className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'
-                           >
-                              STT
-                           </th>
-                           <th
-                              scope='col'
-                              className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'
-                           >
-                              Mã sản phẩm
-                           </th>
-                           <th
-                              scope='col'
-                              className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'
-                           >
-                              Hình ảnh
-                           </th>
-                           <th
-                              scope='col'
-                              className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'
-                           >
-                              Tên sản phẩm
-                           </th>
-                           <th
-                              scope='col'
-                              className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'
-                           >
-                              Danh mục
-                           </th>
-                           <th
-                              scope='col'
-                              className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'
-                           >
-                              Khuyến mãi
-                           </th>
-                           <th
-                              scope='col'
-                              className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'
-                           >
-                              Số lượng
-                           </th>
-                           <th
-                              scope='col'
-                              className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'
-                           >
-                              Trạng thái
-                           </th>
-                           <th
-                              scope='col'
-                              className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'
-                           >
-                              Hành động
-                           </th>
-                        </tr>
-                     </thead>
-                     <tbody className='bg-white divide-y divide-gray-200'>
-                        {loading ? (
-                           <tr>
-                              <td colSpan={9} className='px-6 py-4 text-center'>
-                                 <div className='flex justify-center'>
-                                    <div className='animate-spin rounded-full h-8 w-8 border-b-2 border-amber-500'></div>
-                                 </div>
-                              </td>
-                           </tr>
-                        ) : products.length > 0 ? (
-                           products.map((product) => (
-                              <tr key={product.id} className='hover:bg-gray-50'>
-                                 <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-500'>
-                                    {product.id}
-                                 </td>
-                                 <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-500'></td>
-                                 <td className='px-6 py-4 whitespace-nowrap'>
-                                    <div className='h-12 w-12 rounded bg-gray-200 flex items-center justify-center overflow-hidden'>
-                                       {product.images?.length > 0 ? (
-                                          <Image
-                                             src={product.images[0].path}
-                                             alt={product.name}
-                                             width={48} // Kích thước tối đa của ảnh
-                                             height={48}
-                                             className='object-cover rounded'
-                                          />
-                                       ) : (
-                                          <span className='text-gray-500'>🕯️</span> // Placeholder nếu không có ảnh
-                                       )}
-                                    </div>
-                                 </td>
-                                 <td className='px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900'>
-                                    {product.name}
-                                 </td>
-                                 <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-500'>
-                                    {product.category}
-                                 </td>
-                                 <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-500'>
-                                    {product.discount && product.discount > 0
-                                       ? `${product.discount}%`
-                                       : '0%'}
-                                 </td>
-                                 <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-500'>
-                                    {(product.stock ?? 0).toLocaleString()}
-                                 </td>
-                                 <td className='px-6 py-4 whitespace-nowrap'>
-                                    <span
-                                       className={`px-2 py-1 w-28 justify-center inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(
-                                          product.status as ProductStatus,
-                                       )}`}
-                                    >
-                                       {product.status}
-                                    </span>
-                                 </td>
-                                 <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-500 hover:underline'>
-                                    <Link href='/'>
-                                       <span>Xem chi tiết</span>
-                                    </Link>
-                                 </td>
-                              </tr>
-                           ))
-                        ) : (
-                           <tr>
-                              <td
-                                 colSpan={9}
-                                 className='px-6 py-4 text-center text-sm text-gray-500'
-                              >
-                                 Không có sản phẩm nào phù hợp với điều kiện tìm kiếm
-                              </td>
-                           </tr>
-                        )}
-                     </tbody>
-                  </table>
-               </div>
+               <ProductTable products={products} loading={loading} />
 
                {/* Pagination */}
                {!loading && products.length > 0 && (

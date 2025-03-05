@@ -210,10 +210,10 @@ export default function Step1() {
                                  <option value='' className='hidden'>
                                     Chọn danh mục
                                  </option>
-                                 <option value='candles'>Nến thơm</option>
-                                 <option value='accessories'>Phụ kiện nến</option>
-                                 <option value='oils'>Tinh dầu</option>
-                                 <option value='gifts'>Quà tặng</option>
+                                 <option value='Nến thơm'>Nến thơm</option>
+                                 <option value='Phụ kiện nến'>Phụ kiện nến</option>
+                                 <option value='Tinh dầu'>Tinh dầu</option>
+                                 <option value='Quà tặng '>Quà tặng</option>
                               </select>
                               <div className='absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none'>
                                  <svg

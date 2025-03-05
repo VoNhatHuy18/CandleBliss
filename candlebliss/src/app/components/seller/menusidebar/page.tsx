@@ -24,6 +24,13 @@ export default function MenuSideBar() {
       setShowProductSubmenu(!showProductSubmenu);
    };
 
+   const handleLogout = () => {
+      localStorage.removeItem('token');
+      localStorage.removeItem('userData');
+      window.location.href = '/seller/signin';
+   };
+
+
    return (
       <div className='min-h-screen  flex'>
          {/* Sidebar */}
@@ -139,7 +146,7 @@ export default function MenuSideBar() {
             <div className='p-4 border-t'>
                <button className='flex items-center p-2 text-gray-600 w-full hover:bg-gray-100 rounded'>
                   <LogOut size={18} className='mr-2' />
-                  <span>Đăng Xuất</span>
+                  <span onClick={handleLogout}>Đăng Xuất</span>
                </button>
             </div>
          </div>

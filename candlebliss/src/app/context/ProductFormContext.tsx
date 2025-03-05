@@ -1,7 +1,7 @@
 'use client';
 import { createContext, useContext, useState, ReactNode } from 'react';
 
-// Define your interfaces
+// Định nghĩa interface cho variant
 interface Variant {
    type: string;
    value: string;
@@ -11,17 +11,15 @@ interface Variant {
    quantity?: number;
 }
 
+// Định nghĩa interface cho form data
 interface ProductFormData {
-   // Step 1 data
    name: string;
    description: string;
    category: string;
    images: string[];
    videoUrl?: string;
-   // Step 2 data
-   variants: Variant[];
-   // Step 3 data
    price?: number;
+   variants: Variant[];
 }
 
 // Initialize with default values
@@ -31,7 +29,7 @@ const defaultFormData: ProductFormData = {
    category: '',
    images: [],
    variants: [],
-};
+   };
 
 interface ProductFormContextType {
    formData: ProductFormData;

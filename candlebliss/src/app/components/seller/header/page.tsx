@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import Image from 'next/image';
 import { useState, useEffect } from 'react';
 import { Calendar, Search, Bell } from 'lucide-react';
 
@@ -84,7 +85,7 @@ export default function Header() {
 
                   {/* Notifications */}
                   <div className='mr-4 relative'>
-                     <Bell size={20} className='text-gray-600' />
+                     <Bell size={20} className='text-white' />
                      <span className='absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center'>
                         3
                      </span>
@@ -96,7 +97,15 @@ export default function Header() {
                         className='flex items-center bg-white rounded-lg p-1 shadow-sm'
                         onClick={() => setShowDropdown(!showDropdown)}
                      >
+                        <Image
+                              src="/images/logo.png"
+                              alt="Avatar"
+                              width={40}
+                              height={40}
+                              className="rounded-full"
+                           />
                         <div className='ml-2 mr-1'>
+                           
                            <div className='text-sm font-medium text-gray-700'>Thảo Vy</div>
                            <div className='text-xs text-gray-500'>
                               {isMounted ? formatTime() : ''}
@@ -118,12 +127,6 @@ export default function Header() {
                                  className='block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100'
                               >
                                  Settings
-                              </a>
-                              <a
-                                 href='#'
-                                 className='block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100'
-                              >
-                                 Logout
                               </a>
                            </div>
                         </div>
