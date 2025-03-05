@@ -32,6 +32,7 @@ interface ProductDetails {
    type: string;
    quantities: number;
    images: ProductImage[];
+   isActive: boolean;
 }
 
 // Định nghĩa interface cho Product Pricing
@@ -85,30 +86,51 @@ export async function fetchProducts(
       const productsData = Array.isArray(productResult) ? productResult : productResult.data || [];
 
       // Lấy thông tin chi tiết cho từng sản phẩm
+      const productsWithDetails = await Promise.all(
+         productsData.map(async (product: Product) => {
+            try {
+               // Gọi API chi tiết sản phẩm theo ID
+               const detailsResponse = await fetch(
+                  `${process.env.NEXT_PUBLIC_API_URL}/product-details/${product.id}`,
+                  { headers: { 'Content-Type': 'application/json' } },
+               );
 
-      const detailsResponse = await fetch(
-         `${process.env.NEXT_PUBLIC_API_URL}/product-details?${params.toString()}`,
-         { headers: { 'Content-Type': 'application/json' } },
-      );
-      const detailsData = await detailsResponse.json();
+               if (!detailsResponse.ok) {
+                  console.warn(`Failed to fetch details for product ${product.id}`);
+                  return product;
+               }
 
-      // Gọi API pricing
-      const pricingResponse = await fetch(
-         `${process.env.NEXT_PUBLIC_API_URL}/pricing?${params.toString()}`,
-         { headers: { 'Content-Type': 'application/json' } },
+               const detailsData = await detailsResponse.json();
+
+               // Kết hợp thông tin chi tiết vào sản phẩm
+               return {
+                  ...product,
+                  details: Array.isArray(detailsData) ? detailsData : [detailsData],
+               };
+            } catch (error) {
+               console.error(`Error fetching details for product ${product.id}:`, error);
+               return product;
+            }
+         }),
       );
-      const pricingData = await pricingResponse.json();
 
       // Xử lý lọc theo tab
-      let filteredProducts = productsData;
+      let filteredProducts = productsWithDetails;
       if (activeTab === 'Khuyến Mãi') {
-         filteredProducts = filteredProducts.filter(
-            (product: { pricing: { discount_price: number } }) => product.pricing && product.pricing.discount_price > 0,
+         filteredProducts = productsWithDetails.filter(
+            (product: Product) => product.pricing?.discount_price > 0
          );
       } else if (activeTab === 'Hết hàng') {
-         filteredProducts = filteredProducts.filter((product: { details: { quantities: number }[] }) =>
-            product.details.every((detail: { quantities: number }) => detail.quantities === 0),
+         filteredProducts = productsWithDetails.filter(
+            (product: Product) => {
+               if (!product.details || product.details.length === 0) {
+                  return false;
+               }
+               return product.details.some(detail => detail.quantities === 0);
+            }
          );
+      } else if (activeTab === 'Tất cả') {
+         filteredProducts = productsWithDetails;
       }
 
       return {

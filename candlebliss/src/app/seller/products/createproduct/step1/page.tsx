@@ -22,6 +22,12 @@ export default function Step1() {
    const [productImages, setProductImages] = useState<string[]>(formData.images || []);
    const [imageError, setImageError] = useState<string | null>(null);
    const [videoUrl, setVideoUrl] = useState(formData.videoUrl || '');
+   const [errors, setErrors] = useState({
+      name: '',
+      category: '',
+      description: '',
+      images: ''
+   });
 
    // Handle image upload
    const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -56,6 +62,7 @@ export default function Step1() {
          .filter((image) => image !== null) as string[];
 
       setProductImages((prev) => [...prev, ...newImages]);
+      setErrors(prev => ({...prev, images: ''}));
 
       // Reset the input value so the same file can be selected again
       e.target.value = '';
@@ -70,7 +77,44 @@ export default function Step1() {
       });
    };
 
+   const validateForm = () => {
+      let isValid = true;
+      const newErrors = {
+         name: '',
+         category: '',
+         description: '',
+         images: ''
+      };
+
+      if (!name.trim()) {
+         newErrors.name = 'Vui lòng nhập tên sản phẩm';
+         isValid = false;
+      }
+
+      if (!category) {
+         newErrors.category = 'Vui lòng chọn danh mục';
+         isValid = false;
+      }
+
+      if (!description.trim()) {
+         newErrors.description = 'Vui lòng nhập mô tả sản phẩm';
+         isValid = false;
+      }
+
+      if (productImages.length === 0) {
+         newErrors.images = 'Vui lòng tải lên ít nhất 1 hình ảnh';
+         isValid = false;
+      }
+
+      setErrors(newErrors);
+      return isValid;
+   };
+
    const handleNext = () => {
+      if (!validateForm()) {
+         return;
+      }
+
       // Save Step 1 data to context
       updateFormData({
          name,
@@ -190,10 +234,14 @@ export default function Step1() {
                            <input
                               type='text'
                               value={name}
-                              onChange={(e) => setName(e.target.value)}
+                              onChange={(e) => {
+                                 setName(e.target.value);
+                                 setErrors(prev => ({...prev, name: ''}));
+                              }}
                               placeholder='Tên sản phẩm + Thương hiệu + Model + Thông số kỹ thuật'
-                              className='w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500'
+                              className={`w-full px-3 py-2 border ${errors.name ? 'border-red-500' : 'border-gray-300'} rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500`}
                            />
+                           {errors.name && <p className='text-red-500 text-xs mt-1'>{errors.name}</p>}
                         </div>
 
                         {/* Category */}
@@ -204,8 +252,11 @@ export default function Step1() {
                            <div className='relative'>
                               <select
                                  value={category}
-                                 onChange={(e) => setCategory(e.target.value)}
-                                 className='w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 appearance-none'
+                                 onChange={(e) => {
+                                    setCategory(e.target.value);
+                                    setErrors(prev => ({...prev, category: ''}));
+                                 }}
+                                 className={`w-full px-3 py-2 border ${errors.category ? 'border-red-500' : 'border-gray-300'} rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 appearance-none`}
                               >
                                  <option value='' className='hidden'>
                                     Chọn danh mục
@@ -215,6 +266,7 @@ export default function Step1() {
                                  <option value='Tinh dầu'>Tinh dầu</option>
                                  <option value='Quà tặng '>Quà tặng</option>
                               </select>
+                              {errors.category && <p className='text-red-500 text-xs mt-1'>{errors.category}</p>}
                               <div className='absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none'>
                                  <svg
                                     className='h-5 w-5 text-gray-400'
@@ -237,7 +289,7 @@ export default function Step1() {
                            <label className='block text-sm font-medium text-gray-700 mb-1'>
                               <span className='text-red-500'>*</span> Hình ảnh chi tiết sản phẩm:
                            </label>
-                           <div className='border border-dashed border-gray-300 rounded-md p-6'>
+                           <div className={`border border-dashed ${errors.images ? 'border-red-500' : 'border-gray-300'} rounded-md p-6`}>
                               {/* Image Preview Grid */}
                               {productImages.length > 0 && (
                                  <div className='grid grid-cols-3 gap-4 mb-4'>
@@ -306,6 +358,7 @@ export default function Step1() {
                                  {imageError && (
                                     <p className='text-red-500 text-xs mt-2'>{imageError}</p>
                                  )}
+                                 {errors.images && <p className='text-red-500 text-xs mt-2'>{errors.images}</p>}
                               </div>
                            </div>
                            <p className='text-xs text-gray-500 mt-1'>
@@ -335,10 +388,14 @@ export default function Step1() {
                            <textarea
                               rows={6}
                               placeholder='Mô tả chi tiết về sản phẩm'
-                              className='w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500'
+                              className={`w-full px-3 py-2 border ${errors.description ? 'border-red-500' : 'border-gray-300'} rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500`}
                               value={description}
-                              onChange={(e) => setDescription(e.target.value)}
+                              onChange={(e) => {
+                                 setDescription(e.target.value);
+                                 setErrors(prev => ({...prev, description: ''}));
+                              }}
                            ></textarea>
+                           {errors.description && <p className='text-red-500 text-xs mt-1'>{errors.description}</p>}
                            <div className='text-right text-xs text-gray-500 mt-1'>
                               {description.length}/3000
                            </div>

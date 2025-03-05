@@ -35,30 +35,109 @@ export default function Step3() {
 
    const handleSubmit = async () => {
       try {
-         // Gửi dữ liệu lên API
-         const response = await fetch('/api/products', {
+         const token = localStorage.getItem('token');
+         if (!token) {
+            alert('Phiên đăng nhập đã hết hạn');
+            router.push('/seller/signin');
+            return;
+         }
+
+         // 1. Tạo product trước
+         const productData = {
+            name: name?.trim(),
+            description: description?.trim(),
+            video: '', // Thêm field video
+            images: images || {} // Format theo yêu cầu
+         };
+
+         console.log('Product Data:', productData);
+
+         const API_URL = process.env.NEXT_PUBLIC_API_URL ;
+         
+         const productResponse = await fetch(`${API_URL}/products`, {
             method: 'POST',
             headers: {
                'Content-Type': 'application/json',
+               'Authorization': `Bearer ${token}`
             },
-            body: JSON.stringify({
-               name,
-               description,
-               category,
-               images,
-               variants,
-               price: Number(price) || 0,
-            }),
+            body: JSON.stringify(productData)
          });
 
-         if (response.ok) {
-            // Chuyển hướng đến trang danh sách sản phẩm
-            router.push('/seller/products');
+         const product = await productResponse.json();
+         console.log('Product Response:', product);
+
+         // 2. Tạo product details cho mỗi variant
+         const detailsPromises = variants.map(variant => {
+            const detailData: {
+               size: string;
+               type: string;
+               quantities: string;
+               images: string[];
+               isActive: boolean;
+            } = {
+               size: variant.size || '',
+               type: variant.type || '',
+               quantities: variant.quantity?.toString() || '0',
+               images: variant.images || [],
+               isActive: isActive
+            };
+
+            return fetch(`${API_URL}/product-details`, {
+               method: 'POST', 
+               headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${token}`
+               },
+               body: JSON.stringify(detailData)
+            }).then(res => res.json());
+         });
+
+         const details = await Promise.all(detailsPromises);
+         console.log('Details Response:', details);
+
+         // 3. Tạo prices cho mỗi product detail
+         const pricesPromises = details.map(detail => {
+            const priceData = {
+               base_price: parseFloat(price),
+               discount_price: parseFloat(price),
+               start_date: new Date().toISOString(),
+               end_date: new Date().toISOString(),
+               product_detail: {
+                  id: detail.id,
+                  size: detail.size,
+                  type: detail.type,
+                  quantities: detail.quantities,
+                  images: detail.images,
+                  isActive: detail.isActive
+               }
+            };
+
+            return fetch(`${API_URL}/v1/prices`, {
+               method: 'POST',
+               headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${token}`
+               },
+               body: JSON.stringify(priceData)
+            }).then(res => res.json());
+         });
+
+         await Promise.all(pricesPromises);
+
+         alert('Tạo sản phẩm thành công!');
+         router.push('/seller/products');
+
+      } catch (error: unknown) {
+         if (error instanceof Error) {
+            console.error('Chi tiết lỗi:', {
+               message: error.message,
+               stack: error.stack
+            });
+            alert(`Lỗi: ${error.message}`);
          } else {
-            console.error('Failed to create product');
+            console.error('Chi tiết lỗi không xác định:', error);
+            alert('Đã xảy ra lỗi không xác định');
          }
-      } catch (error) {
-         console.error('Error:', error);
       }
    };
 

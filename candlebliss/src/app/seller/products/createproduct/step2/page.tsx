@@ -30,9 +30,73 @@ export default function Step2() {
    // State for new variant type and value fields
    const [newVariantType, setNewVariantType] = useState<string>('');
    const [newVariantValue, setNewVariantValue] = useState<string>('');
+   const [errors, setErrors] = useState<{ [key: string]: string }>({});
+   const [isFormValid, setIsFormValid] = useState(true);
+
+   // Validation rules
+   const VALIDATION_RULES = {
+      type: {
+         required: true,
+      },
+      value: {
+         required: true,
+      },
+      size: {
+         required: true,
+      },
+      quantity: {
+         required: true,
+         min: 0,
+      },
+      images: {
+         maxFiles: 5,
+         allowedTypes: ['image/jpeg', 'image/png', 'image/gif'],
+         maxSize: 5 * 1024 * 1024, // 5MB
+      },
+   };
+
+   // Validate a single field
+   const validateField = (field: string, value: any): string => {
+      const rules = VALIDATION_RULES[field as keyof typeof VALIDATION_RULES];
+
+      if (!rules) return '';
+
+      // Kiểm tra các trường hợp khác nhau của rules
+      if ('required' in rules && rules.required && !value) {
+         return `${field} không được để trống`;
+      }
+
+      if (typeof value === 'string') {
+         if ('minLength' in rules && typeof rules.minLength === 'number' && value.length < rules.minLength) {
+            return `${field} phải có ít nhất ${rules.minLength} ký tự`;
+         }
+         if ('maxLength' in rules && typeof rules.maxLength === 'number' && value.length > rules.maxLength) {
+            return `${field} không được vượt quá ${rules.maxLength} ký tự`;
+         }
+      }
+
+      if (typeof value === 'number') {
+         if ('min' in rules && typeof rules.min === 'number' && value < rules.min) {
+            return `${field} không được nhỏ hơn ${rules.min}`;
+         }
+         if ('max' in rules && typeof rules.max === 'number' && value > rules.max) {
+            return `${field} không được lớn hơn ${rules.max}`;
+         }
+      }
+
+      return '';
+   };
 
    // Function to add a new variant row
    const addVariant = () => {
+      if (!newVariantType || !newVariantValue) {
+         setErrors({
+            ...errors,
+            newVariant: 'Vui lòng nhập đầy đủ thông tin phân loại và giá trị',
+         });
+         return;
+      }
+      setErrors({});
       setVariants([...variants, { type: '', value: '', isExpanded: false, images: [] }]);
    };
 
@@ -47,6 +111,12 @@ export default function Step2() {
 
    // Function to handle input changes with type annotations
    const handleVariantChange = (index: number, field: string, value: string) => {
+      const error = validateField(field, value);
+      setErrors({
+         ...errors,
+         [`${field}_${index}`]: error,
+      });
+
       const updatedVariants = [...variants];
       if (field === 'type') {
          updatedVariants[index].type = value;
@@ -94,11 +164,44 @@ export default function Step2() {
       const files = e.target.files;
       if (!files) return;
 
+      // Validate file type and size
+      const invalidFiles = Array.from(files).filter((file) => {
+         if (!VALIDATION_RULES.images.allowedTypes.includes(file.type)) {
+            setErrors({
+               ...errors,
+               [`images_${index}`]: 'Chỉ chấp nhận file ảnh định dạng JPG, PNG hoặc GIF',
+            });
+            return true;
+         }
+         if (file.size > VALIDATION_RULES.images.maxSize) {
+            setErrors({
+               ...errors,
+               [`images_${index}`]: 'Kích thước file không được vượt quá 5MB',
+            });
+            return true;
+         }
+         return false;
+      });
+
+      if (invalidFiles.length > 0) return;
+
       const updatedVariants = [...variants];
 
       // Initialize images array if it doesn't exist
       if (!updatedVariants[index].images) {
          updatedVariants[index].images = [];
+      }
+
+      // Check maximum number of images
+      if (
+         (updatedVariants[index].images?.length || 0) + files.length >
+         VALIDATION_RULES.images.maxFiles
+      ) {
+         setErrors({
+            ...errors,
+            [`images_${index}`]: `Không thể tải lên quá ${VALIDATION_RULES.images.maxFiles} ảnh`,
+         });
+         return;
       }
 
       // Create URLs for the selected images
@@ -123,6 +226,26 @@ export default function Step2() {
 
    // Handle next button click
    const handleNext = () => {
+      // Validate all variants
+      let hasErrors = false;
+      const newErrors: { [key: string]: string } = {};
+
+      variants.forEach((variant, index) => {
+         ['type', 'value', 'size', 'quantity'].forEach((field) => {
+            const error = validateField(field, variant[field as keyof Variant]);
+            if (error) {
+               newErrors[`${field}_${index}`] = error;
+               hasErrors = true;
+            }
+         });
+      });
+
+      if (hasErrors) {
+         setErrors(newErrors);
+         setIsFormValid(false);
+         return;
+      }
+
       // Save current variants to context
       updateFormData({ variants });
 
@@ -242,8 +365,14 @@ export default function Step2() {
                                  value={newVariantType}
                                  onChange={(e) => setNewVariantType(e.target.value)}
                                  onKeyPress={handleKeyPress}
-                                 className='w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500'
+                                 className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500 
+                                 ${errors.type ? 'border-red-500' : 'border-gray-300'}`}
                               />
+                              {errors.type && (
+                                 <p className='text-red-500 text-xs mt-1'>
+                                    {errors.type}
+                                 </p>
+                              )}
                            </div>
 
                            <div className='w-2/5'>
@@ -254,8 +383,16 @@ export default function Step2() {
                                  value={newVariantValue}
                                  onChange={(e) => setNewVariantValue(e.target.value)}
                                  onKeyPress={handleKeyPress}
-                                 className='w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500'
+                                 className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500 
+                                 ${
+                                    errors.value ? 'border-red-500' : 'border-gray-300'
+                                 }`}
                               />
+                              {errors.value && (
+                                 <p className='text-red-500 text-xs mt-1'>
+                                    {errors.value}
+                                 </p>
+                              )}
                            </div>
                         </div>
 
@@ -358,9 +495,19 @@ export default function Step2() {
                                                          e.target.value,
                                                       )
                                                    }
-                                                   className='w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500'
+                                                   className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500 
+                                                   ${
+                                                      errors[`type_${index}`]
+                                                         ? 'border-red-500'
+                                                         : 'border-gray-300'
+                                                   }`}
                                                    placeholder='Nhập phân loại'
                                                 />
+                                                {errors[`type_${index}`] && (
+                                                   <p className='text-red-500 text-xs mt-1'>
+                                                      {errors[`type_${index}`]}
+                                                   </p>
+                                                )}
                                              </div>
                                              <div className='w-1/2 pl-2'>
                                                 <label className='block text-sm font-medium mb-1'>
@@ -376,9 +523,19 @@ export default function Step2() {
                                                          e.target.value,
                                                       )
                                                    }
-                                                   className='w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500'
+                                                   className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500 
+                                                   ${
+                                                      errors[`value_${index}`]
+                                                         ? 'border-red-500'
+                                                         : 'border-gray-300'
+                                                   }`}
                                                    placeholder='Nhập giá trị'
                                                 />
+                                                {errors[`value_${index}`] && (
+                                                   <p className='text-red-500 text-xs mt-1'>
+                                                      {errors[`value_${index}`]}
+                                                   </p>
+                                                )}
                                              </div>
                                           </div>
 
@@ -397,9 +554,19 @@ export default function Step2() {
                                                          e.target.value,
                                                       )
                                                    }
-                                                   className='w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500'
+                                                   className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500 
+                                                   ${
+                                                      errors[`size_${index}`]
+                                                         ? 'border-red-500'
+                                                         : 'border-gray-300'
+                                                   }`}
                                                    placeholder='Nhập size hoặc màu sắc'
                                                 />
+                                                {errors[`size_${index}`] && (
+                                                   <p className='text-red-500 text-xs mt-1'>
+                                                      {errors[`size_${index}`]}
+                                                   </p>
+                                                )}
                                              </div>
                                              <div className='w-1/2 pl-2'>
                                                 <label className='block text-sm font-medium mb-1'>
@@ -416,8 +583,18 @@ export default function Step2() {
                                                       )
                                                    }
                                                    placeholder='0'
-                                                   className='w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500'
+                                                   className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500 
+                                                   ${
+                                                      errors[`quantity_${index}`]
+                                                         ? 'border-red-500'
+                                                         : 'border-gray-300'
+                                                   }`}
                                                 />
+                                                {errors[`quantity_${index}`] && (
+                                                   <p className='text-red-500 text-xs mt-1'>
+                                                      {errors[`quantity_${index}`]}
+                                                   </p>
+                                                )}
                                              </div>
                                           </div>
 
