@@ -1,7 +1,7 @@
 'use client';
 
 // pages/login.js
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 import { Eye, EyeOff } from 'lucide-react';

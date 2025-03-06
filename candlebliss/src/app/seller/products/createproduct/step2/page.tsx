@@ -1,6 +1,5 @@
 'use client';
 import { useState, KeyboardEvent, ChangeEvent } from 'react';
-import Head from 'next/head';
 import Image from 'next/image';
 import Link from 'next/link';
 import Header from '@/app/components/seller/header/page';
@@ -31,7 +30,7 @@ export default function Step2() {
    const [newVariantType, setNewVariantType] = useState<string>('');
    const [newVariantValue, setNewVariantValue] = useState<string>('');
    const [errors, setErrors] = useState<{ [key: string]: string }>({});
-   const [isFormValid, setIsFormValid] = useState(true);
+   const [isFormValid, setIsFormValid] = useState<boolean>(true);
 
    // Validation rules
    const VALIDATION_RULES = {
@@ -56,7 +55,7 @@ export default function Step2() {
    };
 
    // Validate a single field
-   const validateField = (field: string, value: any): string => {
+   const validateField = (field: string, value: string | number): string => {
       const rules = VALIDATION_RULES[field as keyof typeof VALIDATION_RULES];
 
       if (!rules) return '';
@@ -67,10 +66,18 @@ export default function Step2() {
       }
 
       if (typeof value === 'string') {
-         if ('minLength' in rules && typeof rules.minLength === 'number' && value.length < rules.minLength) {
+         if (
+            'minLength' in rules &&
+            typeof rules.minLength === 'number' &&
+            value.length < rules.minLength
+         ) {
             return `${field} phải có ít nhất ${rules.minLength} ký tự`;
          }
-         if ('maxLength' in rules && typeof rules.maxLength === 'number' && value.length > rules.maxLength) {
+         if (
+            'maxLength' in rules &&
+            typeof rules.maxLength === 'number' &&
+            value.length > rules.maxLength
+         ) {
             return `${field} không được vượt quá ${rules.maxLength} ký tự`;
          }
       }
@@ -232,7 +239,8 @@ export default function Step2() {
 
       variants.forEach((variant, index) => {
          ['type', 'value', 'size', 'quantity'].forEach((field) => {
-            const error = validateField(field, variant[field as keyof Variant]);
+            const value = variant[field as keyof Variant];
+            const error = validateField(field, typeof value === 'string' || typeof value === 'number' ? value : '');
             if (error) {
                newErrors[`${field}_${index}`] = error;
                hasErrors = true;
@@ -369,9 +377,7 @@ export default function Step2() {
                                  ${errors.type ? 'border-red-500' : 'border-gray-300'}`}
                               />
                               {errors.type && (
-                                 <p className='text-red-500 text-xs mt-1'>
-                                    {errors.type}
-                                 </p>
+                                 <p className='text-red-500 text-xs mt-1'>{errors.type}</p>
                               )}
                            </div>
 
@@ -384,14 +390,10 @@ export default function Step2() {
                                  onChange={(e) => setNewVariantValue(e.target.value)}
                                  onKeyPress={handleKeyPress}
                                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500 
-                                 ${
-                                    errors.value ? 'border-red-500' : 'border-gray-300'
-                                 }`}
+                                 ${errors.value ? 'border-red-500' : 'border-gray-300'}`}
                               />
                               {errors.value && (
-                                 <p className='text-red-500 text-xs mt-1'>
-                                    {errors.value}
-                                 </p>
+                                 <p className='text-red-500 text-xs mt-1'>{errors.value}</p>
                               )}
                            </div>
                         </div>
@@ -683,6 +685,7 @@ export default function Step2() {
                   <div className='flex justify-end'>
                      <button
                         onClick={handleNext}
+                        disabled={!isFormValid}
                         className='px-4 py-2 bg-amber-100 text-amber-800 rounded hover:bg-amber-200 font-medium'
                      >
                         Tiếp theo

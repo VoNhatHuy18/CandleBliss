@@ -2,8 +2,9 @@
 import Header from '@/app/components/seller/header/page';
 import MenuSideBar from '@/app/components/seller/menusidebar/page';
 import { useProductForm } from '@/app/context/ProductFormContext';
-import { useState, ChangeEvent } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 
 // Định nghĩa interface cho variant
@@ -24,7 +25,7 @@ export default function Step3() {
    const [startDate, setStartDate] = useState('');
    const [endDate, setEndDate] = useState('');
    const [variants, setVariants] = useState<Variant[]>(formData.variants || []);
-   const [isActive, setIsActive] = useState(false);
+   const [isActive] = useState(false);
    const [videoUrl, setVideoUrl] = useState('');
    const [promotion, setPromotion] = useState('');
 
@@ -302,13 +303,15 @@ export default function Step3() {
                         <div className='flex flex-wrap gap-2 mt-2'>
                            {images && images.length > 0 ? (
                               images.map((image, index) => (
-                                 <div key={index} className='relative'>
-                                    <img
+                                  <div key={index} className='relative'>
+                                    <Image
                                        src={image}
                                        alt={`Product ${index + 1}`}
                                        className='w-24 h-24 object-cover rounded border'
+                                       width={96}
+                                       height={96}
                                     />
-                                 </div>
+                                  </div>
                               ))
                            ) : (
                               <div className='w-24 h-24 border rounded flex items-center justify-center bg-gray-100'>
@@ -435,16 +438,18 @@ export default function Step3() {
                                              Hình ảnh:
                                           </label>
                                           <div className='flex gap-2'>
-                                             {variant.images.map((img, imgIndex) => (
-                                                <img
+                                              {variant.images.map((img, imgIndex) => (
+                                                <Image
                                                    key={imgIndex}
                                                    src={img}
                                                    alt={`Variant ${index + 1} image ${
-                                                      imgIndex + 1
+                                                     imgIndex + 1
                                                    }`}
                                                    className='w-20 h-20 object-cover rounded border'
+                                                   width={80}
+                                                   height={80}
                                                 />
-                                             ))}
+                                              ))}
                                           </div>
                                        </div>
                                     )}
