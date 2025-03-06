@@ -5,7 +5,6 @@ import Link from 'next/link';
 import Image from 'next/image';
 import Header from '@/app/components/seller/header/page';
 import MenuSideBar from '@/app/components/seller/menusidebar/page';
-import { Product } from '@/app/services/api';
 
 interface ProductDetailClientProps {
    productId: string;
@@ -113,7 +112,7 @@ export default function ProductDetailClient({ productId }: ProductDetailClientPr
                         <div>
                            <label className='block text-sm font-medium mb-1'>Hình đại diện sản phẩm *</label>
                            <div className='flex gap-4'>
-                              {product.images.map((image, index) => (
+                              {/* {product.images.map((image, index) => (
                                  <div key={index} className='relative w-24 h-24 rounded-lg overflow-hidden'>
                                     <Image
                                        src={image.path}
@@ -122,7 +121,7 @@ export default function ProductDetailClient({ productId }: ProductDetailClientPr
                                        className='object-cover'
                                     />
                                  </div>
-                              ))}
+                              ))} */}
                            </div>
                         </div>
                         <div>
@@ -142,7 +141,7 @@ export default function ProductDetailClient({ productId }: ProductDetailClientPr
                      <div className='mb-6'>
                         <h3 className='text-lg font-medium mb-4'>Thông tin chi tiết sản phẩm</h3>
                         <div className='space-y-4'>
-                           {product.details.map((variant, index) => (
+                           {/* {product.details.map((variant, index) => (
                               <div key={index} className='border rounded-lg p-4'>
                                  <div className='grid grid-cols-2 gap-4 mb-4'>
                                     <div>
@@ -174,7 +173,7 @@ export default function ProductDetailClient({ productId }: ProductDetailClientPr
                                     />
                                  </div>
                               </div>
-                           ))}
+                           ))} */}
                         </div>
                      </div>
 

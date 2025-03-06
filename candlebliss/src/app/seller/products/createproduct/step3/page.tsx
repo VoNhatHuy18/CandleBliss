@@ -19,9 +19,14 @@ interface Variant {
 export default function Step3() {
    const router = useRouter();
    const { formData, updateFormData } = useProductForm();
-   const [price, setPrice] = useState('');
+   const [basePrice, setBasePrice] = useState('');
+   const [discountPrice, setDiscountPrice] = useState('');
+   const [startDate, setStartDate] = useState('');
+   const [endDate, setEndDate] = useState('');
    const [variants, setVariants] = useState<Variant[]>(formData.variants || []);
    const [isActive, setIsActive] = useState(false);
+   const [videoUrl, setVideoUrl] = useState('');
+   const [promotion, setPromotion] = useState('');
 
    // Debug the entire formData object
    console.log('Complete formData:', formData);
@@ -29,123 +34,143 @@ export default function Step3() {
    // Access data from Step 1
    const { name, description, category, images } = formData;
 
-   const handlePriceChange = (e: ChangeEvent<HTMLInputElement>) => {
-      setPrice(e.target.value);
-   };
-
-   const handleSubmit = async () => {
-      try {
-         const token = localStorage.getItem('token');
-         if (!token) {
-            alert('Phiên đăng nhập đã hết hạn');
-            router.push('/seller/signin');
-            return;
-         }
-
-         // 1. Tạo product trước
-         const productData = {
-            name: name?.trim(),
-            description: description?.trim(),
-            video: '', // Thêm field video
-            images: images || {} // Format theo yêu cầu
-         };
-
-         console.log('Product Data:', productData);
-
-         const API_URL = process.env.NEXT_PUBLIC_API_URL ;
-         
-         const productResponse = await fetch(`${API_URL}/products`, {
-            method: 'POST',
-            headers: {
-               'Content-Type': 'application/json',
-               'Authorization': `Bearer ${token}`
-            },
-            body: JSON.stringify(productData)
-         });
-
-         const product = await productResponse.json();
-         console.log('Product Response:', product);
-
-         // 2. Tạo product details cho mỗi variant
-         const detailsPromises = variants.map(variant => {
-            const detailData: {
-               size: string;
-               type: string;
-               quantities: string;
-               images: string[];
-               isActive: boolean;
-            } = {
-               size: variant.size || '',
-               type: variant.type || '',
-               quantities: variant.quantity?.toString() || '0',
-               images: variant.images || [],
-               isActive: isActive
-            };
-
-            return fetch(`${API_URL}/product-details`, {
-               method: 'POST', 
-               headers: {
-                  'Content-Type': 'application/json',
-                  'Authorization': `Bearer ${token}`
-               },
-               body: JSON.stringify(detailData)
-            }).then(res => res.json());
-         });
-
-         const details = await Promise.all(detailsPromises);
-         console.log('Details Response:', details);
-
-         // 3. Tạo prices cho mỗi product detail
-         const pricesPromises = details.map(detail => {
-            const priceData = {
-               base_price: parseFloat(price),
-               discount_price: parseFloat(price),
-               start_date: new Date().toISOString(),
-               end_date: new Date().toISOString(),
-               product_detail: {
-                  id: detail.id,
-                  size: detail.size,
-                  type: detail.type,
-                  quantities: detail.quantities,
-                  images: detail.images,
-                  isActive: detail.isActive
-               }
-            };
-
-            return fetch(`${API_URL}/v1/prices`, {
-               method: 'POST',
-               headers: {
-                  'Content-Type': 'application/json',
-                  'Authorization': `Bearer ${token}`
-               },
-               body: JSON.stringify(priceData)
-            }).then(res => res.json());
-         });
-
-         await Promise.all(pricesPromises);
-
-         alert('Tạo sản phẩm thành công!');
-         router.push('/seller/products');
-
-      } catch (error: unknown) {
-         if (error instanceof Error) {
-            console.error('Chi tiết lỗi:', {
-               message: error.message,
-               stack: error.stack
-            });
-            alert(`Lỗi: ${error.message}`);
-         } else {
-            console.error('Chi tiết lỗi không xác định:', error);
-            alert('Đã xảy ra lỗi không xác định');
-         }
-      }
-   };
-
    // Toggle expanded state of a variant
    const toggleVariantExpanded = (index: number) => {
       const updatedVariants = [...variants];
       updatedVariants[index].isExpanded = !updatedVariants[index].isExpanded;
       setVariants(updatedVariants);
+   };
+
+   // Add this function to your Step3 component
+   const handleSubmit = async () => {
+      try {
+         // 1. Get token
+         const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+         if (!token) {
+            alert('Bạn chưa đăng nhập hoặc phiên làm việc đã hết hạn');
+            router.push('/seller/signin');
+            return;
+         }
+
+         // 2. Create FormData object for product
+         const formData = new FormData();
+         formData.append('name', name);
+         formData.append('description', description);
+         formData.append('video', videoUrl);
+
+         // 3. Process each blob URL into actual file objects
+         for (const blobUrl of images) {
+            if (!blobUrl || !blobUrl.startsWith('blob:')) continue;
+            const response = await fetch(blobUrl);
+            const blob = await response.blob();
+            const file = new File([blob], `image-${Date.now()}.jpg`, { type: blob.type });
+            formData.append('images', file);
+         }
+
+         // 4. Create the product
+         console.log('Creating product...');
+         const productResponse = await fetch('http://localhost:3000/api/products', {
+            method: 'POST',
+            headers: {
+               Authorization: `Bearer ${token}`,
+            },
+            body: formData,
+         });
+
+         if (!productResponse.ok) {
+            const errorText = await productResponse.text();
+            throw new Error(`Product creation failed: ${errorText}`);
+         }
+
+         // 5. Get the created product ID
+         const createdProduct = await productResponse.json();
+         const productId = createdProduct.id;
+         console.log('Product created successfully with ID:', productId);
+
+         // 6. Create product details for each variant
+         for (const variant of variants) {
+            console.log('Creating product detail for variant:', variant);
+
+            // Create FormData for product detail
+            const detailFormData = new FormData();
+            detailFormData.append('product_id', String(productId));
+            detailFormData.append('size', variant.size || '');
+            detailFormData.append('type', variant.type || '');
+            detailFormData.append('quantities', String(variant.quantity || 0));
+            detailFormData.append('isActive', String(isActive));
+
+            // Add variant images if any
+            if (variant.images && variant.images.length > 0) {
+               for (const imgUrl of variant.images) {
+                  if (imgUrl.startsWith('blob:')) {
+                     const imgResponse = await fetch(imgUrl);
+                     const imgBlob = await imgResponse.blob();
+                     const imgFile = new File([imgBlob], `variant-${Date.now()}.jpg`, {
+                        type: imgBlob.type,
+                     });
+                     detailFormData.append('images', imgFile);
+                  }
+               }
+            }
+
+            const detailResponse = await fetch('http://localhost:3000/api/product-details', {
+               method: 'POST',
+               headers: {
+                  Authorization: `Bearer ${token}`,
+               },
+               body: detailFormData,
+            });
+
+            if (!detailResponse.ok) {
+               const errorText = await detailResponse.text();
+               throw new Error(`Product detail creation failed: ${errorText}`);
+            }
+
+            const createdDetail = await detailResponse.json();
+            console.log('Product detail created:', createdDetail);
+
+            // 7. Create pricing for each product detail
+            console.log('Creating pricing for product detail:', createdDetail.id);
+
+            // Format dates properly for the API
+            const formattedStartDate = startDate || new Date().toISOString().split('T')[0];
+            const formattedEndDate =
+               endDate ||
+               new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+            const priceData = {
+               base_price: Number(basePrice) || 0,
+               discount_price: Number(discountPrice) || 0,
+               start_date: formattedStartDate,
+               end_date: formattedEndDate,
+               productId: createdDetail.id,
+               isActive: true,
+            };
+
+            const priceResponse = await fetch('http://localhost:3000/api/v1/prices', {
+               method: 'POST',
+               headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: `Bearer ${token}`,
+               },
+               body: JSON.stringify(priceData),
+            });
+
+            if (!priceResponse.ok) {
+               const errorText = await priceResponse.text();
+               throw new Error(`Price creation failed: ${errorText}`);
+            }
+
+            console.log('Price created successfully');
+         }
+
+         // 8. Success! Navigate back to products page
+         alert('Sản phẩm đã được tạo thành công!');
+         router.push('/seller/products');
+      } catch (error) {
+         console.error('Error creating product:', error);
+         alert(`Lỗi khi tạo sản phẩm: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
    };
 
    return (
@@ -245,7 +270,7 @@ export default function Step3() {
                   <div className='flex flex-col'>
                      {/* Product name field */}
                      <div className='mb-4 flex justify-items-center'>
-                        <label className=' text-sm font-medium mb-1 w-60'>
+                        <label className='text-sm font-medium mb-1 w-60'>
                            Tên sản phẩm:<span className='text-red-500'>*</span>
                         </label>
                         <input
@@ -302,6 +327,8 @@ export default function Step3() {
                            type='text'
                            className='w-full p-2 border rounded-md'
                            placeholder='Ví dụ: URL sản phẩm'
+                           value={videoUrl}
+                           onChange={(e) => setVideoUrl(e.target.value)}
                         />
                      </div>
 
@@ -436,16 +463,73 @@ export default function Step3() {
                      <div className='mb-6'>
                         <h3 className='text-md font-semibold mb-2'>Cài đặt giá cho sản phẩm</h3>
 
-                        <div className=''>
-                           <label className='block text-sm '>Thêm giá cho sản phẩm</label>
+                        {/* Giá gốc */}
+                        <div className='mb-4'>
+                           <label className='block text-sm mb-1'>
+                              Giá gốc<span className='text-red-500'>*</span>
+                           </label>
+                           <input
+                              type='number'
+                              className='w-full p-2 border rounded-md'
+                              value={basePrice}
+                              onChange={(e) => setBasePrice(e.target.value)}
+                              placeholder='Nhập giá gốc'
+                              required
+                           />
+                        </div>
+
+                        {/* Giá khuyến mãi */}
+                        <div className='mb-4'>
+                           <label className='block text-sm mb-1'>Giá khuyến mãi</label>
+                           <input
+                              type='number'
+                              className='w-full p-2 border rounded-md'
+                              value={discountPrice}
+                              onChange={(e) => setDiscountPrice(e.target.value)}
+                              placeholder='Nhập giá khuyến mãi (nếu có)'
+                           />
+                        </div>
+
+                        {/* Ngày áp dụng */}
+                        <div className='mb-4'>
+                           <label className='block text-sm mb-1'>
+                              Ngày áp dụng<span className='text-red-500'>*</span>
+                           </label>
+                           <input
+                              type='date'
+                              className='w-full p-2 border rounded-md'
+                              value={startDate}
+                              onChange={(e) => setStartDate(e.target.value)}
+                              required
+                           />
+                        </div>
+
+                        {/* Ngày kết thúc */}
+                        <div className='mb-4'>
+                           <label className='block text-sm mb-1'>
+                              Ngày kết thúc<span className='text-red-500'>*</span>
+                           </label>
+                           <input
+                              type='date'
+                              className='w-full p-2 border rounded-md'
+                              value={endDate}
+                              onChange={(e) => setEndDate(e.target.value)}
+                              required
+                           />
                         </div>
                      </div>
 
                      {/* SKU section */}
                      <div className='mb-4'>
                         <label className='block text-sm mb-1'>Khuyến mãi</label>
-                        <select className='w-full p-2 border rounded-md'>
+                        <select
+                           className='w-full p-2 border rounded-md'
+                           value={promotion}
+                           onChange={(e) => setPromotion(e.target.value)}
+                        >
                            <option value=''>Lựa chọn</option>
+                           <option value='discount'>Giảm giá</option>
+                           <option value='combo'>Combo</option>
                         </select>
                      </div>
 
@@ -455,25 +539,9 @@ export default function Step3() {
                         <input
                            type='text'
                            className='w-full p-2 border rounded-md'
-                           value={price}
-                           onChange={handlePriceChange}
+                           value={basePrice}
+                           readOnly
                         />
-                     </div>
-
-                     {/* Tax fields */}
-                     <div className='mb-4'>
-                        <label className='block text-sm mb-1'>Ngày áp dụng</label>
-                        <input type='date' className='w-full p-2 border rounded-md' />
-                     </div>
-
-                     <div className='mb-4'>
-                        <label className='block text-sm mb-1'>Ngày kết thúc</label>
-                        <input type='date' className='w-full p-2 border rounded-md' />
-                     </div>
-
-                     <div className='mb-4'>
-                        <label className='block text-sm mb-1'>Giá thành tiên</label>
-                        <input type='text' className='w-full p-2 border rounded-md' />
                      </div>
                   </div>
 
