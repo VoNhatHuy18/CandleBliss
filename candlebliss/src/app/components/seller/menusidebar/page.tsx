@@ -83,7 +83,7 @@ export default function MenuSideBar() {
                            <span className='text-sm'>Tạo set quà</span>
                         </Link>
                         <Link
-                           href='/products/promotions'
+                           href='/seller/vouchers'
                            className='flex items-center p-2 text-gray-600 hover:bg-gray-100 rounded'
                         >
                            <span className='text-sm'>Khuyến Mãi</span>
