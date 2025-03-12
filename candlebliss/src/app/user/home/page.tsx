@@ -7,6 +7,7 @@ import Image from 'next/image';
 import Carousel from '@/app/components/user/carousel/page';
 import AccessoriesCarousel from '@/app/components/user/accessoriescarousel/page';
 import TrendingCarousel from '@/app/components/user/trendingcarousel/page';
+import RotatingImages from '@/app/components/user/rotatingimages/page';
 import NavBar from '@/app/components/user/nav/page';
 import Footer from '@/app/components/user/footer/page';
 
@@ -71,34 +72,19 @@ export default function HomePage() {
             {/* About Section */}
             <div className='bg-[#A5978E] py-8 lg:py-16'>
                <div className='flex flex-col lg:flex-row justify-center items-center gap-7 px-4 lg:px-0 lg:w-3/4 mx-auto'>
-                  <div className='w-full lg:w-1/2'>
-                     <h1 className='text-xl lg:text-2xl font-mont font-semibold text-white pb-2'>
-                        Về Chúng tôi
-                     </h1>
-                     <p className='text-white font-mont text-base lg:text-lg'>
-                        Mỗi ngọn nến trong bộ sưu tập của chúng tôi là một kiệt tác của nghệ thuật
-                        và tính xác thực. Chúng tôi tự hào tạo ra những ngọn nến không chỉ đẹp về
-                        mặt thẩm mỹ mà còn có ý thức bảo vệ môi trường. Cam kết sử dụng vật liệu tự
-                        nhiên, bền vững của chúng tôi đảm bảo rằng mỗi ngọn nến bạn thắp đều là sự
-                        đón nhận nhẹ nhàng của bản chất thiên nhiên.
-                     </p>
-                  </div>
-                  <div className='grid grid-cols-1 md:grid-cols-3 gap-6 w-full lg:w-1/2'>
-                     {[1, 2, 3].map((i) => (
-                        <div key={i} className='flex flex-col items-center'>
-                           <Image
-                              src={'/images/trending.png'}
-                              alt=''
-                              height={290}
-                              width={290}
-                              className='rounded-t-full w-full h-auto max-w-[290px]'
-                           />
-                           <p className='text-white font-mont text-lg text-center mt-2'>
-                              Hương thơm dịu nhẹ
-                           </p>
-                        </div>
-                     ))}
-                  </div>
+                 <div className='w-full lg:w-1/2'>
+                   <h1 className='text-xl lg:text-2xl font-mont font-semibold text-white pb-2'>
+                     Về Chúng tôi
+                   </h1>
+                   <p className='text-white font-mont text-base lg:text-lg'>
+                     Mỗi ngọn nến trong bộ sưu tập của chúng tôi là một kiệt tác của nghệ thuật
+                     và tính xác thực. Chúng tôi tự hào tạo ra những ngọn nến không chỉ đẹp về
+                     mặt thẩm mỹ mà còn có ý thức bảo vệ môi trường. Cam kết sử dụng vật liệu tự
+                     nhiên, bền vững của chúng tôi đảm bảo rằng mỗi ngọn nến bạn thắp đều là sự
+                     đón nhận nhẹ nhàng của bản chất thiên nhiên.
+                   </p>
+                 </div>
+                  <RotatingImages />
                </div>
             </div>
 
