@@ -53,11 +53,42 @@ export default function Step3() {
             return;
          }
 
+         // New step: Check if category exists and create if needed
+         let categoryId = category;
+         if (isNaN(Number(category))) {
+            console.log('Category is not a numeric ID, creating new category:', category);
+
+            // Create a new category
+            const categoryResponse = await fetch('http://localhost:3000/api/categories', {
+               method: 'POST',
+               headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: `Bearer ${token}`,
+               },
+               body: JSON.stringify({
+                  name: category,
+                  description: `Category for ${name}`,
+               }),
+            });
+
+            if (!categoryResponse.ok) {
+               const errorText = await categoryResponse.text();
+               throw new Error(`Category creation failed: ${errorText}`);
+            }
+
+            const createdCategory = await categoryResponse.json();
+            categoryId = createdCategory.id;
+            console.log('Created new category with ID:', categoryId);
+         }
+
          // 2. Create FormData object for product
          const formData = new FormData();
          formData.append('name', name);
          formData.append('description', description);
          formData.append('video', videoUrl);
+
+         // Use the retrieved or created category ID
+         formData.append('category_id', categoryId.toString());
 
          // 3. Process each blob URL into actual file objects
          for (const blobUrl of images) {
@@ -282,8 +313,8 @@ export default function Step3() {
                         />
                      </div>
 
-                     {/* Product description */}
-                     <div className='mb-4 flex'>
+                      {/* Product description */}
+                      <div className='mb-4 flex'>
                         <label className='block text-sm font-medium mb-1 w-60'>
                            Danh mục:<span className='text-red-500'>*</span>
                         </label>
@@ -293,7 +324,7 @@ export default function Step3() {
                            value={category || ''}
                            readOnly
                         />
-                     </div>
+                      </div>
 
                      {/* Product images */}
                      <div className='mb-4 flex'>
@@ -303,7 +334,7 @@ export default function Step3() {
                         <div className='flex flex-wrap gap-2 mt-2'>
                            {images && images.length > 0 ? (
                               images.map((image, index) => (
-                                  <div key={index} className='relative'>
+                                 <div key={index} className='relative'>
                                     <Image
                                        src={image}
                                        alt={`Product ${index + 1}`}
@@ -311,7 +342,7 @@ export default function Step3() {
                                        width={96}
                                        height={96}
                                     />
-                                  </div>
+                                 </div>
                               ))
                            ) : (
                               <div className='w-24 h-24 border rounded flex items-center justify-center bg-gray-100'>
@@ -438,18 +469,18 @@ export default function Step3() {
                                              Hình ảnh:
                                           </label>
                                           <div className='flex gap-2'>
-                                              {variant.images.map((img, imgIndex) => (
+                                             {variant.images.map((img, imgIndex) => (
                                                 <Image
                                                    key={imgIndex}
                                                    src={img}
                                                    alt={`Variant ${index + 1} image ${
-                                                     imgIndex + 1
+                                                      imgIndex + 1
                                                    }`}
                                                    className='w-20 h-20 object-cover rounded border'
                                                    width={80}
                                                    height={80}
                                                 />
-                                              ))}
+                                             ))}
                                           </div>
                                        </div>
                                     )}

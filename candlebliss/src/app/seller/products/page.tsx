@@ -485,11 +485,7 @@ const ProductTable = ({
                                  >
                                     {isActive ? 'Hoạt động' : 'Không hoạt động'}
                                  </span>
-                                 {totalQuantity === 0 && (
-                                    <span className='px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800'>
-                                       Hết hàng
-                                    </span>
-                                 )}
+
                                  {hasDiscount && (
                                     <span className='px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-amber-100 text-amber-800'>
                                        Khuyến mãi

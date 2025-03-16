@@ -3,7 +3,7 @@ import Header from '@/app/components/user/nav/page';
 import Footer from '@/app/components/user/footer/page';
 import { useOrder } from '@/stores/user/order';
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { Key, useEffect, useState } from 'react';
 import { ArrowLeftIcon, ShoppingBagIcon } from '@heroicons/react/24/outline';
 import Tabs from '@/app/components/user/pages/order/tabs';
 import Image from 'next/image';
@@ -64,7 +64,7 @@ export default function OrdersManagement() {
                            <div className='bg-white rounded-lg shadow-sm overflow-hidden'>
                               <Tabs orderStatus={status} handleFilterByStatus={onChangeTab} />
                               <div className={'p-[12px]'}>
-                                 {orderStore.orders.map((item, index) => (
+                                 {orderStore.orders.map((item: any, index: Key | null | undefined) => (
                                     <div key={index}>
                                        <OrderItem data={item} />
                                     </div>

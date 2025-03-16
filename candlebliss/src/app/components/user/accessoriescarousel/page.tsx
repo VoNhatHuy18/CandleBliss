@@ -188,7 +188,7 @@ export default function GlideSlide() {
       <div className="relative overflow-hidden">
         <div 
           ref={sliderRef} 
-          className="flex gap-4 overflow-x-scroll scrollbar-hide scroll-smooth transition-transform duration-500"
+          className="flex gap-8 overflow-x-scroll scrollbar-hide scroll-smooth transition-transform duration-500"
           onMouseEnter={() => setIsHovering(true)}
           onMouseLeave={() => setIsHovering(false)}
         >
@@ -221,9 +221,7 @@ export default function GlideSlide() {
                 
                 {/* Quick action buttons - visible on hover */}
                 <div className="absolute bottom-0 left-0 right-0 flex justify-center items-center gap-2 translate-y-full group-hover:translate-y-0 transition-transform duration-300 bg-gradient-to-t from-black/70 to-transparent p-4">
-                  <button className="bg-white rounded-full p-2 hover:bg-amber-500 hover:text-white transition-colors">
-                    <HeartIcon className="h-5 w-5" />
-                  </button>
+                 
                   <button className="bg-[#553C26] text-white px-4 py-2 rounded-full flex items-center gap-1 hover:bg-amber-600 transition-colors">
                     <ShoppingBagIcon className="h-5 w-5" />
                     <span>Thêm vào giỏ</span>

@@ -10,57 +10,50 @@ import Image from 'next/image';
 export default function NavBar() {
    const [showSearchInput, setShowSearchInput] = useState(false);
    const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-   
+
    const toggleMobileMenu = () => {
       setMobileMenuOpen(!mobileMenuOpen);
    };
 
    return (
       <>
-         {/* Header */}
-         <header className='bg-[#F1EEE9] py-2 flex justify-between px-4 sm:px-6 md:px-12 lg:px-20 xl:px-60'>
-            <h4 className='text-[#553C26] font-normal text-sm md:text-base'>Email: candlebliss@gmail.com</h4>
-            <div className='hidden sm:block'>
-               <a href='/user/signup'>
-                  <span className='text-[#553C26] hover:underline text-sm md:text-base lg:text-xl'>Đăng Ký |</span>
-               </a>
-               <a href='/user/signin'>
-                  <span className='text-[#553C26] hover:underline text-sm md:text-base lg:text-xl'> Đăng Nhập</span>
-               </a>
-            </div>
-            <div className='sm:hidden'>
-               <a href='/user/signin'>
-                  <UserIcon className='size-5 text-[#553C26]' />
-               </a>
-            </div>
-         </header>
-         <hr className='border-t-2 border-t-[#553C26]' />
-         
+
          {/* Menu */}
          <div className='bg-[#F1EEE9] flex justify-between items-center px-4 sm:px-6 md:px-12 lg:px-20 xl:px-60 py-2'>
             <div className='flex items-center'>
-               <Image
-                  src={'/images/logoCoChu.png'}
-                  alt='Candle Bliss Logo'
-                  height={62}
-                  width={253}
-                  className='cursor-pointer w-auto h-10 md:h-12 lg:h-auto'
-               />
+               <Link href='/user/home'>
+                  <div className='cursor-pointer'>
+                     <Image
+                        src={'/images/logoCoChu.png'}
+                        alt='Candle Bliss Logo'
+                        height={62}
+                        width={253}
+                        className='cursor-pointer w-auto h-10 md:h-12 lg:h-auto'
+                     />
+                  </div>
+               </Link>
             </div>
-            
+
             {/* Mobile menu button */}
             <div className='flex items-center space-x-4 md:space-x-6 lg:hidden'>
-               <button onClick={() => setShowSearchInput(!showSearchInput)} className='text-[#553C26]'>
+               <button
+                  onClick={() => setShowSearchInput(!showSearchInput)}
+                  className='text-[#553C26]'
+               >
                   <MagnifyingGlassIcon className='size-5' />
                </button>
                <Link href='/user/cart' className='text-[#553C26]'>
                   <ShoppingBagIcon className='size-5' />
                </Link>
                <button onClick={toggleMobileMenu} className='text-[#553C26]'>
-                  {mobileMenuOpen ? <XMarkIcon className='size-6' /> : <Bars3Icon className='size-6' />}
+                  {mobileMenuOpen ? (
+                     <XMarkIcon className='size-6' />
+                  ) : (
+                     <Bars3Icon className='size-6' />
+                  )}
                </button>
             </div>
-            
+
             {/* Desktop Navigation */}
             <nav className='hidden lg:flex space-x-5 xl:space-x-10 text-[#553C26] items-center'>
                <Link href='/user/home'>
@@ -69,7 +62,7 @@ export default function NavBar() {
                   </button>
                </Link>
                <div className='relative group'>
-                  <Link href='/user/product'>
+                  <Link href='/user/products'>
                      <button className='text-base xl:text-lg hover:text-[#FF9900] focus:font-semibold focus:text-[#FF9900] font-mont hover:font-semibold'>
                         Sản Phẩm
                      </button>
@@ -107,9 +100,11 @@ export default function NavBar() {
                <button className='text-base xl:text-lg hover:text-[#FF9900] focus:font-semibold focus:text-[#FF9900] font-mont hover:font-semibold'>
                   Về Chúng Tôi
                </button>
-               <button className='text-base xl:text-lg hover:text-[#FF9900] focus:font-semibold focus:text-[#FF9900] font-mont hover:font-semibold'>
-                  Liên Hệ
-               </button>
+               <Link href='https://www.facebook.com/' target='_blank'>
+                  <button className='text-base xl:text-lg hover:text-[#FF9900] focus:font-semibold focus:text-[#FF9900] font-mont hover:font-semibold'>
+                     Liên Hệ
+                  </button>
+               </Link>
                <div className='relative items-center flex'>
                   {showSearchInput && (
                      <input
@@ -118,19 +113,22 @@ export default function NavBar() {
                         placeholder='Tìm kiếm...'
                      />
                   )}
-                  <button onClick={() => setShowSearchInput(!showSearchInput)} className='ml-2 text-[#553C26]'>
+                  <button
+                     onClick={() => setShowSearchInput(!showSearchInput)}
+                     className='ml-2 text-[#553C26]'
+                  >
                      <MagnifyingGlassIcon className='size-5' />
                   </button>
                </div>
                <Link href='/user/cart' className='text-[#553C26]'>
                   <ShoppingBagIcon className='size-5' />
                </Link>
-               <Link href='/' className='text-[#553C26]'>
+               <Link href='/user/order' className='text-[#553C26]'>
                   <UserIcon className='size-5' />
                </Link>
             </nav>
          </div>
-         
+
          {/* Mobile Menu */}
          {mobileMenuOpen && (
             <div className='lg:hidden bg-[#F1EEE9] py-4 px-4 sm:px-6 md:px-12 shadow-md'>
@@ -183,10 +181,12 @@ export default function NavBar() {
                         Về Chúng Tôi
                      </span>
                   </Link>
-                  <Link href='/contact' onClick={toggleMobileMenu}>
-                     <span className='block text-[#553C26] text-lg font-mont hover:text-[#FF9900]'>
-                        Liên Hệ
-                     </span>
+                  <Link href='' onClick={toggleMobileMenu}>
+                     <a href='https://www.facebook.com/'>
+                        <span className='block text-[#553C26] text-lg font-mont hover:text-[#FF9900]'>
+                           Liên Hệ
+                        </span>
+                     </a>
                   </Link>
                   <div className='sm:hidden pt-2'>
                      <Link href='/user/signup' onClick={toggleMobileMenu}>

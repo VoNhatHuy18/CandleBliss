@@ -4,6 +4,8 @@ import Header from '@/app/components/seller/header/page';
 import MenuSidebar from '@/app/components/seller/menusidebar/page';
 import VoucherTag from '@/app/components/seller/vouchertags/page';
 
+import Link from 'next/link';
+
 export default function VoucherPage() {
    const [searchTerm, setSearchTerm] = useState('');
 
@@ -112,23 +114,25 @@ export default function VoucherPage() {
                      </div>
 
                      <div className='flex gap-3 w-full sm:w-auto'>
-                        <button className='flex items-center justify-center px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg transition-all shadow-sm flex-1 sm:flex-none'>
-                           <svg
-                              xmlns='http://www.w3.org/2000/svg'
-                              className='h-5 w-5 mr-2'
-                              fill='none'
-                              viewBox='0 0 24 24'
-                              stroke='currentColor'
-                           >
-                              <path
-                                 strokeLinecap='round'
-                                 strokeLinejoin='round'
-                                 strokeWidth={2}
-                                 d='M12 6v6m0 0v6m0-6h6m-6 0H6'
-                              />
-                           </svg>
-                           Thêm mới
-                        </button>
+                        <Link href='/seller/vouchers/createvoucher'>
+                           <button className='flex items-center justify-center px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg transition-all shadow-sm flex-1 sm:flex-none'>
+                              <svg
+                                 xmlns='http://www.w3.org/2000/svg'
+                                 className='h-5 w-5 mr-2'
+                                 fill='none'
+                                 viewBox='0 0 24 24'
+                                 stroke='currentColor'
+                              >
+                                 <path
+                                    strokeLinecap='round'
+                                    strokeLinejoin='round'
+                                    strokeWidth={2}
+                                    d='M12 6v6m0 0v6m0-6h6m-6 0H6'
+                                 />
+                              </svg>
+                              Thêm mới
+                           </button>
+                        </Link>
 
                         <button className='flex items-center justify-center p-2.5 text-gray-600 hover:text-gray-800 border border-gray-300 hover:border-gray-400 rounded-lg transition-all bg-white'>
                            <svg
@@ -155,9 +159,6 @@ export default function VoucherPage() {
                   {/* Title section with counter */}
                   <div className='flex items-center justify-between border-b pb-4 mb-6'>
                      <h2 className='text-xl font-semibold text-gray-800'>Mã Giảm Giá</h2>
-                     <span className='bg-amber-100 text-amber-800 text-sm font-medium px-3 py-1 rounded-full'>
-                        {filteredVouchers.length} mã
-                     </span>
                   </div>
 
                   {/* Empty state */}
@@ -197,6 +198,7 @@ export default function VoucherPage() {
                                  discount={voucher.discount}
                                  expiryDate={voucher.expiryDate}
                                  status={voucher.status}
+                                 id={''}
                               />
                            </div>
                         ))}

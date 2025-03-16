@@ -258,7 +258,6 @@ export default function ShoppingCart() {
                            </Link>
                         </div>
                      </div>
-                     de
                      {/* Order Summary */}
                      <div className='w-full lg:w-1/3'>
                         <div className='bg-white rounded-lg shadow-sm p-6 sticky top-6'>
@@ -330,10 +329,12 @@ export default function ShoppingCart() {
 
                            {/* Action Buttons */}
                            <div className='mt-6 space-y-3'>
+                              <Link href='/user/checkout'>
                               <button className='w-full bg-amber-800 hover:bg-amber-900 text-white font-medium py-3 rounded-lg transition-colors flex items-center justify-center gap-2'>
                                  <ShoppingBagIcon className='h-5 w-5' />
                                  Thanh Toán Ngay
                               </button>
+                              </Link>
                            </div>
 
                            {/* Benefits */}
