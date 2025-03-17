@@ -2,22 +2,52 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { MagnifyingGlassIcon } from '@heroicons/react/20/solid';
 import { UserIcon, ShoppingBagIcon, Bars3Icon, XMarkIcon } from '@heroicons/react/24/outline';
 import Image from 'next/image';
+import { useRouter } from 'next/navigation';
 
 export default function NavBar() {
    const [showSearchInput, setShowSearchInput] = useState(false);
    const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+   const [isLoggedIn, setIsLoggedIn] = useState(false);
+   const router = useRouter();
 
    const toggleMobileMenu = () => {
       setMobileMenuOpen(!mobileMenuOpen);
    };
 
+   useEffect(() => {
+      // Kiểm tra xem người dùng đã đăng nhập chưa (từ localStorage hoặc cookie)
+      const userToken = localStorage.getItem('userToken');
+      setIsLoggedIn(!!userToken);
+   }, []);
+
+   const handleUserIconClick = (e: { preventDefault: () => void }) => {
+      e.preventDefault();
+      if (isLoggedIn) {
+         router.push('/user/profile');
+      } else {
+         router.push('/user/signin');
+      }
+   };
+
+   const handleLogout = () => {
+      // Xóa token từ localStorage
+      localStorage.removeItem('userToken');
+      localStorage.removeItem('token');
+      localStorage.removeItem('refreshToken');
+
+      // Cập nhật state
+      setIsLoggedIn(false);
+
+      // Chuyển hướng về trang chủ hoặc đăng nhập
+      router.push('/user/home');
+   };
+
    return (
       <>
-
          {/* Menu */}
          <div className='bg-[#F1EEE9] flex justify-between items-center px-4 sm:px-6 md:px-12 lg:px-20 xl:px-60 py-2'>
             <div className='flex items-center'>
@@ -120,12 +150,33 @@ export default function NavBar() {
                      <MagnifyingGlassIcon className='size-5' />
                   </button>
                </div>
-               <Link href='/user/cart' className='text-[#553C26]'>
+               <Link href='/user/cart' className='text-[#553C26]'>   
                   <ShoppingBagIcon className='size-5' />
                </Link>
-               <Link href='/user/order' className='text-[#553C26]'>
-                  <UserIcon className='size-5' />
-               </Link>
+               <div className='relative '>
+                  <div className='group relative items-center flex '>
+                     <button onClick={handleUserIconClick} className='text-[#553C26] '>
+                        <UserIcon className='size-5' />
+                     </button>
+                     {isLoggedIn && (
+                        <div className='absolute hidden group-hover:block right-0  w-36 bg-[#F1EEE9] rounded-md shadow-lg z-50'>
+                           <Link
+                              href='/user/profile'
+                              className='block px-4 py-2 text-[#553C26] hover:bg-[#E2DED8]'
+                           >
+                              Hồ Sơ
+                           </Link>
+                           <hr className='border-[#553C26]' />
+                           <button
+                              onClick={handleLogout}
+                              className='w-full text-left px-4 py-2 text-[#553C26] hover:bg-[#E2DED8]'
+                           >
+                              Đăng Xuất
+                           </button>
+                        </div>
+                     )}
+                  </div>
+               </div>
             </nav>
          </div>
 
@@ -188,17 +239,35 @@ export default function NavBar() {
                         </span>
                      </a>
                   </Link>
-                  <div className='sm:hidden pt-2'>
-                     <Link href='/user/signup' onClick={toggleMobileMenu}>
-                        <span className='block text-[#553C26] text-lg hover:text-[#FF9900]'>
-                           Đăng Ký
-                        </span>
-                     </Link>
-                     <Link href='/user/signin' onClick={toggleMobileMenu}>
-                        <span className='block text-[#553C26] text-lg hover:text-[#FF9900] mt-2'>
-                           Đăng Nhập
-                        </span>
-                     </Link>
+                  <div className='pt-2'>
+                     {!isLoggedIn ? (
+                        <>
+                           <Link href='/user/signup' onClick={toggleMobileMenu}>
+                              <span className='block text-[#553C26] text-lg hover:text-[#FF9900]'>
+                                 Đăng Ký
+                              </span>
+                           </Link>
+                           <Link href='/user/signin' onClick={toggleMobileMenu}>
+                              <span className='block text-[#553C26] text-lg hover:text-[#FF9900] mt-2'>
+                                 Đăng Nhập
+                              </span>
+                           </Link>
+                        </>
+                     ) : (
+                        <>
+                           <Link href='/user/profile' onClick={toggleMobileMenu}>
+                              <span className='block text-[#553C26] text-lg hover:text-[#FF9900]'>
+                                 Hồ Sơ Cá Nhân
+                              </span>
+                           </Link>
+                           <button
+                              onClick={handleLogout}
+                              className='block text-[#553C26] text-lg hover:text-[#FF9900] mt-2 text-left'
+                           >
+                              Đăng Xuất
+                           </button>
+                        </>
+                     )}
                   </div>
                </nav>
             </div>

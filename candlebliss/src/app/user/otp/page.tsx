@@ -1,42 +1,85 @@
 'use client';
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import NavBar from '@/app/components/user/nav/page';
 import Footer from '@/app/components/user/footer/page';
 import Image from 'next/image';
 
 export default function OTPPage() {
+   const searchParams = useSearchParams();
+   const email = searchParams.get('email') || ''; // Lấy email từ query params
+
+   const [otp, setOtp] = useState('');
+   const [error, setError] = useState('');
+   const [loading, setLoading] = useState(false);
+   const [resendLoading, setResendLoading] = useState(false);
+   const [message, setMessage] = useState('');
+
+   const handleVerifyOTP = async () => {
+      setLoading(true);
+      setError('');
+      setMessage('');
+
+      try {
+         const res = await fetch('/api/v1/auth/email/confirm', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, otp }),
+         });
+
+         const data = await res.json();
+         if (!res.ok) throw new Error(data.message || 'Xác thực thất bại');
+
+         setMessage('Xác thực thành công! Đang chuyển hướng...');
+         setTimeout(() => {
+            window.location.href = '/dashboard'; // Chuyển hướng sau khi xác thực thành công
+         }, 2000);
+      } catch (err) {
+         if (err instanceof Error) {
+            setError(err.message);
+         } else {
+            setError('An unknown error occurred');
+         }
+      } finally {
+         setLoading(false);
+      }
+   };
+
    return (
       <div>
          <NavBar />
          <hr className='border-b-2 border-b-[#F1EEE9]' />
 
-         {/* Form đăng ký */}
          <div
             className='min-h-screen w-full bg-cover bg-center bg-no-repeat flex items-center justify-center md:justify-end md:pr-60 p-4'
             style={{ backgroundImage: `url("https://i.imgur.com/i3IlpOo.png")` }}
          >
             <div className='bg-white p-6 md:p-8 rounded-lg shadow-md w-full max-w-sm md:max-w-lg'>
-               <h2 className='text-2xl font-bold mb-6 text-center text-[#553C26]'>Đăng Ký</h2>
+               <h2 className='text-2xl font-bold mb-6 text-center text-[#553C26]'>Xác thực OTP</h2>
+
+               {message && <p className='text-green-600 text-center mb-4'>{message}</p>}
+               {error && <p className='text-red-600 text-center mb-4'>{error}</p>}
 
                <div className='mb-4'>
-                  <label
-                     htmlFor='otp'
-                     className='block text-[#553C26] mb-2 text-base font-medium'
-                  >
-                     Nhập mã xác thực
+                  <label htmlFor='otp' className='block text-[#553C26] mb-2 text-base font-medium'>
+                     Nhập mã xác thực (OTP)
                   </label>
                   <input
                      type='text'
                      id='otp'
+                     value={otp}
+                     onChange={(e) => setOtp(e.target.value)}
                      className='w-full px-3 py-2 border rounded-lg border-[#553C26]'
-                     placeholder='Nhập mã xác thực'
+                     placeholder='Nhập mã OTP'
                   />
                </div>
+
                <button
-                  type='submit'
-                  className='w-full bg-[#553C26] text-white py-2 mb-2 rounded-lg hover:bg-[#3e2b1a]'
+                  onClick={handleVerifyOTP}
+                  className='w-full bg-[#553C26] text-white py-2 mb-2 rounded-lg hover:bg-[#3e2b1a] disabled:opacity-50'
+                  disabled={loading}
                >
-                  Đăng Ký
+                  {loading ? 'Đang xác thực...' : 'Xác nhận'}
                </button>
 
                <div className='flex items-center my-4'>
