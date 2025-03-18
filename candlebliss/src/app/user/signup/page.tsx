@@ -1,12 +1,16 @@
 'use client';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import NavBar from '@/app/components/user/nav/page';
 import Footer from '@/app/components/user/footer/page';
 import { EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
 import Image from 'next/image';
+import Toast from '@/app/components/ui/toast/page';
+import AuthService from '@/app/utils/authService';
 
 export default function SignUpPage() {
+   const router = useRouter();
    const [showPassword, setShowPassword] = useState<boolean>(false);
    const [showRePassword, setShowRePassword] = useState<boolean>(false);
 
@@ -27,6 +31,26 @@ export default function SignUpPage() {
    const [lastNameError, setLastNameError] = useState<string>('');
    const [apiError, setApiError] = useState<string>(''); // Lỗi từ server
    const [isLoading, setIsLoading] = useState<boolean>(false); // Loading trạng thái
+
+   // State cho Toast notification
+   const [toast, setToast] = useState<{
+      show: boolean;
+      message: string;
+      type: 'success' | 'error' | 'info';
+      position?: 'top-right' | 'top-left' | 'bottom-right' | 'bottom-left';
+   }>({
+      show: false,
+      message: '',
+      type: 'info',
+      position: 'top-right',
+   });
+
+   // Kiểm tra nếu người dùng đã đăng nhập thì chuyển hướng
+   useEffect(() => {
+      if (AuthService.isAuthenticated()) {
+         router.push('/user/home');
+      }
+   }, [router]);
 
    // Biểu thức regex
    const phoneRegex = /^(0[1-9]|84[1-9])\d{8}$/;
@@ -165,6 +189,31 @@ export default function SignUpPage() {
       return isValid;
    };
 
+   // Xử lý đăng nhập với Google
+   const handleGoogleSignup = () => {
+      try {
+         window.location.href = 'http://localhost:3000/api/v1/auth/google';
+      } catch (error) {
+         console.error('Google signup error:', error);
+         showToastMessage('Đăng ký bằng Google thất bại', 'error');
+      }
+   };
+
+   // Hàm tiện ích hiển thị Toast
+   const showToastMessage = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
+      setToast({
+         show: true,
+         message,
+         type,
+         position: 'top-right',
+      });
+
+      // Tự động ẩn toast sau 5 giây
+      setTimeout(() => {
+         setToast((prev) => ({ ...prev, show: false }));
+      }, 5000);
+   };
+
    // Xử lý khi submit form
    const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
       e.preventDefault();
@@ -177,35 +226,39 @@ export default function SignUpPage() {
       setApiError('');
 
       try {
+         // Chuẩn bị dữ liệu đăng ký
+         const userData = {
+            email,
+            password,
+            firstName,
+            lastName,
+            phone,
+         };
+
          const response = await fetch('http://localhost:3000/api/v1/auth/email/register', {
             method: 'POST',
             headers: {
                'Content-Type': 'application/json',
             },
-            body: JSON.stringify({
-               email,
-               password,
-               firstName,
-               lastName,
-               phone,
-            }),
+            body: JSON.stringify(userData),
          });
 
          let data;
          const contentType = response.headers.get('content-type');
-         
+
          // Kiểm tra xem response có phải là JSON không trước khi parse
          if (contentType && contentType.includes('application/json')) {
             try {
                data = await response.json();
             } catch (jsonError) {
                console.error('JSON parsing error:', jsonError);
+               showToastMessage('Lỗi dữ liệu từ server', 'error');
                throw new Error('Lỗi dữ liệu từ server');
             }
          } else {
             // Nếu không phải JSON, đọc dưới dạng text
             const textResponse = await response.text();
-            console.log('Non-JSON response:', textResponse);
+            console.error('Non-JSON response:', textResponse);
             data = { message: 'Lỗi định dạng phản hồi từ server' };
          }
 
@@ -213,21 +266,70 @@ export default function SignUpPage() {
             // Xử lý các mã lỗi cụ thể
             if (response.status === 409) {
                setEmailError('Email này đã được sử dụng');
-               setApiError('');
+               showToastMessage('Email này đã được sử dụng', 'error');
             } else if (response.status === 400) {
                setApiError(data?.message || 'Dữ liệu không hợp lệ');
+               showToastMessage(data?.message || 'Dữ liệu không hợp lệ', 'error');
             } else {
-               throw new Error(data?.message || 'Email đã được sử dụng');
+               throw new Error(data?.message || 'Đăng ký không thành công');
             }
             return;
          }
 
-         // Hiển thị thông báo thành công và điều hướng
-         sessionStorage.setItem('registerEmail', email);
-         sessionStorage.setItem('registerPhone', phone);
-         window.location.href = '/user/otp';
+         // Đăng ký thành công - sử dụng AuthService nếu API trả về token
+         if (data && data.token && data.refreshToken) {
+            // Lưu token bằng AuthService
+            AuthService.setTokens(data.token, data.refreshToken);
+
+            // Lưu thông tin người dùng
+            if (data.user) {
+               AuthService.saveUserInfo({
+                  id: data.user.id,
+                  email: email,
+                  firstName: firstName,
+                  lastName: lastName,
+                  phone: phone,
+                  ...data.user, // bổ sung thêm thông tin khác nếu API trả về
+               });
+            } else {
+               // Nếu API không trả về thông tin user, tự tạo từ form
+               AuthService.saveUserInfo({
+                  email: email,
+                  firstName: firstName,
+                  lastName: lastName,
+                  phone: phone,
+                  id: '',
+               });
+            }
+
+            showToastMessage('Đăng ký thành công!', 'success');
+
+            // Chuyển hướng sau khi đăng ký thành công
+            setTimeout(() => {
+               router.push('/user/home');
+            }, 1500);
+         } else {
+            // // Trường hợp cần xác thực OTP
+            // showToastMessage('Đăng ký thành công! Vui lòng xác thực OTP để tiếp tục.', 'success');
+            // // Lưu thông tin đăng ký cho quá trình xác thực OTP
+            // sessionStorage.setItem('registerEmail', email);
+            // sessionStorage.setItem('registerPhone', phone);
+            // // Chờ 1.5 giây để hiển thị thông báo thành công trước khi chuyển hướng
+            // setTimeout(() => {
+            //    router.push('/user/otp');
+            // }, 1500);
+         }
+
+         // Reset form sau khi đăng ký thành công
+         setEmail('');
+         setPassword('');
+         setRePassword('');
+         setFirstName('');
+         setLastName('');
+         setPhone('');
       } catch (error: any) {
          console.error('Registration error:', error);
+         showToastMessage(error.message || 'Có lỗi xảy ra, vui lòng thử lại sau.', 'error');
          setApiError(error.message || 'Có lỗi xảy ra, vui lòng thử lại sau.');
       } finally {
          setIsLoading(false);
@@ -236,6 +338,15 @@ export default function SignUpPage() {
 
    return (
       <div className='min-h-screen flex flex-col'>
+         <div className='fixed top-4 right-4 z-50'>
+            <Toast
+               show={toast.show}
+               message={toast.message}
+               type={toast.type}
+               onClose={() => setToast((prev) => ({ ...prev, show: false }))}
+            />
+         </div>
+
          <NavBar />
          <hr className='border-b-2 border-b-[#F1EEE9]' />
 
@@ -477,16 +588,20 @@ export default function SignUpPage() {
 
                      {/* Social Login */}
                      <p className='text-center font-paci text-sm md:text-lg text-[#553C26] mb-4'>
-                        Đăng nhập bằng tài khoản khác
+                        Đăng ký bằng tài khoản khác
                      </p>
                      <div className='flex justify-center'>
-                        <button className='h-8 md:h-10 w-32 md:w-40 flex justify-center items-center border border-[#553C26] rounded-lg'>
+                        <button
+                           type='button'
+                           onClick={handleGoogleSignup}
+                           className='h-8 md:h-10 w-32 md:w-40 flex justify-center items-center border border-[#553C26] rounded-lg hover:bg-gray-100 transition-colors duration-200'
+                        >
                            <Image
                               src='/images/google.png'
                               alt='Google Logo'
                               width={50}
                               height={50}
-                              className=' md:h-5 md:w-16'
+                              className='md:h-5 md:w-16'
                            />
                         </button>
                      </div>

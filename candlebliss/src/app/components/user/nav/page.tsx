@@ -7,42 +7,66 @@ import { MagnifyingGlassIcon } from '@heroicons/react/20/solid';
 import { UserIcon, ShoppingBagIcon, Bars3Icon, XMarkIcon } from '@heroicons/react/24/outline';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
+import { jwtDecode } from 'jwt-decode';
 
 export default function NavBar() {
    const [showSearchInput, setShowSearchInput] = useState(false);
    const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
    const [isLoggedIn, setIsLoggedIn] = useState(false);
+   const [userName, setUserName] = useState<string | null>(null);
    const router = useRouter();
 
    const toggleMobileMenu = () => {
       setMobileMenuOpen(!mobileMenuOpen);
    };
 
+   // Kiểm tra trạng thái đăng nhập mỗi khi component được render
    useEffect(() => {
-      // Kiểm tra xem người dùng đã đăng nhập chưa (từ localStorage hoặc cookie)
-      const userToken = localStorage.getItem('userToken');
-      setIsLoggedIn(!!userToken);
+      // Check for JWT token in localStorage
+      const token = localStorage.getItem('token');
+      if (token) {
+         setIsLoggedIn(true);
+         try {
+            // Decode the token to get user information
+            const decoded = jwtDecode(token);
+            // Assuming your token contains a name field
+            setUserName((decoded as { name: string }).name);
+         } catch (error) {
+            console.error('Invalid token:', error);
+            // Nếu token không hợp lệ, xóa token và đặt trạng thái là chưa đăng nhập
+            localStorage.removeItem('token');
+            localStorage.removeItem('refreshToken');
+            setIsLoggedIn(false);
+            setUserName(null);
+         }
+      } else {
+         setIsLoggedIn(false);
+         setUserName(null);
+      }
    }, []);
 
-   const handleUserIconClick = (e: { preventDefault: () => void }) => {
+   const handleUserIconClick = (e: React.MouseEvent) => {
       e.preventDefault();
       if (isLoggedIn) {
+         // If logged in, go directly to profile page
          router.push('/user/profile');
       } else {
+         // If not logged in, go to sign in page
          router.push('/user/signin');
       }
    };
 
    const handleLogout = () => {
-      // Xóa token từ localStorage
+      // Remove all authentication tokens
       localStorage.removeItem('userToken');
       localStorage.removeItem('token');
       localStorage.removeItem('refreshToken');
 
-      // Cập nhật state
+      // Update state
       setIsLoggedIn(false);
+      setUserName(null);
 
-      // Chuyển hướng về trang chủ hoặc đăng nhập
+      // Redirect to home
       router.push('/user/home');
    };
 
@@ -150,32 +174,18 @@ export default function NavBar() {
                      <MagnifyingGlassIcon className='size-5' />
                   </button>
                </div>
-               <Link href='/user/cart' className='text-[#553C26]'>   
+               <Link href='/user/cart' className='text-[#553C26]'>
                   <ShoppingBagIcon className='size-5' />
                </Link>
-               <div className='relative '>
-                  <div className='group relative items-center flex '>
-                     <button onClick={handleUserIconClick} className='text-[#553C26] '>
-                        <UserIcon className='size-5' />
-                     </button>
-                     {isLoggedIn && (
-                        <div className='absolute hidden group-hover:block right-0  w-36 bg-[#F1EEE9] rounded-md shadow-lg z-50'>
-                           <Link
-                              href='/user/profile'
-                              className='block px-4 py-2 text-[#553C26] hover:bg-[#E2DED8]'
-                           >
-                              Hồ Sơ
-                           </Link>
-                           <hr className='border-[#553C26]' />
-                           <button
-                              onClick={handleLogout}
-                              className='w-full text-left px-4 py-2 text-[#553C26] hover:bg-[#E2DED8]'
-                           >
-                              Đăng Xuất
-                           </button>
-                        </div>
-                     )}
-                  </div>
+               <div className='relative items-center flex '>
+                  <button onClick={handleUserIconClick} className='text-[#553C26] '>
+                     <UserIcon className='size-5' />
+                  </button>
+                  {isLoggedIn && userName && (
+                     <div className='absolute top-full right-0 mt-1 bg-[#F1EEE9] rounded-md shadow-lg px-2 py-1 text-xs text-[#553C26] font-semibold truncate'>
+                        {userName}
+                     </div>
+                  )}
                </div>
             </nav>
          </div>
@@ -257,7 +267,7 @@ export default function NavBar() {
                         <>
                            <Link href='/user/profile' onClick={toggleMobileMenu}>
                               <span className='block text-[#553C26] text-lg hover:text-[#FF9900]'>
-                                 Hồ Sơ Cá Nhân
+                                 Hồ Sơ Cá Nhân ({userName})
                               </span>
                            </Link>
                            <button
