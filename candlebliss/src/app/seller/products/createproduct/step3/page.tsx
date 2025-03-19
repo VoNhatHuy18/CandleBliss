@@ -53,22 +53,24 @@ export default function Step3() {
             return;
          }
 
-         // New step: Check if category exists and create if needed
+         // 2. Create category if needed (using the provided structure)
          let categoryId = category;
          if (isNaN(Number(category))) {
-            console.log('Category is not a numeric ID, creating new category:', category);
+            console.log('Creating new category:', category);
+            
+            const categoryData = {
+               id: 0,
+               name: category,
+               descriptions: `Mô tả cho ${category}`
+            };
 
-            // Create a new category
             const categoryResponse = await fetch('http://localhost:3000/api/categories', {
                method: 'POST',
                headers: {
                   'Content-Type': 'application/json',
                   Authorization: `Bearer ${token}`,
                },
-               body: JSON.stringify({
-                  name: category,
-                  description: `Category for ${name}`,
-               }),
+               body: JSON.stringify(categoryData),
             });
 
             if (!categoryResponse.ok) {
@@ -81,32 +83,27 @@ export default function Step3() {
             console.log('Created new category with ID:', categoryId);
          }
 
-         // 2. Create FormData object for product
-         const formData = new FormData();
-         formData.append('name', name);
-         formData.append('description', description);
-         formData.append('video', videoUrl);
+         // 3. Create product using the provided structure
+         const productData = {
+            id: 0,
+            name: name,
+            description: description,
+            video: videoUrl,
+            images: {
+               id: "string",
+               path: images && images.length > 0 ? images[0] : "",
+               public_id: "public_id"
+            }
+         };
 
-         // Use the retrieved or created category ID
-         formData.append('category_id', categoryId.toString());
-
-         // 3. Process each blob URL into actual file objects
-         for (const blobUrl of images) {
-            if (!blobUrl || !blobUrl.startsWith('blob:')) continue;
-            const response = await fetch(blobUrl);
-            const blob = await response.blob();
-            const file = new File([blob], `image-${Date.now()}.jpg`, { type: blob.type });
-            formData.append('images', file);
-         }
-
-         // 4. Create the product
-         console.log('Creating product...');
+         console.log('Creating product with data:', productData);
          const productResponse = await fetch('http://localhost:3000/api/products', {
             method: 'POST',
             headers: {
+               'Content-Type': 'application/json',
                Authorization: `Bearer ${token}`,
             },
-            body: formData,
+            body: JSON.stringify(productData),
          });
 
          if (!productResponse.ok) {
@@ -114,43 +111,36 @@ export default function Step3() {
             throw new Error(`Product creation failed: ${errorText}`);
          }
 
-         // 5. Get the created product ID
+         // 4. Get the created product ID
          const createdProduct = await productResponse.json();
          const productId = createdProduct.id;
          console.log('Product created successfully with ID:', productId);
 
-         // 6. Create product details for each variant
+         // 5. Create product details for each variant
          for (const variant of variants) {
             console.log('Creating product detail for variant:', variant);
 
-            // Create FormData for product detail
-            const detailFormData = new FormData();
-            detailFormData.append('product_id', String(productId));
-            detailFormData.append('size', variant.size || '');
-            detailFormData.append('type', variant.type || '');
-            detailFormData.append('quantities', String(variant.quantity || 0));
-            detailFormData.append('isActive', String(isActive));
-
-            // Add variant images if any
-            if (variant.images && variant.images.length > 0) {
-               for (const imgUrl of variant.images) {
-                  if (imgUrl.startsWith('blob:')) {
-                     const imgResponse = await fetch(imgUrl);
-                     const imgBlob = await imgResponse.blob();
-                     const imgFile = new File([imgBlob], `variant-${Date.now()}.jpg`, {
-                        type: imgBlob.type,
-                     });
-                     detailFormData.append('images', imgFile);
-                  }
-               }
-            }
+            // Create product detail using the provided structure
+            const detailData = {
+               id: 0,
+               size: variant.size || '',
+               type: variant.type || '',
+               quantities: variant.quantity || 0,
+               images: [{
+                  id: "string",
+                  path: variant.images && variant.images.length > 0 ? variant.images[0] : "",
+                  public_id: "public_id"
+               }],
+               isActive: isActive
+            };
 
             const detailResponse = await fetch('http://localhost:3000/api/product-details', {
                method: 'POST',
                headers: {
+                  'Content-Type': 'application/json',
                   Authorization: `Bearer ${token}`,
                },
-               body: detailFormData,
+               body: JSON.stringify(detailData),
             });
 
             if (!detailResponse.ok) {
@@ -161,25 +151,23 @@ export default function Step3() {
             const createdDetail = await detailResponse.json();
             console.log('Product detail created:', createdDetail);
 
-            // 7. Create pricing for each product detail
+            // 6. Create pricing for the product detail
             console.log('Creating pricing for product detail:', createdDetail.id);
 
             // Format dates properly for the API
-            const formattedStartDate = startDate || new Date().toISOString().split('T')[0];
-            const formattedEndDate =
-               endDate ||
-               new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+            const formattedStartDate = startDate || new Date().toISOString();
+            const formattedEndDate = endDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
 
             const priceData = {
+               id: 0,
                base_price: Number(basePrice) || 0,
                discount_price: Number(discountPrice) || 0,
                start_date: formattedStartDate,
                end_date: formattedEndDate,
-               productId: createdDetail.id,
-               isActive: true,
+               product_detail: createdDetail
             };
 
-            const priceResponse = await fetch('http://localhost:3000/api/v1/prices', {
+            const priceResponse = await fetch('http://localhost:3000/api/prices', {
                method: 'POST',
                headers: {
                   'Content-Type': 'application/json',
@@ -196,7 +184,7 @@ export default function Step3() {
             console.log('Price created successfully');
          }
 
-         // 8. Success! Navigate back to products page
+         // 7. Success! Navigate back to products page
          alert('Sản phẩm đã được tạo thành công!');
          router.push('/seller/products');
       } catch (error) {

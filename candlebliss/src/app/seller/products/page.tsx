@@ -151,29 +151,6 @@ export default function ProductManagement() {
                   console.warn(`Failed to fetch details for product ${product.id}:`, error);
                }
 
-               // If no prices were found by detail ID, try fetching by product ID
-               if (productViewModel.pricing.length === 0) {
-                  try {
-                     const priceResponse = await fetch(
-                        `http://localhost:3000/api/v1/prices/product/${product.id}`,
-                        {
-                           headers: {
-                              Authorization: `Bearer ${token}`,
-                           },
-                        },
-                     );
-
-                     if (priceResponse.ok) {
-                        const priceData = await priceResponse.json();
-                        productViewModel.pricing = Array.isArray(priceData)
-                           ? priceData
-                           : [priceData];
-                     }
-                  } catch (error) {
-                     console.warn(`Failed to fetch prices for product ${product.id}:`, error);
-                  }
-               }
-
                return productViewModel;
             }),
          );
@@ -485,7 +462,11 @@ const ProductTable = ({
                                  >
                                     {isActive ? 'Hoạt động' : 'Không hoạt động'}
                                  </span>
-
+                                 {totalQuantity === 0 && (
+                                    <span className='px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800'>
+                                       Hết hàng
+                                    </span>
+                                 )}
                                  {hasDiscount && (
                                     <span className='px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-amber-100 text-amber-800'>
                                        Khuyến mãi

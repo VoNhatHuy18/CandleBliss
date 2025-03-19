@@ -13,11 +13,14 @@ import {
    FiCheckCircle,
 } from 'react-icons/fi';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 export default function CreateVoucher() {
+   const router = useRouter();
+   // Update your initial voucherData state
+
    const [voucherData, setVoucherData] = useState({
       code: '',
-      name: '',
       startDate: '',
       endDate: '',
       discountPercent: '',
@@ -25,9 +28,14 @@ export default function CreateVoucher() {
       usageLimit: '',
       description: '',
       applyTo: 'all',
+      // Add these fields to match database schema
+      maxVoucherAmount: '', // Max discount amount
+      usagePerCustomer: '1', // Default 1
+      newCustomersOnly: false,
    });
 
    const [isSubmitting, setIsSubmitting] = useState(false);
+   const [errors, setErrors] = useState<{ [key: string]: string }>({});
 
    // Format date để hiển thị
    const formatDate = (dateString: string | number | Date) => {
@@ -46,16 +54,177 @@ export default function CreateVoucher() {
       setVoucherData((prev) => ({ ...prev, [name]: value }));
    };
 
+   const validateForm = () => {
+      const newErrors: { [key: string]: string } = {};
+
+      // Code validation - check if empty and format
+      if (!voucherData.code) {
+         newErrors.code = 'Vui lòng nhập mã voucher';
+      } else if (!/^[A-Z0-9_-]{3,15}$/.test(voucherData.code)) {
+         newErrors.code = 'Mã voucher chỉ chứa chữ hoa, số, dấu gạch ngang và dài 3-15 ký tự';
+      }
+
+      // Date validation
+      if (!voucherData.startDate) {
+         newErrors.startDate = 'Vui lòng chọn ngày bắt đầu';
+      }
+      if (!voucherData.endDate) {
+         newErrors.endDate = 'Vui lòng chọn ngày kết thúc';
+      }
+
+      // Check if end date is after start date
+      if (voucherData.startDate && voucherData.endDate) {
+         const start = new Date(voucherData.startDate);
+         const end = new Date(voucherData.endDate);
+         if (start >= end) {
+            newErrors.endDate = 'Ngày kết thúc phải sau ngày bắt đầu';
+         }
+      }
+
+      // Discount percent validation
+      if (!voucherData.discountPercent) {
+         newErrors.discountPercent = 'Vui lòng nhập mức giảm giá';
+      } else if (
+         Number(voucherData.discountPercent) <= 0 ||
+         Number(voucherData.discountPercent) > 100
+      ) {
+         newErrors.discountPercent = 'Mức giảm giá phải từ 1% đến 100%';
+      }
+
+      // Min price validation - optional but must be positive if provided
+      if (voucherData.minPrice && Number(voucherData.minPrice) < 0) {
+         newErrors.minPrice = 'Giá trị đơn hàng tối thiểu không được âm';
+      }
+
+      // Usage limit validation - optional but must be positive if provided
+      if (voucherData.usageLimit && Number(voucherData.usageLimit) <= 0) {
+         newErrors.usageLimit = 'Số lượt sử dụng phải lớn hơn 0';
+      }
+
+      setErrors(newErrors);
+      return Object.keys(newErrors).length === 0;
+   };
+
    // Tạo voucher
-   const handleSubmit = (e: React.FormEvent) => {
+   const handleSubmit = async (e: React.FormEvent) => {
       e.preventDefault();
+
+      // Validate form before submission
+      if (!validateForm()) {
+         // Don't proceed if validation fails
+         return;
+      }
+
       setIsSubmitting(true);
 
-      // Giả lập thời gian xử lý
-      setTimeout(() => {
-         alert('Đã tạo voucher thành công!');
+      try {
+         // Get authentication token
+         const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+         if (!token) {
+            alert('Bạn chưa đăng nhập hoặc phiên làm việc đã hết hạn');
+            router.push('/seller/signin');
+            setIsSubmitting(false);
+            return;
+         }
+
+         // Complete payload with all fields matching database schema
+
+         const voucherPayload = {
+            code: voucherData.code,
+            description:
+               voucherData.description || `Giảm ${voucherData.discountPercent}% cho đơn hàng`,
+            percent_off: Number(voucherData.discountPercent),
+            amount_off: 0, // Fixed to 0 since we're using percent discount
+            min_order_value: Number(voucherData.minPrice) || 0,
+
+            // Use user input or calculate a reasonable maximum
+            max_voucher_amount:
+               Number(voucherData.maxVoucherAmount) ||
+               (Number(voucherData.discountPercent) * 100000) / 100,
+
+            usage_limit: Number(voucherData.usageLimit) || 100,
+            usage_per_customer: Number(voucherData.usagePerCustomer) || 1,
+            start_date: voucherData.startDate,
+            end_date: voucherData.endDate,
+
+            // Handle product/category specific vouchers
+            applicable_products: voucherData.applyTo === 'product' ? [] : null,
+            applicable_categories: voucherData.applyTo === 'category' ? [] : null,
+
+            // Additional fields from form
+            new_customers_only: voucherData.newCustomersOnly,
+            isActive: true,
+         };
+
+         console.log('Sending voucher data:', voucherPayload);
+
+         // Send request to create voucher
+         try {
+            const response = await fetch('http://localhost:3000/api/v1/vouchers', {
+               method: 'POST',
+               headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: `Bearer ${token}`,
+               },
+               body: JSON.stringify(voucherPayload),
+            });
+
+            let responseText = '';
+            try {
+               responseText = await response.text();
+            } catch (e) {
+               console.error("Couldn't read response text:", e);
+            }
+
+            if (!response.ok) {
+               console.error('API error response:', responseText);
+
+               let errorMessage = 'Không thể tạo mã giảm giá';
+               try {
+                  // Try to parse JSON error response
+                  const errorData = JSON.parse(responseText);
+                  errorMessage =
+                     errorData.message || errorData.error || 'Lỗi không xác định từ server';
+               } catch (e) {
+                  // If it's not valid JSON, use the raw text
+                  errorMessage = `Lỗi server: ${responseText.substring(0, 100)}...`;
+               }
+
+               throw new Error(errorMessage);
+            }
+
+            // Handle successful creation
+            let result;
+            try {
+               result = JSON.parse(responseText);
+            } catch (e) {
+               console.warn('Response not valid JSON, using text response');
+               result = { message: 'Voucher created successfully' };
+            }
+
+            console.log('Voucher created successfully:', result);
+            alert('Đã tạo mã giảm giá thành công!');
+            router.push('/seller/vouchers');
+         } catch (error) {
+            console.error('Error creating voucher:', error);
+            alert(
+               `Lỗi khi tạo mã giảm giá: ${
+                  error instanceof Error ? error.message : 'Lỗi không xác định'
+               }`,
+            );
+         } finally {
+            setIsSubmitting(false);
+         }
+      } catch (error) {
+         console.error('Error creating voucher:', error);
+         alert(
+            `Lỗi khi tạo mã giảm giá: ${
+               error instanceof Error ? error.message : 'Lỗi không xác định'
+            }`,
+         );
+      } finally {
          setIsSubmitting(false);
-      }, 1500);
+      }
    };
 
    return (
@@ -108,34 +277,24 @@ export default function CreateVoucher() {
                                  <input
                                     type='text'
                                     name='code'
-                                    className='w-full p-2 pl-10 border rounded-md focus:outline-none focus:ring-2 focus:ring-amber-300 transition'
+                                    className={`w-full p-2 pl-10 border rounded-md focus:outline-none focus:ring-2 focus:ring-amber-300 transition ${
+                                       errors.code ? 'border-red-500 ring-1 ring-red-500' : ''
+                                    }`}
                                     placeholder='SUMMER2025'
                                     value={voucherData.code}
                                     onChange={handleChange}
                                     required
                                  />
                               </div>
+                              {errors.code && (
+                                 <p className='text-xs text-red-500 mt-1'>{errors.code}</p>
+                              )}
                               <p className='text-xs text-gray-500 mt-1'>
                                  Mã độc nhất để khách hàng nhập khi sử dụng
                               </p>
                            </div>
 
-                           <div>
-                              <label className='block mb-2 text-sm font-medium'>
-                                 Tên mã giảm giá:
-                              </label>
-                              <input
-                                 type='text'
-                                 name='name'
-                                 className='w-full p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-amber-300 transition'
-                                 placeholder='Ví dụ: Giảm giá mùa hè'
-                                 value={voucherData.name}
-                                 onChange={handleChange}
-                                 required
-                              />
-                           </div>
-
-                           {/* Các trường còn lại giữ nguyên... */}
+                           <div></div>
                            <div>
                               <label className=' mb-2 text-sm font-medium flex items-center'>
                                  <FiCalendar className='mr-1 text-amber-600' />
@@ -144,11 +303,16 @@ export default function CreateVoucher() {
                               <input
                                  type='date'
                                  name='startDate'
-                                 className='w-full p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-amber-300 transition'
+                                 className={`w-full p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-amber-300 transition ${
+                                    errors.startDate ? 'border-red-500 ring-1 ring-red-500' : ''
+                                 }`}
                                  value={voucherData.startDate}
                                  onChange={handleChange}
                                  required
                               />
+                              {errors.startDate && (
+                                 <p className='text-xs text-red-500 mt-1'>{errors.startDate}</p>
+                              )}
                            </div>
 
                            <div>
@@ -159,11 +323,16 @@ export default function CreateVoucher() {
                               <input
                                  type='date'
                                  name='endDate'
-                                 className='w-full p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-amber-300 transition'
+                                 className={`w-full p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-amber-300 transition ${
+                                    errors.endDate ? 'border-red-500 ring-1 ring-red-500' : ''
+                                 }`}
                                  value={voucherData.endDate}
                                  onChange={handleChange}
                                  required
                               />
+                              {errors.endDate && (
+                                 <p className='text-xs text-red-500 mt-1'>{errors.endDate}</p>
+                              )}
                            </div>
 
                            <div className='col-span-2'>
@@ -180,7 +349,11 @@ export default function CreateVoucher() {
                               <input
                                  type='number'
                                  name='discountPercent'
-                                 className='w-full p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-amber-300 transition'
+                                 className={`w-full p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-amber-300 transition ${
+                                    errors.discountPercent
+                                       ? 'border-red-500 ring-1 ring-red-500'
+                                       : ''
+                                 }`}
                                  placeholder='10'
                                  min='0'
                                  max='100'
@@ -188,6 +361,11 @@ export default function CreateVoucher() {
                                  onChange={handleChange}
                                  required
                               />
+                              {errors.discountPercent && (
+                                 <p className='text-xs text-red-500 mt-1'>
+                                    {errors.discountPercent}
+                                 </p>
+                              )}
                            </div>
 
                            <div>
@@ -216,36 +394,86 @@ export default function CreateVoucher() {
                                  <FiUsers className='mr-1 text-amber-600' />
                                  Số lượt sử dụng:
                               </label>
-                              <select
+                              <input
+                                 type='number'
                                  name='usageLimit'
                                  className='w-full p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-amber-300 transition'
+                                 placeholder='1'
+                                 min='0'
                                  value={voucherData.usageLimit}
                                  onChange={handleChange}
-                              >
-                                 <option value=''>Không giới hạn</option>
-                                 <option value='10'>10 lượt</option>
-                                 <option value='50'>50 lượt</option>
-                                 <option value='100'>100 lượt</option>
-                                 <option value='200'>200 lượt</option>
-                                 <option value='500'>500 lượt</option>
-                              </select>
+                              />
                            </div>
 
+                           {/* Maximum discount amount */}
                            <div>
-                              <label className=' mb-2 text-sm font-medium flex items-center'>
-                                 <FiInfo className='mr-1 text-amber-600' />
-                                 Đối tượng áp dụng:
+                              <label className='mb-2 text-sm font-medium flex items-center'>
+                                 <FiDollarSign className='mr-1 text-amber-600' />
+                                 Giới hạn giảm giá tối đa:
                               </label>
-                              <select
-                                 name='applyTo'
+                              <div className='relative'>
+                                 <input
+                                    type='number'
+                                    name='maxVoucherAmount'
+                                    className='w-full p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-amber-300 transition'
+                                    placeholder='100000'
+                                    min='0'
+                                    value={voucherData.maxVoucherAmount}
+                                    onChange={handleChange}
+                                 />
+                                 <span className='absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm'>
+                                    VNĐ
+                                 </span>
+                              </div>
+                              <p className='text-xs text-gray-500 mt-1'>
+                                 Để trống nếu không giới hạn
+                              </p>
+                           </div>
+
+                           {/* New customers only option */}
+                           <div>
+                              <label className='mb-2 text-sm font-medium flex items-center'>
+                                 <FiUsers className='mr-1 text-amber-600' />
+                                 Đối tượng khách hàng:
+                              </label>
+                              <div className='flex items-center mt-2'>
+                                 <input
+                                    type='checkbox'
+                                    id='newCustomersOnly'
+                                    name='newCustomersOnly'
+                                    className='w-4 h-4 text-amber-600 border-gray-300 rounded focus:ring-amber-500'
+                                    checked={voucherData.newCustomersOnly}
+                                    onChange={(e) =>
+                                       setVoucherData((prev) => ({
+                                          ...prev,
+                                          newCustomersOnly: e.target.checked,
+                                       }))
+                                    }
+                                 />
+                                 <label
+                                    htmlFor='newCustomersOnly'
+                                    className='ml-2 text-sm text-gray-700'
+                                 >
+                                    Chỉ áp dụng cho khách hàng mới
+                                 </label>
+                              </div>
+                           </div>
+
+                           {/* Usage per customer */}
+                           <div>
+                              <label className='mb-2 text-sm font-medium flex items-center'>
+                                 <FiUsers className='mr-1 text-amber-600' />
+                                 Số lần sử dụng cho mỗi khách:
+                              </label>
+                              <input
+                                 type='number'
+                                 name='usagePerCustomer'
                                  className='w-full p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-amber-300 transition'
-                                 value={voucherData.applyTo}
+                                 placeholder='1'
+                                 min='1'
+                                 value={voucherData.usagePerCustomer}
                                  onChange={handleChange}
-                              >
-                                 <option value='all'>Tất cả sản phẩm</option>
-                                 <option value='product'>Sản phẩm cụ thể</option>
-                                 <option value='category'>Theo danh mục</option>
-                              </select>
+                              />
                            </div>
 
                            <div className='col-span-2'>
@@ -264,12 +492,12 @@ export default function CreateVoucher() {
                         </div>
 
                         <div className='flex justify-end mt-6 space-x-2'>
-                           <button
-                              type='button'
+                           <Link
+                              href='/seller/vouchers'
                               className='px-5 py-2 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition focus:outline-none focus:ring-2 focus:ring-gray-300'
                            >
                               Hủy
-                           </button>
+                           </Link>
                            <button
                               type='submit'
                               disabled={isSubmitting}
@@ -318,7 +546,7 @@ export default function CreateVoucher() {
                            <FiTag className='mr-2 text-amber-600' /> Xem trước voucher
                         </h2>
 
-                        {/* Phần preview của voucher giữ nguyên... */}
+                        {/* Phần preview của voucher */}
                         <div className='bg-white p-5 rounded-lg shadow-md border border-gray-200 mb-6 relative overflow-hidden transition-all duration-300 hover:shadow-lg'>
                            {/* Phần trang trí */}
                            <div className='absolute -top-10 -right-10 w-20 h-20 bg-amber-100 rounded-full'></div>
@@ -351,10 +579,6 @@ export default function CreateVoucher() {
                                     </div>
                                  </div>
 
-                                 <div className='text-lg font-semibold my-2'>
-                                    {voucherData.name || 'Tên mã giảm giá'}
-                                 </div>
-
                                  <div className='text-md font-semibold border-t border-dashed border-gray-200 pt-2 mt-2'>
                                     {voucherData.discountPercent ? (
                                        <>
@@ -362,9 +586,36 @@ export default function CreateVoucher() {
                                           <span className='text-red-600 font-bold'>
                                              {voucherData.discountPercent}%
                                           </span>
+                                          {voucherData.minPrice ? (
+                                             <span className='text-sm ml-1'>
+                                                cho đơn từ{' '}
+                                                <span className='font-semibold'>
+                                                   {Number(voucherData.minPrice).toLocaleString(
+                                                      'vi-VN',
+                                                   )}
+                                                   đ
+                                                </span>
+                                             </span>
+                                          ) : null}
                                        </>
                                     ) : (
                                        'Giảm ...%'
+                                    )}
+                                 </div>
+
+                                 <div className='text-xs mt-2 text-gray-600'>
+                                    {voucherData.usageLimit ? (
+                                       <div className='flex items-center'>
+                                          <FiUsers className='mr-1 text-amber-500' />
+                                          <span>
+                                             Còn <b>{voucherData.usageLimit}</b> lượt sử dụng
+                                          </span>
+                                       </div>
+                                    ) : (
+                                       <div className='flex items-center'>
+                                          <FiUsers className='mr-1 text-amber-500' />
+                                          <span>Không giới hạn lượt sử dụng</span>
+                                       </div>
                                     )}
                                  </div>
 
