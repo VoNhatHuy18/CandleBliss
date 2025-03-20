@@ -4,14 +4,76 @@ import { useState } from 'react';
 import Head from 'next/head';
 import Image from 'next/image';
 import Link from 'next/link';
-import { FaPlus, FaEllipsisV, FaPencilAlt } from 'react-icons/fa';
+import { FaPlus, FaPencilAlt, FaTrash } from 'react-icons/fa';
 import Header from '@/app/components/user/nav/page';
 import Footer from '@/app/components/user/footer/page';
-import ViewedCarousel from '@/app/components/user/viewedcarousel/page';
 import MenuProfile from '@/app/components/user/menuprofile/page';
 
 export default function Profile() {
-   const [selectedTab, setSelectedTab] = useState('profile');
+   const [isEditing, setIsEditing] = useState(false); // Modal state for editing profile
+   const [isAddressModalOpen, setIsAddressModalOpen] = useState(false); // Modal state for address
+   const [editingAddress, setEditingAddress] = useState<Record<string, any>>({}); // Address being edited
+   const [formData, setFormData] = useState({
+      name: 'Mai Xuân Toàn',
+      email: 'mai******@gmail.com',
+      phone: '0333084060',
+      birthday: '28.09.2000',
+      gender: 'male',
+   });
+   const [addresses, setAddresses] = useState([
+      {
+         id: 1,
+         name: 'Mai Xuân Toàn',
+         address: '1135 Huỳnh Tấn Phát',
+         city: 'TP Hồ Chí Minh - Quận 7 - Phường Phú Thuận',
+         phone: '0333084060',
+      },
+   ]);
+
+   const handleInputChange = (e: { target: { name: any; value: any; }; }) => {
+      const { name, value } = e.target;
+      setFormData((prev) => ({ ...prev, [name]: value }));
+   };
+
+   const handleAddressChange = (e: { target: { name: any; value: any; }; }) => {
+      const { name, value } = e.target;
+      setEditingAddress((prev) => ({ ...(prev || {}), [name]: value }));
+   };
+
+   const handleSaveProfile = () => {
+      setIsEditing(false);
+   };
+
+   const handleAddOrEditAddress = () => {
+      if (editingAddress && editingAddress.id) {
+         // Edit existing address
+         setAddresses((prev) =>
+            prev.map((addr) =>
+               addr.id === editingAddress.id ? { ...addr, ...editingAddress } : addr
+            )
+         );
+      } else {
+         // Add new address
+         setAddresses((prev) => [
+            ...prev,
+            {
+               id: Date.now(),
+               name: editingAddress.name || '',
+               address: editingAddress.address || '',
+               city: editingAddress.city || '',
+               phone: editingAddress.phone || '',
+            },
+         ]);
+      }
+      setIsAddressModalOpen(false);
+      setEditingAddress({});
+   };
+
+   const handleDeleteAddress = (id: number) => {
+      if (confirm('Bạn có chắc chắn muốn xóa địa chỉ này?')) {
+         setAddresses((prev) => prev.filter((addr) => addr.id !== id));
+      }
+   };
 
    return (
       <div className='flex flex-col min-h-screen bg-gray-50'>
@@ -48,93 +110,19 @@ export default function Profile() {
                   <section className='bg-white p-6 rounded-lg shadow-sm border'>
                      <h2 className='text-xl font-semibold text-gray-800 mb-4'>Thông tin tài khoản</h2>
                      <div className='flex justify-between items-center'>
-                        <div className='flex items-center'>
-                           <span className='font-semibold text-lg text-gray-800 mr-2'>maixuantoan1</span>
-                        </div>
-                        <div className='flex items-center'>
-                           <div className='w-12 h-12 rounded-full overflow-hidden bg-gray-200'>
-                              <Image
-                                 src='/avatar.jpg'
-                                 alt='Avatar'
-                                 width={48}
-                                 height={48}
-                                 className='object-cover w-full h-full'
-                              />
-                           </div>
-                           <button className='ml-4 text-amber-600 flex items-center hover:text-amber-800'>
-                              <FaPencilAlt className='mr-1' />
-                              <span>Thay đổi</span>
-                           </button>
-                        </div>
-                     </div>
-                  </section>
-
-                  {/* Personal Details */}
-                  <section className='bg-white p-6 rounded-lg shadow-sm border'>
-                     <div className='grid grid-cols-1 md:grid-cols-2 gap-6'>
                         <div>
-                           <label className='block text-sm font-medium text-gray-700 mb-1'>Họ tên</label>
-                           <input
-                              type='text'
-                              className='w-full px-4 py-2 border rounded-md focus:ring-amber-500 focus:border-amber-500'
-                              value='Mai Xuân Toàn'
-                           />
+                           <p className='text-gray-700'>Họ tên: {formData.name}</p>
+                           <p className='text-gray-700'>Email: {formData.email}</p>
+                           <p className='text-gray-700'>Số điện thoại: {formData.phone}</p>
+                           <p className='text-gray-700'>Ngày sinh: {formData.birthday}</p>
                         </div>
-                        <div>
-                           <label className='block text-sm font-medium text-gray-700 mb-1'>Địa chỉ email</label>
-                           <input
-                              type='email'
-                              className='w-full px-4 py-2 border rounded-md bg-gray-100 focus:ring-amber-500 focus:border-amber-500'
-                              value='mai******@gmail.com'
-                              disabled
-                           />
-                        </div>
-                        <div>
-                           <label className='block text-sm font-medium text-gray-700 mb-1'>Số điện thoại</label>
-                           <input
-                              type='tel'
-                              className='w-full px-4 py-2 border rounded-md focus:ring-amber-500 focus:border-amber-500'
-                              value='0333084060'
-                           />
-                        </div>
-                        <div>
-                           <label className='block text-sm font-medium text-gray-700 mb-1'>Ngày sinh</label>
-                           <input
-                              type='text'
-                              className='w-full px-4 py-2 border rounded-md focus:ring-amber-500 focus:border-amber-500'
-                              value='28.09.2000'
-                           />
-                        </div>
-                        <div className='md:col-span-2'>
-                           <label className='block text-sm font-medium text-gray-700 mb-1'>Giới tính</label>
-                           <div className='flex items-center space-x-6'>
-                              <label className='flex items-center'>
-                                 <input
-                                    type='radio'
-                                    name='gender'
-                                    className='h-4 w-4 text-amber-600 focus:ring-amber-500'
-                                    checked
-                                 />
-                                 <span className='ml-2 text-sm text-gray-700'>Nam</span>
-                              </label>
-                              <label className='flex items-center'>
-                                 <input
-                                    type='radio'
-                                    name='gender'
-                                    className='h-4 w-4 text-amber-600 focus:ring-amber-500'
-                                 />
-                                 <span className='ml-2 text-sm text-gray-700'>Nữ</span>
-                              </label>
-                              <label className='flex items-center'>
-                                 <input
-                                    type='radio'
-                                    name='gender'
-                                    className='h-4 w-4 text-amber-600 focus:ring-amber-500'
-                                 />
-                                 <span className='ml-2 text-sm text-gray-700'>Khác</span>
-                              </label>
-                           </div>
-                        </div>
+                        <button
+                           className='text-amber-600 flex items-center hover:text-amber-800'
+                           onClick={() => setIsEditing(true)}
+                        >
+                           <FaPencilAlt className='mr-1' />
+                           <span>Chỉnh sửa</span>
+                        </button>
                      </div>
                   </section>
 
@@ -142,47 +130,175 @@ export default function Profile() {
                   <section className='bg-white p-6 rounded-lg shadow-sm border'>
                      <div className='flex justify-between items-center mb-4'>
                         <h3 className='text-lg font-semibold text-gray-800'>Địa chỉ giao hàng</h3>
-                        <button className='text-amber-600 flex items-center text-sm hover:text-amber-800'>
+                        <button
+                           className='text-amber-600 flex items-center text-sm hover:text-amber-800'
+                           onClick={() => {
+                              setEditingAddress({ name: '', address: '', city: '', phone: '' });
+                              setIsAddressModalOpen(true);
+                           }}
+                        >
                            <FaPlus className='mr-1' />
                            <span>Thêm địa chỉ mới</span>
                         </button>
                      </div>
-                     <div className='overflow-x-auto'>
-                        <table className='min-w-full'>
-                           <thead className='border-b'>
-                              <tr>
-                                 <th className='text-left py-3 px-4 text-sm font-medium text-gray-500'>Họ tên</th>
-                                 <th className='text-left py-3 px-4 text-sm font-medium text-gray-500'>Địa chỉ</th>
-                                 <th className='text-left py-3 px-4 text-sm font-medium text-gray-500'>Tỉnh/Thành</th>
-                                 <th className='text-left py-3 px-4 text-sm font-medium text-gray-500'>Số điện thoại</th>
-                                 <th className='text-left py-3 px-4 text-sm font-medium text-gray-500'></th>
-                              </tr>
-                           </thead>
-                           <tbody className='divide-y divide-gray-200'>
-                              <tr className='hover:bg-gray-50'>
-                                 <td className='py-3 px-4'>Mai Xuân Toàn</td>
-                                 <td className='py-3 px-4'>1135 Huỳnh Tấn Phát</td>
-                                 <td className='py-3 px-4'>TP Hồ Chí Minh - Quận 7 - Phường Phú Thuận</td>
-                                 <td className='py-3 px-4'>0333084060</td>
-                                 <td className='py-3 px-4 text-right'>
-                                    <button className='text-gray-400 hover:text-gray-600'>
-                                       <FaEllipsisV />
-                                    </button>
-                                 </td>
-                              </tr>
-                           </tbody>
-                        </table>
+                     <div className='space-y-4'>
+                        {addresses.map((addr) => (
+                           <div key={addr.id} className='border p-4 rounded-lg flex justify-between items-center'>
+                              <div>
+                                 <p className='text-gray-700'>Họ tên: {addr.name}</p>
+                                 <p className='text-gray-700'>Địa chỉ: {addr.address}</p>
+                                 <p className='text-gray-700'>Tỉnh/Thành: {addr.city}</p>
+                                 <p className='text-gray-700'>Số điện thoại: {addr.phone}</p>
+                              </div>
+                              <div className='flex space-x-2'>
+                                 <button
+                                    className='text-amber-600 hover:text-amber-800'
+                                    onClick={() => {
+                                       setEditingAddress(addr);
+                                       setIsAddressModalOpen(true);
+                                    }}
+                                 >
+                                    <FaPencilAlt />
+                                 </button>
+                                 <button
+                                    className='text-red-600 hover:text-red-800'
+                                    onClick={() => handleDeleteAddress(addr.id)}
+                                 >
+                                    <FaTrash />
+                                 </button>
+                              </div>
+                           </div>
+                        ))}
                      </div>
                   </section>
                </div>
             </div>
-
-            {/* Recently Viewed Products */}
-            <ViewedCarousel />
          </main>
 
          {/* Footer */}
          <Footer />
+
+         {/* Address Modal */}
+         {isAddressModalOpen && (
+            <div className='fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50'>
+               <div className='bg-white p-6 rounded-lg shadow-lg w-full max-w-md'>
+                  <h2 className='text-lg font-semibold text-gray-800 mb-4'>
+                     {editingAddress?.id ? 'Chỉnh sửa địa chỉ' : 'Thêm địa chỉ mới'}
+                  </h2>
+                  <div className='space-y-4'>
+                     <div>
+                        <label className='block text-sm font-medium text-gray-700'>Họ tên</label>
+                        <input
+                           type='text'
+                           name='name'
+                           value={editingAddress?.name || ''}
+                           onChange={handleAddressChange}
+                           className='w-full px-4 py-2 border rounded-md focus:ring-amber-500 focus:border-amber-500'
+                        />
+                     </div>
+                     <div>
+                        <label className='block text-sm font-medium text-gray-700'>Địa chỉ</label>
+                        <input
+                           type='text'
+                           name='address'
+                           value={editingAddress?.address || ''}
+                           onChange={handleAddressChange}
+                           className='w-full px-4 py-2 border rounded-md focus:ring-amber-500 focus:border-amber-500'
+                        />
+                     </div>
+                     <div>
+                        <label className='block text-sm font-medium text-gray-700'>Tỉnh/Thành</label>
+                        <input
+                           type='text'
+                           name='city'
+                           value={editingAddress?.city || ''}
+                           onChange={handleAddressChange}
+                           className='w-full px-4 py-2 border rounded-md focus:ring-amber-500 focus:border-amber-500'
+                        />
+                     </div>
+                     <div>
+                        <label className='block text-sm font-medium text-gray-700'>Số điện thoại</label>
+                        <input
+                           type='tel'
+                           name='phone'
+                           value={editingAddress?.phone || ''}
+                           onChange={handleAddressChange}
+                           className='w-full px-4 py-2 border rounded-md focus:ring-amber-500 focus:border-amber-500'
+                        />
+                     </div>
+                  </div>
+                  <div className='mt-6 flex justify-end space-x-4'>
+                     <button
+                        className='px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300'
+                        onClick={() => setIsAddressModalOpen(false)}
+                     >
+                        Hủy
+                     </button>
+                     <button
+                        className='px-4 py-2 bg-amber-600 text-white rounded-md hover:bg-amber-700'
+                        onClick={handleAddOrEditAddress}
+                     >
+                        Lưu
+                     </button>
+                  </div>
+               </div>
+            </div>
+         )}
+
+         {/* Edit Profile Modal */}
+         {isEditing && (
+            <div className='fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50'>
+               <div className='bg-white p-6 rounded-lg shadow-lg w-full max-w-md'>
+                  <h2 className='text-lg font-semibold text-gray-800 mb-4'>Chỉnh sửa thông tin</h2>
+                  <div className='space-y-4'>
+                     <div>
+                        <label className='block text-sm font-medium text-gray-700'>Họ tên</label>
+                        <input
+                           type='text'
+                           name='name'
+                           value={formData.name}
+                           onChange={handleInputChange}
+                           className='w-full px-4 py-2 border rounded-md focus:ring-amber-500 focus:border-amber-500'
+                        />
+                     </div>
+                     <div>
+                        <label className='block text-sm font-medium text-gray-700'>Số điện thoại</label>
+                        <input
+                           type='tel'
+                           name='phone'
+                           value={formData.phone}
+                           onChange={handleInputChange}
+                           className='w-full px-4 py-2 border rounded-md focus:ring-amber-500 focus:border-amber-500'
+                        />
+                     </div>
+                     <div>
+                        <label className='block text-sm font-medium text-gray-700'>Ngày sinh</label>
+                        <input
+                           type='text'
+                           name='birthday'
+                           value={formData.birthday}
+                           onChange={handleInputChange}
+                           className='w-full px-4 py-2 border rounded-md focus:ring-amber-500 focus:border-amber-500'
+                        />
+                     </div>
+                  </div>
+                  <div className='mt-6 flex justify-end space-x-4'>
+                     <button
+                        className='px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300'
+                        onClick={() => setIsEditing(false)}
+                     >
+                        Hủy
+                     </button>
+                     <button
+                        className='px-4 py-2 bg-amber-600 text-white rounded-md hover:bg-amber-700'
+                        onClick={handleSaveProfile}
+                     >
+                        Lưu
+                     </button>
+                  </div>
+               </div>
+            </div>
+         )}
       </div>
    );
 }
