@@ -1,107 +1,187 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import NavBar from '@/app/components/user/nav/page';
+import { useState } from 'react';
+import Head from 'next/head';
+import Image from 'next/image';
+import Link from 'next/link';
+import { FaPlus, FaEllipsisV, FaPencilAlt } from 'react-icons/fa';
+import Header from '@/app/components/user/nav/page';
 import Footer from '@/app/components/user/footer/page';
-import AuthService from '@/app/utils/authService';
-import Toast from '@/app/components/ui/toast/page';
+import ViewedCarousel from '@/app/components/user/viewedcarousel/page';
+import MenuProfile from '@/app/components/user/menuprofile/page';
 
 export default function Profile() {
-   const router = useRouter();
-   const [userName, setUserName] = useState<string>('');
-   const [userEmail, setUserEmail] = useState<string>('');
-   const [isLoading, setIsLoading] = useState<boolean>(true);
-
-   const [toast, setToast] = useState<{
-      show: boolean;
-      message: string;
-      type: 'success' | 'error' | 'info';
-   }>({
-      show: false,
-      message: '',
-      type: 'info',
-   });
-
-   useEffect(() => {
-      // Kiểm tra xem người dùng đã đăng nhập chưa
-      if (!AuthService.isAuthenticated()) {
-         router.push('/user/signin');
-         return;
-      }
-
-      // Lấy thông tin người dùng từ localStorage hoặc từ API
-      const userInfo = AuthService.getUserInfo();
-      if (userInfo) {
-         setUserName(`${userInfo.firstName || ''} ${userInfo.lastName || ''}`);
-         setUserEmail(userInfo.email || '');
-      }
-
-      setIsLoading(false);
-   }, [router]);
-
-   const handleLogout = () => {
-      AuthService.logout();
-      setToast({
-         show: true,
-         message: 'Đăng xuất thành công',
-         type: 'success',
-      });
-
-      setTimeout(() => {
-         router.push('/user/home');
-      }, 1000);
-   };
-
-   if (isLoading) {
-      return (
-         <div className='min-h-screen flex items-center justify-center'>
-            <div className='animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#553C26]'></div>
-         </div>
-      );
-   }
+   const [selectedTab, setSelectedTab] = useState('profile');
 
    return (
-      <div className='min-h-screen flex flex-col bg-[#F9F6F3]'>
-         <div className='fixed top-4 right-4 z-50'>
-            <Toast
-               show={toast.show}
-               message={toast.message}
-               type={toast.type}
-               onClose={() => setToast((prev) => ({ ...prev, show: false }))}
-            />
-         </div>
+      <div className='flex flex-col min-h-screen bg-gray-50'>
+         <Head>
+            <title>Thông tin cá nhân | Candle Bliss</title>
+            <meta name='description' content='Thông tin cá nhân Candle Bliss' />
+         </Head>
 
-         <NavBar />
-         <hr className='border-b-2 border-b-[#F1EEE9]' />
+         {/* Header */}
+         <Header />
 
-         <div className='container mx-auto px-4 py-8 flex-grow'>
-            <div className='bg-white rounded-lg shadow-md p-6 max-w-3xl mx-auto'>
-               <h1 className='text-2xl font-bold text-[#553C26] mb-6'>Hồ Sơ Cá Nhân</h1>
-
-               <div className='space-y-4'>
-                  <div>
-                     <h2 className='text-lg font-semibold text-[#553C26]'>Họ và tên</h2>
-                     <p className='text-gray-700'>{userName || 'Chưa cập nhật'}</p>
-                  </div>
-
-                  <div>
-                     <h2 className='text-lg font-semibold text-[#553C26]'>Email</h2>
-                     <p className='text-gray-700'>{userEmail || 'Chưa cập nhật'}</p>
-                  </div>
-
-                  <div className='pt-6'>
-                     <button
-                        onClick={handleLogout}
-                        className='bg-[#553C26] text-white py-2 px-4 rounded hover:bg-[#3e2b1a] transition-colors'
-                     >
-                        Đăng xuất
-                     </button>
-                  </div>
-               </div>
+         {/* Breadcrumb */}
+         <div className='bg-gray-100 py-3'>
+            <div className='container mx-auto px-4'>
+               <nav className='flex items-center text-sm'>
+                  <Link href='/' className='hover:text-amber-600'>
+                     Trang chủ
+                  </Link>
+                  <span className='mx-2 text-gray-400'>{'>'}</span>
+                  <span className='text-gray-500'>Thông tin cá nhân</span>
+               </nav>
             </div>
          </div>
 
+         {/* Main Content */}
+         <main className='flex-grow container mx-auto px-4 py-6'>
+            <div className='flex flex-col md:flex-row gap-8'>
+               {/* Sidebar */}
+               <MenuProfile />
+
+               {/* Main Section */}
+               <div className='w-full md:w-3/4 space-y-6'>
+                  {/* Account Information */}
+                  <section className='bg-white p-6 rounded-lg shadow-sm border'>
+                     <h2 className='text-xl font-semibold text-gray-800 mb-4'>Thông tin tài khoản</h2>
+                     <div className='flex justify-between items-center'>
+                        <div className='flex items-center'>
+                           <span className='font-semibold text-lg text-gray-800 mr-2'>maixuantoan1</span>
+                        </div>
+                        <div className='flex items-center'>
+                           <div className='w-12 h-12 rounded-full overflow-hidden bg-gray-200'>
+                              <Image
+                                 src='/avatar.jpg'
+                                 alt='Avatar'
+                                 width={48}
+                                 height={48}
+                                 className='object-cover w-full h-full'
+                              />
+                           </div>
+                           <button className='ml-4 text-amber-600 flex items-center hover:text-amber-800'>
+                              <FaPencilAlt className='mr-1' />
+                              <span>Thay đổi</span>
+                           </button>
+                        </div>
+                     </div>
+                  </section>
+
+                  {/* Personal Details */}
+                  <section className='bg-white p-6 rounded-lg shadow-sm border'>
+                     <div className='grid grid-cols-1 md:grid-cols-2 gap-6'>
+                        <div>
+                           <label className='block text-sm font-medium text-gray-700 mb-1'>Họ tên</label>
+                           <input
+                              type='text'
+                              className='w-full px-4 py-2 border rounded-md focus:ring-amber-500 focus:border-amber-500'
+                              value='Mai Xuân Toàn'
+                           />
+                        </div>
+                        <div>
+                           <label className='block text-sm font-medium text-gray-700 mb-1'>Địa chỉ email</label>
+                           <input
+                              type='email'
+                              className='w-full px-4 py-2 border rounded-md bg-gray-100 focus:ring-amber-500 focus:border-amber-500'
+                              value='mai******@gmail.com'
+                              disabled
+                           />
+                        </div>
+                        <div>
+                           <label className='block text-sm font-medium text-gray-700 mb-1'>Số điện thoại</label>
+                           <input
+                              type='tel'
+                              className='w-full px-4 py-2 border rounded-md focus:ring-amber-500 focus:border-amber-500'
+                              value='0333084060'
+                           />
+                        </div>
+                        <div>
+                           <label className='block text-sm font-medium text-gray-700 mb-1'>Ngày sinh</label>
+                           <input
+                              type='text'
+                              className='w-full px-4 py-2 border rounded-md focus:ring-amber-500 focus:border-amber-500'
+                              value='28.09.2000'
+                           />
+                        </div>
+                        <div className='md:col-span-2'>
+                           <label className='block text-sm font-medium text-gray-700 mb-1'>Giới tính</label>
+                           <div className='flex items-center space-x-6'>
+                              <label className='flex items-center'>
+                                 <input
+                                    type='radio'
+                                    name='gender'
+                                    className='h-4 w-4 text-amber-600 focus:ring-amber-500'
+                                    checked
+                                 />
+                                 <span className='ml-2 text-sm text-gray-700'>Nam</span>
+                              </label>
+                              <label className='flex items-center'>
+                                 <input
+                                    type='radio'
+                                    name='gender'
+                                    className='h-4 w-4 text-amber-600 focus:ring-amber-500'
+                                 />
+                                 <span className='ml-2 text-sm text-gray-700'>Nữ</span>
+                              </label>
+                              <label className='flex items-center'>
+                                 <input
+                                    type='radio'
+                                    name='gender'
+                                    className='h-4 w-4 text-amber-600 focus:ring-amber-500'
+                                 />
+                                 <span className='ml-2 text-sm text-gray-700'>Khác</span>
+                              </label>
+                           </div>
+                        </div>
+                     </div>
+                  </section>
+
+                  {/* Shipping Address */}
+                  <section className='bg-white p-6 rounded-lg shadow-sm border'>
+                     <div className='flex justify-between items-center mb-4'>
+                        <h3 className='text-lg font-semibold text-gray-800'>Địa chỉ giao hàng</h3>
+                        <button className='text-amber-600 flex items-center text-sm hover:text-amber-800'>
+                           <FaPlus className='mr-1' />
+                           <span>Thêm địa chỉ mới</span>
+                        </button>
+                     </div>
+                     <div className='overflow-x-auto'>
+                        <table className='min-w-full'>
+                           <thead className='border-b'>
+                              <tr>
+                                 <th className='text-left py-3 px-4 text-sm font-medium text-gray-500'>Họ tên</th>
+                                 <th className='text-left py-3 px-4 text-sm font-medium text-gray-500'>Địa chỉ</th>
+                                 <th className='text-left py-3 px-4 text-sm font-medium text-gray-500'>Tỉnh/Thành</th>
+                                 <th className='text-left py-3 px-4 text-sm font-medium text-gray-500'>Số điện thoại</th>
+                                 <th className='text-left py-3 px-4 text-sm font-medium text-gray-500'></th>
+                              </tr>
+                           </thead>
+                           <tbody className='divide-y divide-gray-200'>
+                              <tr className='hover:bg-gray-50'>
+                                 <td className='py-3 px-4'>Mai Xuân Toàn</td>
+                                 <td className='py-3 px-4'>1135 Huỳnh Tấn Phát</td>
+                                 <td className='py-3 px-4'>TP Hồ Chí Minh - Quận 7 - Phường Phú Thuận</td>
+                                 <td className='py-3 px-4'>0333084060</td>
+                                 <td className='py-3 px-4 text-right'>
+                                    <button className='text-gray-400 hover:text-gray-600'>
+                                       <FaEllipsisV />
+                                    </button>
+                                 </td>
+                              </tr>
+                           </tbody>
+                        </table>
+                     </div>
+                  </section>
+               </div>
+            </div>
+
+            {/* Recently Viewed Products */}
+            <ViewedCarousel />
+         </main>
+
+         {/* Footer */}
          <Footer />
       </div>
    );
