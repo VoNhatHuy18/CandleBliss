@@ -6,53 +6,88 @@ import { useState, useEffect } from 'react';
 import { MagnifyingGlassIcon } from '@heroicons/react/20/solid';
 import { UserIcon, ShoppingBagIcon, Bars3Icon, XMarkIcon } from '@heroicons/react/24/outline';
 import Image from 'next/image';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { jwtDecode } from 'jwt-decode';
+
+interface DecodedToken {
+   name: string;
+   exp: number;
+   [key: string]: any;
+}
 
 export default function NavBar() {
    const [showSearchInput, setShowSearchInput] = useState(false);
    const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
    const [isLoggedIn, setIsLoggedIn] = useState(false);
    const [userName, setUserName] = useState<string | null>(null);
+   const [showUserMenu, setShowUserMenu] = useState(false);
    const router = useRouter();
+   const pathname = usePathname();
 
    const toggleMobileMenu = () => {
       setMobileMenuOpen(!mobileMenuOpen);
    };
 
+   const toggleUserMenu = () => {
+      setShowUserMenu(!showUserMenu);
+   };
+
    // Kiểm tra trạng thái đăng nhập mỗi khi component được render
    useEffect(() => {
+      checkAuthStatus();
+   }, [pathname]);
+
+   const checkAuthStatus = () => {
       // Check for JWT token in localStorage
       const token = localStorage.getItem('token');
+
       if (token) {
-         setIsLoggedIn(true);
          try {
             // Decode the token to get user information
-            const decoded = jwtDecode(token);
-            // Assuming your token contains a name field
-            setUserName((decoded as { name: string }).name);
+            const decoded = jwtDecode<DecodedToken>(token);
+
+            // Check if token is expired
+            const currentTime = Date.now() / 1000;
+            if (decoded.exp && decoded.exp < currentTime) {
+               // Token expired, remove and logout
+               handleLogout();
+               return;
+            }
+
+            // Valid token
+            setIsLoggedIn(true);
+            setUserName(decoded.name || 'User');
          } catch (error) {
             console.error('Invalid token:', error);
-            // Nếu token không hợp lệ, xóa token và đặt trạng thái là chưa đăng nhập
-            localStorage.removeItem('token');
-            localStorage.removeItem('refreshToken');
-            setIsLoggedIn(false);
-            setUserName(null);
+            handleLogout();
          }
       } else {
          setIsLoggedIn(false);
          setUserName(null);
+
+         // If on protected routes, redirect to login
+         if (pathname === '/user/profile' || pathname.startsWith('/user/orders')) {
+            router.push('/user/signin');
+         }
       }
-   }, []);
+   };
 
    const handleUserIconClick = (e: React.MouseEvent) => {
       e.preventDefault();
+
       if (isLoggedIn) {
-         // If logged in, go directly to profile page
-         router.push('/user/profile');
+         // On desktop, toggle dropdown
+         if (window.innerWidth >= 1024) {
+            toggleUserMenu();
+         } else {
+            // On mobile, go directly to profile
+            router.push('/user/profile');
+            setMobileMenuOpen(false);
+         }
       } else {
          // If not logged in, go to sign in page
          router.push('/user/signin');
+         setMobileMenuOpen(false);
       }
    };
 
@@ -65,6 +100,7 @@ export default function NavBar() {
       // Update state
       setIsLoggedIn(false);
       setUserName(null);
+      setShowUserMenu(false);
 
       // Redirect to home
       router.push('/user/home');
@@ -177,14 +213,38 @@ export default function NavBar() {
                <Link href='/user/cart' className='text-[#553C26]'>
                   <ShoppingBagIcon className='size-5' />
                </Link>
-               <div className='relative items-center flex '>
-                  <button onClick={handleUserIconClick} className='text-[#553C26] '>
+
+               {/* User Account Menu */}
+               <div className='relative'>
+                  <button
+                     onClick={handleUserIconClick}
+                     className={`text-[#553C26] p-2 rounded-full ${isLoggedIn ? 'bg-amber-100' : ''}`}
+                  >
                      <UserIcon className='size-5' />
                   </button>
-                  {isLoggedIn && userName && (
-                     <div className='absolute top-full right-0 mt-1 bg-[#F1EEE9] rounded-md shadow-lg px-2 py-1 text-xs text-[#553C26] font-semibold truncate'>
-                        {userName}
+
+                  {/* User Menu Dropdown */}
+                  {isLoggedIn && showUserMenu && (
+                     <div className='absolute top-full right-0 mt-1 bg-[#F1EEE9] rounded-md shadow-lg w-48 py-2 z-50'>
+
+
+                        <Link href='/user/profile'>
+                           <div className='block px-4 py-2 text-[#553C26] hover:bg-[#E2DED8]'>
+                              Hồ sơ cá nhân
+                           </div>
+                        </Link>
+                        <button
+                           onClick={handleLogout}
+                           className='w-full text-left px-4 py-2 text-red-600 hover:bg-red-50 border-t border-amber-200 mt-1'
+                        >
+                           Đăng xuất
+                        </button>
                      </div>
+                  )}
+
+                  {/* Show small indicator when logged in */}
+                  {isLoggedIn && !showUserMenu && (
+                     <div className='absolute bottom-0 right-0 w-2 h-2 bg-green-500 rounded-full'></div>
                   )}
                </div>
             </nav>
@@ -242,39 +302,57 @@ export default function NavBar() {
                         Về Chúng Tôi
                      </span>
                   </Link>
-                  <Link href='' onClick={toggleMobileMenu}>
-                     <a href='https://www.facebook.com/'>
-                        <span className='block text-[#553C26] text-lg font-mont hover:text-[#FF9900]'>
-                           Liên Hệ
-                        </span>
-                     </a>
+                  <Link href='https://www.facebook.com/' target='_blank' onClick={toggleMobileMenu}>
+                     <span className='block text-[#553C26] text-lg font-mont hover:text-[#FF9900]'>
+                        Liên Hệ
+                     </span>
                   </Link>
-                  <div className='pt-2'>
+
+                  {/* User Account Section - Mobile */}
+                  <div className='pt-3 mt-2 border-t border-amber-200'>
                      {!isLoggedIn ? (
                         <>
-                           <Link href='/user/signup' onClick={toggleMobileMenu}>
-                              <span className='block text-[#553C26] text-lg hover:text-[#FF9900]'>
-                                 Đăng Ký
-                              </span>
-                           </Link>
                            <Link href='/user/signin' onClick={toggleMobileMenu}>
-                              <span className='block text-[#553C26] text-lg hover:text-[#FF9900] mt-2'>
+                              <div className='block py-2 px-4 text-[#553C26] text-lg font-bold bg-amber-100 hover:bg-amber-200 rounded-md mb-2'>
                                  Đăng Nhập
-                              </span>
+                              </div>
+                           </Link>
+                           <Link href='/user/signup' onClick={toggleMobileMenu}>
+                              <div className='block py-2 px-4 text-amber-600 text-lg border border-amber-400 rounded-md hover:bg-amber-50 text-center'>
+                                 Đăng Ký
+                              </div>
                            </Link>
                         </>
                      ) : (
                         <>
+                           <div className='py-2 px-4 bg-amber-50 rounded-md mb-3'>
+                              <p className='text-amber-800 text-sm'>Xin chào,</p>
+                              <p className='font-bold text-[#553C26]'>{userName}</p>
+                           </div>
+
                            <Link href='/user/profile' onClick={toggleMobileMenu}>
-                              <span className='block text-[#553C26] text-lg hover:text-[#FF9900]'>
-                                 Hồ Sơ Cá Nhân ({userName})
-                              </span>
+                              <div className='flex items-center py-2 text-[#553C26] hover:text-amber-700'>
+                                 <UserIcon className='size-5 mr-2' />
+                                 <span>Hồ Sơ Cá Nhân</span>
+                              </div>
                            </Link>
+
+                           <Link href='/user/orders' onClick={toggleMobileMenu}>
+                              <div className='flex items-center py-2 text-[#553C26] hover:text-amber-700'>
+                                 <ShoppingBagIcon className='size-5 mr-2' />
+                                 <span>Đơn Hàng Của Tôi</span>
+                              </div>
+                           </Link>
+
                            <button
-                              onClick={handleLogout}
-                              className='block text-[#553C26] text-lg hover:text-[#FF9900] mt-2 text-left'
+                              onClick={() => {
+                                 handleLogout();
+                                 toggleMobileMenu();
+                              }}
+                              className='flex items-center w-full py-2 text-red-600 hover:text-red-700 mt-3'
                            >
-                              Đăng Xuất
+                              <XMarkIcon className='size-5 mr-2' />
+                              <span>Đăng Xuất</span>
                            </button>
                         </>
                      )}

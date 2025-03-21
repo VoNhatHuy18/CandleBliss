@@ -22,12 +22,15 @@ export default function Step1() {
    const [productImages, setProductImages] = useState<string[]>(formData.images || []);
    const [imageError, setImageError] = useState<string | null>(null);
    const [videoUrl, setVideoUrl] = useState(formData.videoUrl || '');
+   const [categoryDescription, setCategoryDescription] = useState('');
    const [errors, setErrors] = useState({
       name: '',
       category: '',
       description: '',
-      images: ''
+      images: '',
+      categoryDescription: '',
    });
+   const [isLoading, setIsLoading] = useState(false); // Thêm state isLoading
 
    // Handle image upload
    const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -62,7 +65,7 @@ export default function Step1() {
          .filter((image) => image !== null) as string[];
 
       setProductImages((prev) => [...prev, ...newImages]);
-      setErrors(prev => ({...prev, images: ''}));
+      setErrors((prev) => ({ ...prev, images: '' }));
 
       // Reset the input value so the same file can be selected again
       e.target.value = '';
@@ -83,7 +86,8 @@ export default function Step1() {
          name: '',
          category: '',
          description: '',
-         images: ''
+         images: '',
+         categoryDescription: '',
       };
 
       if (!name.trim()) {
@@ -106,26 +110,160 @@ export default function Step1() {
          isValid = false;
       }
 
+      if (!categoryDescription.trim()) {
+         newErrors.categoryDescription = 'Vui lòng nhập mô tả danh mục';
+         isValid = false;
+      }
+
       setErrors(newErrors);
       return isValid;
    };
 
-   const handleNext = () => {
+   const handleNext = async () => {
       if (!validateForm()) {
          return;
       }
 
-      // Save Step 1 data to context
-      updateFormData({
-         name,
-         description,
-         category,
-         images: productImages, // Save images to context
-         videoUrl,
-      });
+      try {
+         setIsLoading(true);
 
-      // Navigate to Step 2
-      router.push('/seller/products/createproduct/step2');
+         // Lấy token xác thực
+         const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+         if (!token) {
+            alert('Bạn chưa đăng nhập hoặc phiên làm việc đã hết hạn');
+            router.push('/seller/signin');
+            return;
+         }
+
+         // Tạo FormData để gửi dữ liệu bao gồm hình ảnh
+         const productFormData = new FormData();
+         productFormData.append('name', name.trim());
+         productFormData.append('description', description || '');
+         if (videoUrl) {
+            productFormData.append('video', videoUrl);
+         }
+
+         // Xử lý và thêm các hình ảnh
+         let hasImages = false;
+         for (const blobUrl of productImages) {
+            if (!blobUrl || !blobUrl.startsWith('blob:')) continue;
+            try {
+               const response = await fetch(blobUrl);
+               const blob = await response.blob();
+               const file = new File([blob], `image-${Date.now()}.jpg`, { type: blob.type });
+               productFormData.append('images', file);
+               hasImages = true;
+            } catch (error) {
+               console.error('Error processing image:', error);
+               alert('Lỗi khi xử lý hình ảnh sản phẩm');
+            }
+         }
+
+         // Kiểm tra có hình ảnh không
+         if (!hasImages) {
+            setErrors((prev) => ({ ...prev, images: 'Vui lòng tải lên ít nhất 1 hình ảnh' }));
+            setIsLoading(false);
+            return;
+         }
+
+         // Gửi request tạo sản phẩm
+         const productResponse = await fetch('http://localhost:3000/api/products', {
+            method: 'POST',
+            headers: {
+               Authorization: `Bearer ${token}`,
+            },
+            body: productFormData,
+         });
+
+         if (!productResponse.ok) {
+            const errorData = await productResponse.json().catch(() => null);
+            const errorText = await productResponse.text().catch(() => 'Unknown error');
+            console.error('Product creation failed:', errorData || errorText);
+            alert(`Lỗi khi tạo sản phẩm: ${errorData?.message || errorText}`);
+            setIsLoading(false);
+            return;
+         }
+
+         // Lấy ID sản phẩm đã tạo
+         const createdProduct = await productResponse.json();
+         const productId = createdProduct.id;
+
+         // Tạo danh mục cho sản phẩm - cập nhật để chỉ gửi thông tin danh mục
+         const categoryData = {
+            name: category.trim(),
+            description: categoryDescription.trim(),
+            // Bỏ trường productId
+         };
+
+         // Gửi request tạo danh mục
+         const categoryResponse = await fetch('http://localhost:3000/api/categories', {
+            method: 'POST',
+            headers: {
+               'Content-Type': 'application/json',
+               Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify(categoryData),
+         });
+
+         if (!categoryResponse.ok) {
+            const errorData = await categoryResponse.json().catch(() => null);
+            const errorText = await categoryResponse.text().catch(() => 'Unknown error');
+            console.error('Category creation failed:', errorData || errorText);
+            alert(`Lỗi khi tạo danh mục: ${errorData?.message || errorText}`);
+            setIsLoading(false);
+            return;
+         }
+
+         // Lấy ID danh mục đã tạo
+         const createdCategory = await categoryResponse.json();
+         const categoryId = createdCategory.id;
+
+         // Cập nhật sản phẩm với categoryId
+         const updateProductData = {
+            categoryId: categoryId,
+         };
+
+         const updateProductResponse = await fetch(
+            `http://localhost:3000/api/products/${productId}`,
+            {
+               method: 'PATCH',
+               headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: `Bearer ${token}`,
+               },
+               body: JSON.stringify(updateProductData),
+            },
+         );
+
+         if (!updateProductResponse.ok) {
+            const errorData = await updateProductResponse.json().catch(() => null);
+            console.error('Product update failed:', errorData);
+            alert(
+               `Lỗi khi cập nhật sản phẩm với danh mục: ${errorData?.message || 'Unknown error'}`,
+            );
+            setIsLoading(false);
+            return;
+         }
+
+         // Cập nhật dữ liệu trong context và thêm productId vào để các bước tiếp theo sử dụng
+         updateFormData({
+            name,
+            description,
+            category,
+            categoryDescription, // Thêm mô tả danh mục
+            images: productImages,
+            videoUrl,
+            productId: productId,
+         });
+
+         // Chuyển đến bước tiếp theo
+         router.push('/seller/products/createproduct/step2');
+      } catch (error) {
+         console.error('Error creating product:', error);
+         alert(`Đã xảy ra lỗi: ${error instanceof Error ? error.message : 'Lỗi không xác định'}`);
+      } finally {
+         setIsLoading(false);
+      }
    };
 
    return (
@@ -236,12 +374,15 @@ export default function Step1() {
                               value={name}
                               onChange={(e) => {
                                  setName(e.target.value);
-                                 setErrors(prev => ({...prev, name: ''}));
+                                 setErrors((prev) => ({ ...prev, name: '' }));
                               }}
                               placeholder='Tên sản phẩm + Thương hiệu + Model + Thông số kỹ thuật'
-                              className={`w-full px-3 py-2 border ${errors.name ? 'border-red-500' : 'border-gray-300'} rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500`}
+                              className={`w-full px-3 py-2 border ${errors.name ? 'border-red-500' : 'border-gray-300'
+                                 } rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500`}
                            />
-                           {errors.name && <p className='text-red-500 text-xs mt-1'>{errors.name}</p>}
+                           {errors.name && (
+                              <p className='text-red-500 text-xs mt-1'>{errors.name}</p>
+                           )}
                         </div>
 
                         {/* Category */}
@@ -250,38 +391,49 @@ export default function Step1() {
                               <span className='text-red-500'>*</span> Danh mục
                            </label>
                            <div className='relative'>
-                              <select
+                              <input
+                                 type='text'
                                  value={category}
                                  onChange={(e) => {
                                     setCategory(e.target.value);
-                                    setErrors(prev => ({...prev, category: ''}));
+                                    setErrors((prev) => ({ ...prev, category: '' }));
                                  }}
-                                 className={`w-full px-3 py-2 border ${errors.category ? 'border-red-500' : 'border-gray-300'} rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 appearance-none`}
-                              >
-                                 <option value='' className='hidden'>
-                                    Chọn danh mục
-                                 </option>
-                                 <option value='Nến thơm'>Nến thơm</option>
-                                 <option value='Phụ kiện nến'>Phụ kiện nến</option>
-                                 <option value='Tinh dầu'>Tinh dầu</option>
-                                 <option value='Quà tặng '>Quà tặng</option>
-                              </select>
-                              {errors.category && <p className='text-red-500 text-xs mt-1'>{errors.category}</p>}
-                              <div className='absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none'>
-                                 <svg
-                                    className='h-5 w-5 text-gray-400'
-                                    xmlns='http://www.w3.org/2000/svg'
-                                    viewBox='0 0 20 20'
-                                    fill='currentColor'
-                                 >
-                                    <path
-                                       fillRule='evenodd'
-                                       d='M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z'
-                                       clipRule='evenodd'
-                                    />
-                                 </svg>
-                              </div>
+                                 placeholder='Nhập tên danh mục sản phẩm (vd: Nến thơm, Tinh dầu)'
+                                 className={`w-full px-3 py-2 border ${errors.category ? 'border-red-500' : 'border-gray-300'
+                                    } rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500`}
+                              />
+                              {errors.category && (
+                                 <p className='text-red-500 text-xs mt-1'>{errors.category}</p>
+                              )}
                            </div>
+                           <p className='text-xs text-gray-500 mt-1'>
+                              Nhập tên danh mục để phân loại sản phẩm của bạn
+                           </p>
+                        </div>
+
+                        {/* Category Description - Thêm mới */}
+                        <div>
+                           <label className='block text-sm font-medium text-gray-700 mb-1'>
+                              <span className='text-red-500'>*</span> Mô tả danh mục
+                           </label>
+                           <textarea
+
+                              rows={3}
+                              value={categoryDescription}
+                              onChange={(e) => {
+                                 setCategoryDescription(e.target.value);
+                                 setErrors((prev) => ({ ...prev, categoryDescription: '' }));
+                              }}
+                              placeholder='Mô tả ngắn gọn về danh mục sản phẩm'
+                              className={`w-full px-3 py-2 border ${errors.categoryDescription ? 'border-red-500' : 'border-gray-300'
+                                 } rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500`}
+                           ></textarea>
+                           {errors.categoryDescription && (
+                              <p className='text-red-500 text-xs mt-1'>
+                                 {errors.categoryDescription}
+                              </p>
+                           )}
+
                         </div>
 
                         {/* Product Image - Updated with functionality */}
@@ -289,7 +441,10 @@ export default function Step1() {
                            <label className='block text-sm font-medium text-gray-700 mb-1'>
                               <span className='text-red-500'>*</span> Hình ảnh chi tiết sản phẩm:
                            </label>
-                           <div className={`border border-dashed ${errors.images ? 'border-red-500' : 'border-gray-300'} rounded-md p-6`}>
+                           <div
+                              className={`border border-dashed ${errors.images ? 'border-red-500' : 'border-gray-300'
+                                 } rounded-md p-6`}
+                           >
                               {/* Image Preview Grid */}
                               {productImages.length > 0 && (
                                  <div className='grid grid-cols-3 gap-4 mb-4'>
@@ -358,7 +513,9 @@ export default function Step1() {
                                  {imageError && (
                                     <p className='text-red-500 text-xs mt-2'>{imageError}</p>
                                  )}
-                                 {errors.images && <p className='text-red-500 text-xs mt-2'>{errors.images}</p>}
+                                 {errors.images && (
+                                    <p className='text-red-500 text-xs mt-2'>{errors.images}</p>
+                                 )}
                               </div>
                            </div>
                            <p className='text-xs text-gray-500 mt-1'>
@@ -388,14 +545,17 @@ export default function Step1() {
                            <textarea
                               rows={6}
                               placeholder='Mô tả chi tiết về sản phẩm'
-                              className={`w-full px-3 py-2 border ${errors.description ? 'border-red-500' : 'border-gray-300'} rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500`}
+                              className={`w-full px-3 py-2 border ${errors.description ? 'border-red-500' : 'border-gray-300'
+                                 } rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500`}
                               value={description}
                               onChange={(e) => {
                                  setDescription(e.target.value);
-                                 setErrors(prev => ({...prev, description: ''}));
+                                 setErrors((prev) => ({ ...prev, description: '' }));
                               }}
                            ></textarea>
-                           {errors.description && <p className='text-red-500 text-xs mt-1'>{errors.description}</p>}
+                           {errors.description && (
+                              <p className='text-red-500 text-xs mt-1'>{errors.description}</p>
+                           )}
                            <div className='text-right text-xs text-gray-500 mt-1'>
                               {description.length}/3000
                            </div>

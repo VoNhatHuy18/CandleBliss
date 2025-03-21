@@ -2,12 +2,13 @@
 import Header from '@/app/components/seller/header/page';
 import MenuSideBar from '@/app/components/seller/menusidebar/page';
 import { useProductForm } from '@/app/context/ProductFormContext';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
+import Toast from '@/app/components/ui/toast/page';
 
-// Định nghĩa interface cho variant
+// Interface for variant
 interface Variant {
    type: string;
    value: string;
@@ -15,6 +16,7 @@ interface Variant {
    size?: string;
    images?: string[];
    quantity?: number;
+   detailId?: number; // Đảm bảo có trường này
 }
 
 export default function Step3() {
@@ -25,14 +27,43 @@ export default function Step3() {
    const [startDate, setStartDate] = useState('');
    const [endDate, setEndDate] = useState('');
    const [variants, setVariants] = useState<Variant[]>(formData.variants || []);
-   const [isActive] = useState(false);
+   const [isActive, setIsActive] = useState(true);
    const [videoUrl, setVideoUrl] = useState('');
    const [promotion, setPromotion] = useState('');
+   const [isLoading, setIsLoading] = useState(false);
+   const [calculatedPrice, setCalculatedPrice] = useState('');
 
-   // Debug the entire formData object
-   console.log('Complete formData:', formData);
+   // Initialize dates if empty
+   useEffect(() => {
+      if (!startDate) {
+         setStartDate(new Date().toISOString().split('T')[0]);
+      }
+      if (!endDate) {
+         const thirtyDaysLater = new Date();
+         thirtyDaysLater.setDate(thirtyDaysLater.getDate() + 30);
+         setEndDate(thirtyDaysLater.toISOString().split('T')[0]);
+      }
 
-   // Access data from Step 1
+      // Set empty variants as expanded by default
+      if (variants.length > 0) {
+         const initializedVariants = variants.map((variant) => ({
+            ...variant,
+            isExpanded: variant.isExpanded !== undefined ? variant.isExpanded : true,
+         }));
+         setVariants(initializedVariants);
+      }
+   }, []);
+
+   // Calculate display price whenever basePrice or discountPrice changes
+   useEffect(() => {
+      if (discountPrice && Number(discountPrice) > 0 && Number(discountPrice) < Number(basePrice)) {
+         setCalculatedPrice(discountPrice);
+      } else {
+         setCalculatedPrice(basePrice);
+      }
+   }, [basePrice, discountPrice]);
+
+   // Access data from previous steps
    const { name, description, category, images } = formData;
 
    // Toggle expanded state of a variant
@@ -42,10 +73,37 @@ export default function Step3() {
       setVariants(updatedVariants);
    };
 
-   // Add this function to your Step3 component
+   // Validate form before submission
+   const validateForm = () => {
+      if (!basePrice || Number(basePrice) <= 0) {
+         return false;
+      }
+
+      if (discountPrice && Number(discountPrice) > Number(basePrice)) {
+         return false;
+      }
+
+      if (!startDate) {
+         return false;
+      }
+
+      if (!endDate) {
+         return false;
+      }
+
+      if (new Date(endDate) <= new Date(startDate)) {
+         return false;
+      }
+
+      return true;
+   };
+
    const handleSubmit = async () => {
+      if (!validateForm()) return;
+
+      setIsLoading(true);
       try {
-         // 1. Get token
+         // Lấy token
          const token = localStorage.getItem('token') || sessionStorage.getItem('token');
          if (!token) {
             alert('Bạn chưa đăng nhập hoặc phiên làm việc đã hết hạn');
@@ -53,121 +111,49 @@ export default function Step3() {
             return;
          }
 
-         // 2. Create category if needed (using the provided structure)
-         let categoryId = category;
-         if (isNaN(Number(category))) {
-            console.log('Creating new category:', category);
-            
-            const categoryData = {
-               id: 0,
-               name: category,
-               descriptions: `Mô tả cho ${category}`
-            };
-
-            const categoryResponse = await fetch('http://localhost:3000/api/categories', {
-               method: 'POST',
-               headers: {
-                  'Content-Type': 'application/json',
-                  Authorization: `Bearer ${token}`,
-               },
-               body: JSON.stringify(categoryData),
-            });
-
-            if (!categoryResponse.ok) {
-               const errorText = await categoryResponse.text();
-               throw new Error(`Category creation failed: ${errorText}`);
-            }
-
-            const createdCategory = await categoryResponse.json();
-            categoryId = createdCategory.id;
-            console.log('Created new category with ID:', categoryId);
+         // Lấy productId từ context
+         const productId = formData.productId;
+         if (!productId) {
+            alert('Không tìm thấy thông tin sản phẩm. Vui lòng quay lại bước 1.');
+            router.push('/seller/products/createproduct/step1');
+            return;
          }
 
-         // 3. Create product using the provided structure
-         const productData = {
-            id: 0,
-            name: name,
-            description: description,
-            video: videoUrl,
-            images: {
-               id: "string",
-               path: images && images.length > 0 ? images[0] : "",
-               public_id: "public_id"
-            }
-         };
-
-         console.log('Creating product with data:', productData);
-         const productResponse = await fetch('http://localhost:3000/api/products', {
-            method: 'POST',
-            headers: {
-               'Content-Type': 'application/json',
-               Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify(productData),
-         });
-
-         if (!productResponse.ok) {
-            const errorText = await productResponse.text();
-            throw new Error(`Product creation failed: ${errorText}`);
+         // Kiểm tra xem variants có tồn tại và có dữ liệu không
+         if (!variants || variants.length === 0) {
+            alert('Không tìm thấy thông tin biến thể. Vui lòng quay lại bước 2.');
+            router.push('/seller/products/createproduct/step2');
+            return;
          }
 
-         // 4. Get the created product ID
-         const createdProduct = await productResponse.json();
-         const productId = createdProduct.id;
-         console.log('Product created successfully with ID:', productId);
-
-         // 5. Create product details for each variant
+         // Xử lý giá cho từng biến thể
          for (const variant of variants) {
-            console.log('Creating product detail for variant:', variant);
-
-            // Create product detail using the provided structure
-            const detailData = {
-               id: 0,
-               size: variant.size || '',
-               type: variant.type || '',
-               quantities: variant.quantity || 0,
-               images: [{
-                  id: "string",
-                  path: variant.images && variant.images.length > 0 ? variant.images[0] : "",
-                  public_id: "public_id"
-               }],
-               isActive: isActive
-            };
-
-            const detailResponse = await fetch('http://localhost:3000/api/product-details', {
-               method: 'POST',
-               headers: {
-                  'Content-Type': 'application/json',
-                  Authorization: `Bearer ${token}`,
-               },
-               body: JSON.stringify(detailData),
-            });
-
-            if (!detailResponse.ok) {
-               const errorText = await detailResponse.text();
-               throw new Error(`Product detail creation failed: ${errorText}`);
+            // Kiểm tra xem biến thể có detailId không
+            if (!variant.detailId) {
+               console.error('Missing detailId for variant:', variant);
+               continue; // Bỏ qua biến thể này và tiếp tục với biến thể tiếp theo
             }
 
-            const createdDetail = await detailResponse.json();
-            console.log('Product detail created:', createdDetail);
+            // Định dạng ngày
+            const formattedStartDate = startDate || new Date().toISOString().split('T')[0];
+            const formattedEndDate =
+               endDate ||
+               new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
-            // 6. Create pricing for the product detail
-            console.log('Creating pricing for product detail:', createdDetail.id);
-
-            // Format dates properly for the API
-            const formattedStartDate = startDate || new Date().toISOString();
-            const formattedEndDate = endDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-
+            // Tạo dữ liệu giá
             const priceData = {
-               id: 0,
                base_price: Number(basePrice) || 0,
                discount_price: Number(discountPrice) || 0,
                start_date: formattedStartDate,
                end_date: formattedEndDate,
-               product_detail: createdDetail
+               productId: variant.detailId, // Sử dụng detailId
+               isActive: isActive,
             };
 
-            const priceResponse = await fetch('http://localhost:3000/api/prices', {
+            console.log('Sending price data:', priceData); // Giúp debug
+
+            // Gửi request tạo giá
+            const priceResponse = await fetch('http://localhost:3000/api/v1/prices', {
                method: 'POST',
                headers: {
                   'Content-Type': 'application/json',
@@ -177,19 +163,60 @@ export default function Step3() {
             });
 
             if (!priceResponse.ok) {
-               const errorText = await priceResponse.text();
-               throw new Error(`Price creation failed: ${errorText}`);
+               const errorData = await priceResponse.json().catch(() => null);
+               const errorText = await priceResponse.text().catch(() => 'Unknown error');
+               console.error('Price creation failed:', errorData || errorText);
+               alert(`Lỗi khi tạo giá sản phẩm: ${errorData?.message || errorText}`);
+               setIsLoading(false);
+               return;
             }
-
-            console.log('Price created successfully');
          }
 
-         // 7. Success! Navigate back to products page
+         // Áp dụng khuyến mãi nếu có
+         if (promotion) {
+            // Thêm code xử lý khuyến mãi ở đây
+         }
+
+         // Cập nhật trạng thái hoạt động của sản phẩm
+         const updateProductResponse = await fetch(
+            `http://localhost:3000/api/products/${productId}`,
+            {
+               method: 'PATCH',
+               headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: `Bearer ${token}`,
+               },
+               body: JSON.stringify({ isActive: true }),
+            },
+         );
+
+         if (!updateProductResponse.ok) {
+            console.error('Failed to update product status');
+         }
+
+         // Success! Navigate back to products page
          alert('Sản phẩm đã được tạo thành công!');
+
+         // Reset form data
+         updateFormData({
+            name: '',
+            description: '',
+            category: '',
+            images: [],
+            variants: [],
+            productId: undefined, // Clear productId
+         });
+
          router.push('/seller/products');
       } catch (error) {
-         console.error('Error creating product:', error);
-         alert(`Lỗi khi tạo sản phẩm: ${error instanceof Error ? error.message : 'Unknown error'}`);
+         console.error('Error creating product pricing:', error);
+         alert(
+            `Lỗi khi cài đặt giá sản phẩm: ${
+               error instanceof Error ? error.message : 'Lỗi không xác định'
+            }`,
+         );
+      } finally {
+         setIsLoading(false);
       }
    };
 
@@ -285,7 +312,7 @@ export default function Step3() {
                      </div>
                   </div>
 
-                  <h1 className='text-2xl font-medium mb-4'>Thông tin cơ bản</h1>
+                  <h1 className='text-2xl font-medium mb-4'>Thông tin sản phẩm</h1>
 
                   <div className='flex flex-col'>
                      {/* Product name field */}
@@ -295,24 +322,24 @@ export default function Step3() {
                         </label>
                         <input
                            type='text'
-                           className='w-full p-2 border rounded-md'
+                           className='w-full p-2 border rounded-md bg-gray-50'
                            value={name || ''}
                            readOnly
                         />
                      </div>
 
-                      {/* Product description */}
-                      <div className='mb-4 flex'>
+                     {/* Product category */}
+                     <div className='mb-4 flex'>
                         <label className='block text-sm font-medium mb-1 w-60'>
                            Danh mục:<span className='text-red-500'>*</span>
                         </label>
                         <input
                            type='text'
-                           className='w-full p-2 border rounded-md'
+                           className='w-full p-2 border rounded-md bg-gray-50'
                            value={category || ''}
                            readOnly
                         />
-                      </div>
+                     </div>
 
                      {/* Product images */}
                      <div className='mb-4 flex'>
@@ -348,7 +375,7 @@ export default function Step3() {
                         <input
                            type='text'
                            className='w-full p-2 border rounded-md'
-                           placeholder='Ví dụ: URL sản phẩm'
+                           placeholder='Nhập URL video sản phẩm (YouTube, Vimeo...)'
                            value={videoUrl}
                            onChange={(e) => setVideoUrl(e.target.value)}
                         />
@@ -360,7 +387,7 @@ export default function Step3() {
                            Mô tả sản phẩm:<span className='text-red-500'>*</span>
                         </label>
                         <textarea
-                           className='w-full p-2 border rounded-md'
+                           className='w-full p-2 border rounded-md bg-gray-50'
                            rows={6}
                            value={description || ''}
                            readOnly
@@ -370,127 +397,134 @@ export default function Step3() {
 
                   {/* Variants section */}
                   <div className='mb-6'>
+                     <h3 className='text-lg font-semibold mb-3'>Thông tin biến thể sản phẩm</h3>
                      <div className='space-y-4'>
-                        {variants.map((variant, index) => (
-                           <div key={index} className='border border-black rounded-lg'>
-                              {/* Accordion Header */}
+                        {variants && variants.length > 0 ? (
+                           variants.map((variant, index) => (
                               <div
-                                 className='flex justify-between items-center p-4 cursor-pointer'
-                                 onClick={() => toggleVariantExpanded(index)}
+                                 key={index}
+                                 className='border rounded-lg overflow-hidden shadow-sm'
                               >
-                                 <div className='font-medium'>
-                                    {variant.type || 'Biến thể không tên'}
-                                    {variant.value && ` - ${variant.value}`}
-                                 </div>
-                                 <svg
-                                    xmlns='http://www.w3.org/2000/svg'
-                                    className={`h-5 w-5 transform transition-transform ${
-                                       variant.isExpanded ? 'rotate-180' : ''
-                                    }`}
-                                    fill='none'
-                                    viewBox='0 0 24 24'
-                                    stroke='currentColor'
+                                 {/* Accordion Header */}
+                                 <div
+                                    className='flex justify-between items-center p-4 cursor-pointer bg-gray-50 hover:bg-gray-100'
+                                    onClick={() => toggleVariantExpanded(index)}
                                  >
-                                    <path
-                                       strokeLinecap='round'
-                                       strokeLinejoin='round'
-                                       strokeWidth={2}
-                                       d='M19 9l-7 7-7-7'
-                                    />
-                                 </svg>
-                              </div>
-
-                              {/* Accordion Content */}
-                              {variant.isExpanded && (
-                                 <div className='p-4 border-t border-gray-200'>
-                                    <div className='grid grid-cols-2 gap-4'>
-                                       <div>
-                                          <label className='block text-sm font-medium mb-1'>
-                                             Phân loại:
-                                          </label>
-                                          <input
-                                             type='text'
-                                             value={variant.type || ''}
-                                             className='w-full p-2 border rounded-md'
-                                             readOnly
-                                          />
-                                       </div>
-                                       <div>
-                                          <label className='block text-sm font-medium mb-1'>
-                                             Giá trị:
-                                          </label>
-                                          <input
-                                             type='text'
-                                             value={variant.value || ''}
-                                             className='w-full p-2 border rounded-md'
-                                             readOnly
-                                          />
-                                       </div>
-                                       <div>
-                                          <label className='block text-sm font-medium mb-1'>
-                                             Size:
-                                          </label>
-                                          <input
-                                             type='text'
-                                             value={variant.size || ''}
-                                             className='w-full p-2 border rounded-md'
-                                             readOnly
-                                          />
-                                       </div>
-                                       <div>
-                                          <label className='block text-sm font-medium mb-1'>
-                                             Số lượng:
-                                          </label>
-                                          <input
-                                             type='number'
-                                             value={variant.quantity || 0}
-                                             className='w-full p-2 border rounded-md'
-                                             readOnly
-                                          />
-                                       </div>
+                                    <div className='font-medium'>
+                                       {variant.type || 'Biến thể không tên'}
+                                       {variant.value && ` - ${variant.value}`}
                                     </div>
+                                    <svg
+                                       xmlns='http://www.w3.org/2000/svg'
+                                       className={`h-5 w-5 transform transition-transform ${
+                                          variant.isExpanded ? 'rotate-180' : ''
+                                       }`}
+                                       fill='none'
+                                       viewBox='0 0 24 24'
+                                       stroke='currentColor'
+                                    >
+                                       <path
+                                          strokeLinecap='round'
+                                          strokeLinejoin='round'
+                                          strokeWidth={2}
+                                          d='M19 9l-7 7-7-7'
+                                       />
+                                    </svg>
+                                 </div>
 
-                                    {/* Variant Images */}
-                                    {variant.images && variant.images.length > 0 && (
-                                       <div className='mt-4'>
-                                          <label className='block text-sm font-medium mb-2'>
-                                             Hình ảnh:
-                                          </label>
-                                          <div className='flex gap-2'>
-                                             {variant.images.map((img, imgIndex) => (
-                                                <Image
-                                                   key={imgIndex}
-                                                   src={img}
-                                                   alt={`Variant ${index + 1} image ${
-                                                      imgIndex + 1
-                                                   }`}
-                                                   className='w-20 h-20 object-cover rounded border'
-                                                   width={80}
-                                                   height={80}
-                                                />
-                                             ))}
+                                 {/* Accordion Content */}
+                                 {variant.isExpanded && (
+                                    <div className='p-4 border-t'>
+                                       <div className='grid grid-cols-2 gap-4'>
+                                          <div>
+                                             <label className='block text-sm font-medium mb-1'>
+                                                Phân loại:
+                                             </label>
+                                             <input
+                                                type='text'
+                                                value={variant.type || ''}
+                                                className='w-full p-2 border rounded-md bg-gray-50'
+                                                readOnly
+                                             />
+                                          </div>
+                                          <div>
+                                             <label className='block text-sm font-medium mb-1'>
+                                                Giá trị:
+                                             </label>
+                                             <input
+                                                type='text'
+                                                value={variant.value || ''}
+                                                className='w-full p-2 border rounded-md bg-gray-50'
+                                                readOnly
+                                             />
+                                          </div>
+                                          <div>
+                                             <label className='block text-sm font-medium mb-1'>
+                                                Size:
+                                             </label>
+                                             <input
+                                                type='text'
+                                                value={variant.size || ''}
+                                                className='w-full p-2 border rounded-md bg-gray-50'
+                                                readOnly
+                                             />
+                                          </div>
+                                          <div>
+                                             <label className='block text-sm font-medium mb-1'>
+                                                Số lượng:
+                                             </label>
+                                             <input
+                                                type='number'
+                                                value={variant.quantity || 0}
+                                                className='w-full p-2 border rounded-md bg-gray-50'
+                                                readOnly
+                                             />
                                           </div>
                                        </div>
-                                    )}
-                                 </div>
-                              )}
+
+                                       {/* Variant Images */}
+                                       {variant.images && variant.images.length > 0 && (
+                                          <div className='mt-4'>
+                                             <label className='block text-sm font-medium mb-2'>
+                                                Hình ảnh:
+                                             </label>
+                                             <div className='flex flex-wrap gap-2'>
+                                                {variant.images.map((img, imgIndex) => (
+                                                   <Image
+                                                      key={imgIndex}
+                                                      src={img}
+                                                      alt={`Variant ${index + 1} image ${
+                                                         imgIndex + 1
+                                                      }`}
+                                                      className='w-20 h-20 object-cover rounded border'
+                                                      width={80}
+                                                      height={80}
+                                                   />
+                                                ))}
+                                             </div>
+                                          </div>
+                                       )}
+                                    </div>
+                                 )}
+                              </div>
+                           ))
+                        ) : (
+                           <div className='p-4 bg-yellow-50 border border-yellow-200 rounded-md'>
+                              <p className='text-yellow-600'>Không có biến thể nào được tạo.</p>
                            </div>
-                        ))}
+                        )}
                      </div>
                   </div>
 
-                  {/* Additional product information section */}
-                  <div className='mb-6'>
-                     <h3 className='text-md font-bold mb-2'>Thông tin chi tiết sản phẩm khác</h3>
+                  {/* Price setting section */}
+                  <div className='mb-6 p-4 border rounded-lg '>
+                     <h3 className='text-lg font-semibold mb-4 '>Cài đặt giá cho sản phẩm</h3>
 
-                     {/* Price setting section */}
-                     <div className='mb-6'>
-                        <h3 className='text-md font-semibold mb-2'>Cài đặt giá cho sản phẩm</h3>
-
+                     <div className='grid md:grid-cols-2 gap-4'>
                         {/* Giá gốc */}
                         <div className='mb-4'>
-                           <label className='block text-sm mb-1'>
-                              Giá gốc<span className='text-red-500'>*</span>
+                           <label className='block text-sm font-medium mb-1'>
+                              Giá gốc (VNĐ)<span className='text-red-500'>*</span>
                            </label>
                            <input
                               type='number'
@@ -504,7 +538,9 @@ export default function Step3() {
 
                         {/* Giá khuyến mãi */}
                         <div className='mb-4'>
-                           <label className='block text-sm mb-1'>Giá khuyến mãi</label>
+                           <label className='block text-sm font-medium mb-1'>
+                              Giá khuyến mãi (VNĐ)
+                           </label>
                            <input
                               type='number'
                               className='w-full p-2 border rounded-md'
@@ -513,10 +549,12 @@ export default function Step3() {
                               placeholder='Nhập giá khuyến mãi (nếu có)'
                            />
                         </div>
+                     </div>
 
+                     <div className='grid md:grid-cols-2 gap-4'>
                         {/* Ngày áp dụng */}
                         <div className='mb-4'>
-                           <label className='block text-sm mb-1'>
+                           <label className='block text-sm font-medium mb-1'>
                               Ngày áp dụng<span className='text-red-500'>*</span>
                            </label>
                            <input
@@ -530,7 +568,7 @@ export default function Step3() {
 
                         {/* Ngày kết thúc */}
                         <div className='mb-4'>
-                           <label className='block text-sm mb-1'>
+                           <label className='block text-sm font-medium mb-1'>
                               Ngày kết thúc<span className='text-red-500'>*</span>
                            </label>
                            <input
@@ -543,29 +581,35 @@ export default function Step3() {
                         </div>
                      </div>
 
-                     {/* SKU section */}
+                     {/* Khuyến mãi */}
                      <div className='mb-4'>
-                        <label className='block text-sm mb-1'>Khuyến mãi</label>
+                        <label className='block text-sm font-medium mb-1'>
+                           Chương trình khuyến mãi
+                        </label>
                         <select
                            className='w-full p-2 border rounded-md'
                            value={promotion}
                            onChange={(e) => setPromotion(e.target.value)}
                         >
-                           <option value=''>Lựa chọn</option>
+                           <option value=''>Không áp dụng</option>
                            <option value='discount'>Giảm giá</option>
                            <option value='combo'>Combo</option>
+                           <option value='gift'>Quà tặng kèm</option>
                         </select>
                      </div>
 
-                     {/* Warehouse field */}
-                     <div className='mb-4'>
-                        <label className='block text-sm mb-1'>Giá bán</label>
-                        <input
-                           type='text'
-                           className='w-full p-2 border rounded-md'
-                           value={basePrice}
-                           readOnly
-                        />
+                     {/* Giá sẽ hiển thị */}
+                     <div className='mt-6 p-3 bg-white rounded-md border border-blue-200'>
+                        <div className='flex justify-between items-center'>
+                           <span className='font-medium text-sm'>
+                              Giá sẽ hiển thị cho khách hàng:
+                           </span>
+                           <span className='font-bold text-lg text-blue-600'>
+                              {calculatedPrice
+                                 ? `${Number(calculatedPrice).toLocaleString('vi-VN')} VNĐ`
+                                 : '0 VNĐ'}
+                           </span>
+                        </div>
                      </div>
                   </div>
 
@@ -573,40 +617,45 @@ export default function Step3() {
                   <div className='flex justify-end gap-2 mt-6'>
                      <button
                         onClick={() => {
-                           // Cập nhật formData với giá trị hiện tại trước khi quay lại
+                           // Update formData with current values before going back
                            updateFormData({
                               ...formData,
-                              variants: variants, // Lưu variants hiện tại vào formData
+                              variants: variants,
                            });
-                           // Đợi cập nhật formData hoàn tất trước khi chuyển trang
+                           // Wait for formData update to complete before navigating
                            setTimeout(() => {
                               router.push('/seller/products/createproduct/step2');
                            }, 100);
                         }}
                         className='px-4 py-2 bg-white border border-gray-300 rounded-md hover:bg-gray-100'
+                        disabled={isLoading}
                      >
                         Quay lại
                      </button>
                      <button
                         onClick={() => {
-                           updateFormData({
-                              name: '',
-                              description: '',
-                              category: '',
-                              images: [],
-                              variants: [],
-                           });
-                           window.location.href = '/seller/products';
+                           if (window.confirm('Bạn có chắc muốn hủy tạo sản phẩm không?')) {
+                              updateFormData({
+                                 name: '',
+                                 description: '',
+                                 category: '',
+                                 images: [],
+                                 variants: [],
+                              });
+                              router.push('/seller/products');
+                           }
                         }}
                         className='px-4 py-2 bg-white border border-gray-300 rounded-md hover:bg-gray-100'
+                        disabled={isLoading}
                      >
                         Hủy
                      </button>
                      <button
-                        className='px-4 py-2 bg-blue-600 text-white rounded-md'
+                        className='px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-blue-300'
                         onClick={handleSubmit}
+                        disabled={isLoading}
                      >
-                        Tạo sản phẩm
+                        {isLoading ? 'Đang xử lý...' : 'Tạo sản phẩm'}
                      </button>
                   </div>
                </div>

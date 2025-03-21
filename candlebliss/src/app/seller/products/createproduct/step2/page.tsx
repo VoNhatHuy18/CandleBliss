@@ -15,6 +15,7 @@ interface Variant {
    size?: string;
    images?: string[];
    quantity?: number;
+   detailId?: number; // Thêm field này để lưu ID của product detail
 }
 
 export default function Step2() {
@@ -31,6 +32,7 @@ export default function Step2() {
    const [newVariantValue, setNewVariantValue] = useState<string>('');
    const [errors, setErrors] = useState<{ [key: string]: string }>({});
    const [isFormValid, setIsFormValid] = useState<boolean>(true);
+   const [isLoading, setIsLoading] = useState(false);
 
    // Validation rules
    const VALIDATION_RULES = {
@@ -232,7 +234,7 @@ export default function Step2() {
    };
 
    // Handle next button click
-   const handleNext = () => {
+   const handleNext = async () => {
       // Validate all variants
       let hasErrors = false;
       const newErrors: { [key: string]: string } = {};
@@ -240,7 +242,10 @@ export default function Step2() {
       variants.forEach((variant, index) => {
          ['type', 'value', 'size', 'quantity'].forEach((field) => {
             const value = variant[field as keyof Variant];
-            const error = validateField(field, typeof value === 'string' || typeof value === 'number' ? value : '');
+            const error = validateField(
+               field,
+               typeof value === 'string' || typeof value === 'number' ? value : '',
+            );
             if (error) {
                newErrors[`${field}_${index}`] = error;
                hasErrors = true;
@@ -254,11 +259,96 @@ export default function Step2() {
          return;
       }
 
-      // Save current variants to context
-      updateFormData({ variants });
+      setIsLoading(true);
 
-      // Navigate to next step
-      router.push('/seller/products/createproduct/step3');
+      try {
+         // Lấy token và productId từ context
+         const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+         if (!token) {
+            alert('Bạn chưa đăng nhập hoặc phiên làm việc đã hết hạn');
+            router.push('/seller/signin');
+            return;
+         }
+
+         const productId = formData.productId;
+         if (!productId) {
+            alert('Không tìm thấy thông tin sản phẩm. Vui lòng quay lại bước 1.');
+            router.push('/seller/products/createproduct/step1');
+            return;
+         }
+
+         // Tạo một bản sao của variants để cập nhật detailId
+         const updatedVariants = [...variants];
+
+         // Lưu từng biến thể vào database
+         for (let i = 0; i < updatedVariants.length; i++) {
+            const variant = updatedVariants[i];
+
+            // Tạo FormData cho biến thể sản phẩm
+            const detailFormData = new FormData();
+            detailFormData.append('product_id', String(productId));
+            detailFormData.append('size', variant.size || '');
+            detailFormData.append('type', variant.type || '');
+            detailFormData.append('quantities', String(variant.quantity || 0));
+            detailFormData.append('isActive', 'true');
+
+            // Thêm hình ảnh cho biến thể nếu có
+            if (variant.images && variant.images.length > 0) {
+               for (const imgUrl of variant.images) {
+                  if (imgUrl.startsWith('blob:')) {
+                     try {
+                        const imgResponse = await fetch(imgUrl);
+                        const imgBlob = await imgResponse.blob();
+                        const imgFile = new File([imgBlob], `variant-${Date.now()}.jpg`, {
+                           type: imgBlob.type,
+                        });
+                        detailFormData.append('images', imgFile);
+                     } catch (error) {
+                        console.error('Error processing variant image:', error);
+                     }
+                  }
+               }
+            }
+
+            // Gửi request tạo chi tiết sản phẩm
+            const detailResponse = await fetch('http://localhost:3000/api/product-details', {
+               method: 'POST',
+               headers: {
+                  Authorization: `Bearer ${token}`,
+               },
+               body: detailFormData,
+            });
+
+            if (!detailResponse.ok) {
+               const errorText = await detailResponse.text();
+               console.error('Product detail creation failed:', errorText);
+               alert(`Lỗi khi tạo chi tiết sản phẩm: ${errorText}`);
+               setIsLoading(false);
+               return;
+            }
+
+            // Lưu ID của biến thể vào đối tượng variant
+            const createdDetail = await detailResponse.json();
+            updatedVariants[i].detailId = createdDetail.id;
+         }
+
+         // Cập nhật variants trong state với các detailId mới
+         setVariants(updatedVariants);
+
+         // Cập nhật dữ liệu trong context với IDs của các biến thể
+         updateFormData({
+            ...formData,
+            variants: updatedVariants, // Sử dụng updatedVariants thay vì variants
+         });
+
+         // Chuyển đến bước tiếp theo
+         router.push('/seller/products/createproduct/step3');
+      } catch (error) {
+         console.error('Error creating product variants:', error);
+         alert(`Đã xảy ra lỗi: ${error instanceof Error ? error.message : 'Lỗi không xác định'}`);
+      } finally {
+         setIsLoading(false);
+      }
    };
 
    return (

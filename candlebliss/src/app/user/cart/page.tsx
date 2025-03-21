@@ -197,6 +197,17 @@ export default function ShoppingCart() {
                                                 ))}
                                              </div>
                                           )}
+
+                                          {/* Nút xóa sản phẩm - hiển thị trên mobile */}
+                                          <div className='mt-3 md:hidden'>
+                                             <button
+                                                onClick={() => removeItem(item.id)}
+                                                className='flex items-center text-sm text-red-500 hover:text-red-600 transition-colors'
+                                             >
+                                                <TrashIcon className='h-4 w-4 mr-1' />
+                                                <span>Xóa</span>
+                                             </button>
+                                          </div>
                                        </div>
                                     </div>
                                  </div>
@@ -237,10 +248,29 @@ export default function ShoppingCart() {
                                     </div>
                                  </div>
 
-                                 {/* Total - Desktop */}
+                                 {/* Total + Delete - Desktop */}
                                  <div className='hidden md:flex md:col-span-2 justify-end items-center gap-3'>
                                     <div className='text-gray-800 font-medium'>
                                        {(item.price * item.quantity).toLocaleString()}₫
+                                    </div>
+                                    <button
+                                       onClick={() => removeItem(item.id)}
+                                       className='text-red-500 hover:text-red-600 transition-colors p-1.5 hover:bg-red-50 rounded-full'
+                                       aria-label='Xóa sản phẩm'
+                                    >
+                                       <TrashIcon className='h-4 w-4' />
+                                    </button>
+                                 </div>
+
+                                 {/* Price + Total - Mobile */}
+                                 <div className='grid grid-cols-2 md:hidden col-span-1 text-sm'>
+                                    <div>
+                                       <span className='text-gray-500'>Đơn giá:</span>
+                                       <div className='font-medium text-amber-600'>{item.price.toLocaleString()}₫</div>
+                                    </div>
+                                    <div className='text-right'>
+                                       <span className='text-gray-500'>Tổng:</span>
+                                       <div className='font-medium'>{(item.price * item.quantity).toLocaleString()}₫</div>
                                     </div>
                                  </div>
                               </div>
@@ -250,7 +280,7 @@ export default function ShoppingCart() {
                         {/* Continue Shopping Button */}
                         <div className='mt-6'>
                            <Link
-                              href='/user/product'
+                              href='/user/products'
                               className='inline-flex items-center gap-2 text-amber-600 hover:text-amber-800 transition-colors'
                            >
                               <ArrowLeftIcon className='h-4 w-4' />
@@ -330,10 +360,10 @@ export default function ShoppingCart() {
                            {/* Action Buttons */}
                            <div className='mt-6 space-y-3'>
                               <Link href='/user/checkout'>
-                              <button className='w-full bg-amber-800 hover:bg-amber-900 text-white font-medium py-3 rounded-lg transition-colors flex items-center justify-center gap-2'>
-                                 <ShoppingBagIcon className='h-5 w-5' />
-                                 Thanh Toán Ngay
-                              </button>
+                                 <button className='w-full bg-amber-800 hover:bg-amber-900 text-white font-medium py-3 rounded-lg transition-colors flex items-center justify-center gap-2'>
+                                    <ShoppingBagIcon className='h-5 w-5' />
+                                    Thanh Toán Ngay
+                                 </button>
                               </Link>
                            </div>
 
@@ -435,7 +465,7 @@ export default function ShoppingCart() {
                      <p className='text-gray-500 mb-6'>
                         Thêm sản phẩm vào giỏ hàng để tiến hành mua sắm
                      </p>
-                     <Link href='/user/product'>
+                     <Link href='/user/products'>
                         <button className='bg-amber-600 hover:bg-amber-700 text-white px-6 py-3 rounded-lg transition-colors'>
                            Tiếp Tục Mua Sắm
                         </button>
