@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import Footer from '@/app/components/user/footer/page';
 import ViewedCarousel from '@/app/components/user/viewedcarousel/page';
 import Header from '@/app/components/user/nav/page';
@@ -18,34 +18,35 @@ import {
    MapPinIcon,
 } from '@heroicons/react/24/outline';
 
+// Định nghĩa interface cho CartItem
+interface CartItem {
+   id: number;
+   detailId: number;
+   name: string;
+   price: number;
+   quantity: number;
+   image: string;
+   type: string;
+   options: {
+      name: string;
+      value: string;
+   }[];
+}
+
 export default function ShoppingCart() {
-   // Sample product data
-   const [cartItems, setCartItems] = useState([
-      {
-         id: 1,
-         name: 'GIỎ TRUYỀN THÔNG 01 - COMBO 9KG',
-         price: 120000,
-         quantity: 1,
-         image: '/images/image.png',
-         type: 'Mùi hương: Hương sen đào',
-         options: [
-            { name: 'Kích thước', value: 'Lớn' },
-            { name: 'Màu sắc', value: 'Trắng ngà' },
-         ],
-      },
-      {
-         id: 2,
-         name: 'GIỎ TRUYỀN THÔNG 01 - COMBO 9KG',
-         price: 120000,
-         quantity: 2,
-         image: '/images/image.png',
-         type: 'Mùi hương: Hương sen đào',
-         options: [
-            { name: 'Kích thước', value: 'Trung bình' },
-            { name: 'Màu sắc', value: 'Hồng nhạt' },
-         ],
-      },
-   ]);
+   // Thay thế dữ liệu mẫu bằng dữ liệu từ localStorage
+   const [cartItems, setCartItems] = useState<CartItem[]>([]);
+
+   // Lấy dữ liệu giỏ hàng từ localStorage khi component được mount
+   useEffect(() => {
+      try {
+         const storedCartItems = JSON.parse(localStorage.getItem('cart') || '[]');
+         setCartItems(storedCartItems);
+      } catch (error) {
+         console.error('Error loading cart data:', error);
+         setCartItems([]);
+      }
+   }, []);
 
    const [voucher, setVoucher] = useState('');
    const [voucherError, setVoucherError] = useState('');
@@ -53,6 +54,9 @@ export default function ShoppingCart() {
    const [selectedAddress, setSelectedAddress] = useState<number | null>(null);
    const [showAddressList, setShowAddressList] = useState(false);
    const [showAddressModal, setShowAddressModal] = useState(false);
+   const [appliedVoucher, setAppliedVoucher] = useState<any>(null);
+   const [discount, setDiscount] = useState(0);
+   const [voucherLoading, setVoucherLoading] = useState(false);
    const addresses = [
       {
          id: 1,
@@ -74,43 +78,208 @@ export default function ShoppingCart() {
       },
    ];
 
-   // Handle quantity change
-   const updateQuantity = (id: number, newQuantity: number) => {
+   // Thêm state để lưu danh sách gợi ý voucher
+   const [suggestedVouchers, setSuggestedVouchers] = useState<any[]>([]);
+   const [showVoucherSuggestions, setShowVoucherSuggestions] = useState(false);
+
+   // Subtotal (tổng phụ) vẫn giữ nguyên
+   const subtotal = useMemo(() => cartItems.reduce((total, item) => total + item.price * item.quantity, 0), [cartItems]);
+
+   // Thêm useEffect để lấy danh sách voucher gợi ý khi component mount
+   useEffect(() => {
+      const fetchSuggestedVouchers = async () => {
+         try {
+            // Vì không có endpoint public nên chúng ta sẽ lấy tất cả voucher (có thể cần token)
+            const token = localStorage.getItem('token');
+
+            if (!token) {
+               console.warn('Không có token để lấy danh sách voucher');
+               return;
+            }
+
+            const response = await fetch('http://localhost:3000/api/v1/vouchers', {
+               method: 'GET',
+               headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${token}`
+               }
+            });
+
+            if (!response.ok) {
+               throw new Error('Không thể tải danh sách voucher');
+            }
+
+            const allVouchers = await response.json();
+
+            // Lọc voucher có hiệu lực và có thể áp dụng
+            const currentDate = new Date();
+            const validVouchers = allVouchers.filter((voucher: { start_date: string | number | Date; end_date: string | number | Date; usage_limit: number; usage_count: number; min_order_value: number; hasOwnProperty: (arg0: string) => any; isActive: any; }) => {
+               // Kiểm tra ngày hiệu lực
+               const startDate = new Date(voucher.start_date);
+               const endDate = new Date(voucher.end_date);
+               const dateValid = currentDate >= startDate && currentDate <= endDate;
+
+               // Kiểm tra số lần sử dụng
+               const usageValid = !voucher.usage_limit || (voucher.usage_count < voucher.usage_limit);
+
+               // Kiểm tra giá trị đơn hàng tối thiểu
+               const minOrderValid = !voucher.min_order_value || subtotal >= voucher.min_order_value;
+
+               // Kiểm tra trạng thái kích hoạt
+               const isActiveValid = !voucher.hasOwnProperty('isActive') || voucher.isActive;
+
+               return dateValid && usageValid && minOrderValid && isActiveValid;
+            });
+
+            setSuggestedVouchers(validVouchers);
+         } catch (error) {
+            console.error('Không thể tải danh sách mã giảm giá gợi ý:', error);
+         }
+      };
+
+      // Chỉ fetch nếu người dùng đã đăng nhập và có sản phẩm trong giỏ hàng
+      if (cartItems.length > 0) {
+         fetchSuggestedVouchers();
+      }
+   }, [cartItems, subtotal]); // subtotal is now memoized and safe to use here
+
+   const [updatingItem, setUpdatingItem] = useState<{ id: number, detailId: number } | null>(null);
+
+   // Handle quantity change - cập nhật cả state và localStorage
+   const updateQuantity = (id: number, detailId: number, newQuantity: number) => {
       if (newQuantity < 1) newQuantity = 1;
       if (newQuantity > 10) newQuantity = 10;
 
-      setCartItems(
-         cartItems.map((item) => (item.id === id ? { ...item, quantity: newQuantity } : item)),
-      );
+      // Set loading state
+      setUpdatingItem({ id, detailId });
+
+      // Update cart with slight delay to show loading
+      setTimeout(() => {
+         const updatedItems = cartItems.map((item) =>
+            (item.id === id && item.detailId === detailId)
+               ? { ...item, quantity: newQuantity }
+               : item
+         );
+
+         setCartItems(updatedItems);
+         localStorage.setItem('cart', JSON.stringify(updatedItems));
+         setUpdatingItem(null);
+      }, 300);
    };
 
-   // Handle item removal
-   const removeItem = (id: number) => {
-      setCartItems(cartItems.filter((item) => item.id !== id));
+   // Handle item removal - xóa khỏi cả state và localStorage
+   const removeItem = (id: number, detailId: number) => {
+      const updatedItems = cartItems.filter(
+         (item) => !(item.id === id && item.detailId === detailId)
+      );
+
+      setCartItems(updatedItems);
+      localStorage.setItem('cart', JSON.stringify(updatedItems));
    };
 
    // Apply voucher
-   const applyVoucher = () => {
+   const applyVoucher = async () => {
+      // Reset các trạng thái thông báo
+      setVoucherError('');
+      setVoucherSuccess('');
+
       if (!voucher) {
          setVoucherError('Vui lòng nhập mã giảm giá');
          return;
       }
 
-      // Example validation - in real app, this would check against valid codes
-      if (voucher === 'SALE10') {
-         setVoucherSuccess('Áp dụng mã giảm giá thành công: Giảm 10%');
-         setVoucherError('');
-      } else {
-         setVoucherError('Mã giảm giá không hợp lệ hoặc đã hết hạn');
-         setVoucherSuccess('');
+      setVoucherLoading(true);
+
+      try {
+         // Lấy token từ localStorage (nếu có)
+         const token = localStorage.getItem('token');
+
+         // Gọi API để kiểm tra voucher bằng code
+         const response = await fetch(`http://localhost:3000/api/v1/vouchers/code/${voucher}`, {
+            method: 'GET',
+            headers: {
+               'Content-Type': 'application/json',
+               ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+            }
+         });
+
+         // Nếu không tìm thấy voucher
+         if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.message || 'Mã giảm giá không hợp lệ');
+         }
+
+         // Lấy dữ liệu voucher
+         const voucherData = await response.json();
+
+         // Kiểm tra ngày bắt đầu và kết thúc của voucher
+         const currentDate = new Date();
+         const startDate = new Date(voucherData.start_date);
+         const endDate = new Date(voucherData.end_date);
+
+         if (currentDate < startDate) {
+            throw new Error('Mã giảm giá chưa có hiệu lực');
+         }
+
+         if (currentDate > endDate) {
+            throw new Error('Mã giảm giá đã hết hạn');
+         }
+
+         // Kiểm tra số lần sử dụng
+         if (voucherData.usage_limit && voucherData.usage_count >= voucherData.usage_limit) {
+            throw new Error('Mã giảm giá đã hết lượt sử dụng');
+         }
+
+         // Kiểm tra giá trị đơn hàng tối thiểu
+         if (voucherData.min_order_value && subtotal < voucherData.min_order_value) {
+            throw new Error(`Giá trị đơn hàng tối thiểu để áp dụng mã này là ${voucherData.min_order_value.toLocaleString('vi-VN')}₫`);
+         }
+
+         // Kiểm tra trạng thái kích hoạt
+         if (voucherData.hasOwnProperty('isActive') && !voucherData.isActive) {
+            throw new Error('Mã giảm giá này hiện không khả dụng');
+         }
+
+         // Xác định giá trị giảm giá
+         let discountAmount = 0;
+
+         if (voucherData.percent_off > 0) {
+            // Giảm giá theo phần trăm
+            discountAmount = Math.min((subtotal * voucherData.percent_off) / 100, voucherData.max_discount || Infinity);
+            setVoucherSuccess(`Áp dụng mã giảm giá thành công: Giảm ${voucherData.percent_off}%`);
+         } else if (voucherData.amount_off > 0) {
+            // Giảm giá theo số tiền cố định
+            discountAmount = Math.min(voucherData.amount_off, subtotal);
+            setVoucherSuccess(`Áp dụng mã giảm giá thành công: Giảm ${voucherData.amount_off.toLocaleString('vi-VN')}₫`);
+         } else {
+            throw new Error('Mã giảm giá không hợp lệ');
+         }
+
+         // Cập nhật state
+         setAppliedVoucher(voucherData);
+         setDiscount(discountAmount);
+
+      } catch (error) {
+         console.error('Lỗi khi áp dụng voucher:', error);
+         setVoucherError(error instanceof Error ? error.message : 'Mã giảm giá không hợp lệ hoặc đã hết hạn');
+      } finally {
+         setVoucherLoading(false);
       }
    };
 
-   // Calculate subtotal
-   const subtotal = cartItems.reduce((total, item) => total + item.price * item.quantity, 0);
+   // Thêm hàm để hủy áp dụng voucher
+   const removeVoucher = () => {
+      setVoucher('');
+      setAppliedVoucher(null);
+      setDiscount(0);
+      setVoucherSuccess('');
+      setVoucherError('');
+   };
 
-   // Discount (if voucher is applied)
-   const discount = voucherSuccess ? subtotal * 0.1 : 0;
+   // Cập nhật phần tính giá trị giỏ hàng
+   // Subtotal (tổng phụ) vẫn giữ nguyên
+   // Discount không còn là giá trị cố định mà dựa vào voucher đã áp dụng
+   // (đã cập nhật trong hàm applyVoucher)
 
    // Final total
    const totalPrice = subtotal - discount;
@@ -118,6 +287,7 @@ export default function ShoppingCart() {
    // Calculate number of items
    const itemCount = cartItems.reduce((count, item) => count + item.quantity, 0);
 
+   // Cập nhật phần render để sử dụng cartItems mới
    return (
       <div className='bg-gray-50 min-h-screen flex flex-col'>
          {/* Header */}
@@ -162,7 +332,7 @@ export default function ShoppingCart() {
                            {/* Cart Items */}
                            {cartItems.map((item) => (
                               <div
-                                 key={item.id}
+                                 key={`${item.id}-${item.detailId}`} // Sử dụng id + detailId làm key
                                  className='px-6 py-6 border-b last:border-0 grid grid-cols-1 md:grid-cols-12 gap-4 items-center'
                               >
                                  {/* Product Info - Mobile & Desktop */}
@@ -179,7 +349,7 @@ export default function ShoppingCart() {
                                        </div>
                                        <div className='flex-grow'>
                                           <h3 className='font-medium text-gray-800 mb-1 hover:text-amber-600 transition-colors'>
-                                             <Link href={`/product/${item.id}`}>{item.name}</Link>
+                                             <Link href={`/user/products/${item.id}`}>{item.name}</Link>
                                           </h3>
                                           <p className='text-sm text-gray-500 mb-2'>{item.type}</p>
 
@@ -201,7 +371,7 @@ export default function ShoppingCart() {
                                           {/* Nút xóa sản phẩm - hiển thị trên mobile */}
                                           <div className='mt-3 md:hidden'>
                                              <button
-                                                onClick={() => removeItem(item.id)}
+                                                onClick={() => removeItem(item.id, item.detailId)}
                                                 className='flex items-center text-sm text-red-500 hover:text-red-600 transition-colors'
                                              >
                                                 <TrashIcon className='h-4 w-4 mr-1' />
@@ -223,23 +393,29 @@ export default function ShoppingCart() {
                                  <div className='col-span-1 md:col-span-2 flex justify-center'>
                                     <div className='flex items-center border rounded-lg overflow-hidden'>
                                        <button
-                                          onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                                          onClick={() => updateQuantity(item.id, item.detailId, item.quantity - 1)}
                                           className='px-1 py-2 text-gray-600 hover:bg-gray-100 transition-colors'
                                           aria-label='Giảm số lượng'
+                                          disabled={updatingItem?.id === item.id && updatingItem?.detailId === item.detailId}
                                        >
                                           <MinusIcon className='h-3 w-3' />
                                        </button>
                                        <input
-                                          value={item.quantity}
+                                          value={
+                                             updatingItem?.id === item.id && updatingItem?.detailId === item.detailId
+                                                ? '...'
+                                                : item.quantity
+                                          }
                                           onChange={(e) =>
-                                             updateQuantity(item.id, parseInt(e.target.value) || 1)
+                                             updateQuantity(item.id, item.detailId, parseInt(e.target.value) || 1)
                                           }
                                           className='w-12 text-center border-x py-1 text-sm focus:outline-none'
+                                          disabled={updatingItem?.id === item.id && updatingItem?.detailId === item.detailId}
                                           min='1'
-                                          max=''
+                                          max='10'
                                        />
                                        <button
-                                          onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                                          onClick={() => updateQuantity(item.id, item.detailId, item.quantity + 1)}
                                           className='px-1 py-2 text-gray-600 hover:bg-gray-100 transition-colors'
                                           aria-label='Tăng số lượng'
                                        >
@@ -254,7 +430,7 @@ export default function ShoppingCart() {
                                        {(item.price * item.quantity).toLocaleString()}₫
                                     </div>
                                     <button
-                                       onClick={() => removeItem(item.id)}
+                                       onClick={() => removeItem(item.id, item.detailId)}
                                        className='text-red-500 hover:text-red-600 transition-colors p-1.5 hover:bg-red-50 rounded-full'
                                        aria-label='Xóa sản phẩm'
                                     >
@@ -295,7 +471,7 @@ export default function ShoppingCart() {
                               Thông Tin Đơn Hàng
                            </h2>
 
-                           {/* Voucher Code Input */}
+                           {/* Voucher Code Input với thêm nút xóa voucher */}
                            <div className='mb-6'>
                               <label className='block text-sm font-medium text-gray-700 mb-2'>
                                  Mã giảm giá
@@ -307,19 +483,85 @@ export default function ShoppingCart() {
                                     onChange={(e) => setVoucher(e.target.value)}
                                     placeholder='Nhập mã giảm giá'
                                     className='flex-grow rounded-l-lg border-r-0 border border-gray-300 focus:ring-2 focus:ring-amber-200 focus:border-amber-400 px-4 py-2 text-sm focus:outline-none'
+                                    disabled={appliedVoucher !== null} // Vô hiệu hóa khi đã áp dụng voucher
                                  />
-                                 <button
-                                    onClick={applyVoucher}
-                                    className='bg-amber-600 hover:bg-amber-700 text-white px-4 rounded-r-lg transition-colors'
-                                 >
-                                    Áp dụng
-                                 </button>
+                                 {appliedVoucher ? (
+                                    <button
+                                       onClick={removeVoucher}
+                                       className='bg-gray-100 hover:bg-gray-200 text-gray-600 px-4 rounded-r-lg transition-colors border border-gray-300 border-l-0'
+                                    >
+                                       Hủy
+                                    </button>
+                                 ) : (
+                                    <button
+                                       onClick={applyVoucher}
+                                       disabled={voucherLoading} // Vô hiệu hóa khi đang loading
+                                       className='bg-amber-600 hover:bg-amber-700 text-white px-4 rounded-r-lg transition-colors flex items-center'
+                                    >
+                                       {voucherLoading ? (
+                                          <>
+                                             <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                             </svg>
+                                             Đang xử lý
+                                          </>
+                                       ) : (
+                                          'Áp dụng'
+                                       )}
+                                    </button>
+                                 )}
                               </div>
                               {voucherError && (
                                  <p className='text-red-500 text-xs mt-1'>{voucherError}</p>
                               )}
                               {voucherSuccess && (
                                  <p className='text-green-600 text-xs mt-1'>{voucherSuccess}</p>
+                              )}
+                           </div>
+
+                           {/* Thêm phần hiển thị gợi ý voucher sau phần nhập mã */}
+                           <div className='mt-2'>
+                              <button
+                                 onClick={() => setShowVoucherSuggestions(!showVoucherSuggestions)}
+                                 className='text-amber-600 text-xs underline focus:outline-none'
+                              >
+                                 {showVoucherSuggestions ? 'Ẩn gợi ý' : 'Xem các mã giảm giá hiện có'}
+                              </button>
+
+                              {showVoucherSuggestions && suggestedVouchers.length > 0 && (
+                                 <div className='mt-2 p-3 border border-dashed border-amber-300 rounded-lg bg-amber-50'>
+                                    <p className='text-xs font-medium text-gray-700 mb-2'>Mã giảm giá hiện có:</p>
+                                    <div className='flex flex-wrap gap-2'>
+                                       {suggestedVouchers.map((voucher) => (
+                                          <div
+                                             key={voucher.id}
+                                             onClick={() => setVoucher(voucher.code)}
+                                             className='cursor-pointer px-2 py-1 bg-white text-xs border border-amber-200 rounded-md hover:bg-amber-100 transition-colors'
+                                          >
+                                             <div className='font-mono font-medium text-amber-700'>{voucher.code}</div>
+                                             <div className='text-gray-600 text-[10px] whitespace-nowrap'>
+                                                {voucher.percent_off > 0
+                                                   ? `Giảm ${voucher.percent_off}%`
+                                                   : `Giảm ${voucher.amount_off.toLocaleString('vi-VN')}₫`
+                                                }
+                                                {voucher.min_order_value > 0 && (
+                                                   <span> | Tối thiểu {voucher.min_order_value.toLocaleString('vi-VN')}₫</span>
+                                                )}
+                                             </div>
+                                             <div className='text-gray-500 text-[9px]'>
+                                                HSD: {new Date(voucher.end_date).toLocaleDateString('vi-VN')}
+                                             </div>
+                                          </div>
+                                       ))}
+                                    </div>
+                                 </div>
+                              )}
+
+                              {showVoucherSuggestions && suggestedVouchers.length === 0 && (
+                                 <div className='mt-2 p-3 border border-dashed border-gray-200 rounded-lg bg-gray-50'>
+                                    <p className='text-xs text-gray-500'>Hiện không có mã giảm giá nào.</p>
+                                 </div>
                               )}
                            </div>
 
@@ -330,10 +572,11 @@ export default function ShoppingCart() {
                                  <span>{subtotal.toLocaleString()}₫</span>
                               </div>
 
+                              {/* Cập nhật phần hiển thị giảm giá */}
                               {discount > 0 && (
                                  <div className='flex justify-between text-green-600'>
                                     <span>Giảm giá:</span>
-                                    <span>-{discount.toLocaleString()}₫</span>
+                                    <span>-{discount.toLocaleString('vi-VN')}₫</span>
                                  </div>
                               )}
 
@@ -360,7 +603,26 @@ export default function ShoppingCart() {
                            {/* Action Buttons */}
                            <div className='mt-6 space-y-3'>
                               <Link href='/user/checkout'>
-                                 <button className='w-full bg-amber-800 hover:bg-amber-900 text-white font-medium py-3 rounded-lg transition-colors flex items-center justify-center gap-2'>
+                                 <button
+                                    onClick={() => {
+                                       // Lưu thông tin giỏ hàng và voucher để sử dụng ở trang thanh toán
+                                       if (appliedVoucher) {
+                                          // Chỉ lưu những thông tin cần thiết
+                                          const voucherInfo = {
+                                             id: appliedVoucher.id,
+                                             code: appliedVoucher.code,
+                                             percent_off: appliedVoucher.percent_off,
+                                             amount_off: appliedVoucher.amount_off,
+                                             discountAmount: discount // Lưu số tiền đã giảm
+                                          };
+                                          localStorage.setItem('appliedVoucher', JSON.stringify(voucherInfo));
+                                       } else {
+                                          // Xóa voucher cũ nếu không có voucher mới
+                                          localStorage.removeItem('appliedVoucher');
+                                       }
+                                    }}
+                                    className='w-full bg-amber-800 hover:bg-amber-900 text-white font-medium py-3 rounded-lg transition-colors flex items-center justify-center gap-2'
+                                 >
                                     <ShoppingBagIcon className='h-5 w-5' />
                                     Thanh Toán Ngay
                                  </button>

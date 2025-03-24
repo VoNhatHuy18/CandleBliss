@@ -40,6 +40,7 @@ interface Product {
    images: ProductImage | ProductImage[];
 }
 
+// Cập nhật interface
 interface ProductCardProps {
    title: string;
    description: string;
@@ -55,11 +56,12 @@ interface ProductCardProps {
       discountPrice?: string;
       inStock: boolean;
    }>;
-   onViewDetail?: () => void;
-   onAddToCart?: () => void;
+   onViewDetail?: (productId: number) => void;
+   onAddToCart?: (productId: number, detailId?: number) => void;
 }
 
 const ProductCard = ({
+   id, // Thêm id vào props
    title,
    description,
    price,
@@ -69,7 +71,7 @@ const ProductCard = ({
    variants,
    onViewDetail,
    onAddToCart,
-}: ProductCardProps) => {
+}: ProductCardProps & { id: number }) => { // Mở rộng interface để bao gồm id
    const renderStars = () => {
       const stars = [];
       const fullStars = Math.floor(rating);
@@ -108,24 +110,26 @@ const ProductCard = ({
                className='h-full w-full object-cover transition-all duration-300 group-hover:blur-sm'
             />
             <div className='absolute inset-0 flex flex-col items-center justify-center gap-4 opacity-0 group-hover:opacity-100 transition-opacity duration-300'>
-               <Link href={`/user/products/${encodeURIComponent(title)}`}>
+               {/* Cập nhật Link để sử dụng id thay vì title */}
+               <Link href={`/user/products/${id}`}>
                   <button
-                     onClick={onViewDetail}
-                     className='bg-white/90 hover:bg-white text-gray-800 px-4 py-2 rounded-full flex items-center gap-2 transition-colors duration-200 border boder-black'
+                     onClick={() => onViewDetail && onViewDetail(id)} // Cập nhật để truyền id
+                     className='bg-white/90 hover:bg-white text-gray-800 px-4 py-2 rounded-full flex items-center gap-2 transition-colors duration-200 border border-black'
                   >
                      <Eye className='w-4 h-4' />
                      <span>Xem chi tiết</span>
                   </button>
                </Link>
                <button
-                  onClick={onAddToCart}
-                  className='bg-white/90 hover:bg-white text-gray-800 px-4 py-2 rounded-full flex items-center gap-2 transition-colors duration-200 border boder-black'
+                  onClick={() => onAddToCart && onAddToCart(id, variants?.[0]?.detailId)} // Cập nhật để truyền id và detailId
+                  className='bg-white/90 hover:bg-white text-gray-800 px-4 py-2 rounded-full flex items-center gap-2 transition-colors duration-200 border border-black'
                >
                   <ShoppingCart className='w-4 h-4' />
                   <span>Thêm vào giỏ</span>
                </button>
             </div>
          </div>
+         {/* Phần còn lại giữ nguyên */}
          <div className='mt-3'>
             <h3 className='text-sm font-medium text-gray-700 mb-1'>{title}</h3>
             <p className='text-xs text-gray-500 line-clamp-2 mb-1'>{description}</p>
@@ -312,12 +316,59 @@ export default function ProductPage() {
       fetchProducts();
    }, []);
 
-   const handleViewDetail = () => {
-      console.log('View detail clicked');
+   const handleViewDetail = (productId: number) => {
+      console.log('View detail clicked for product ID:', productId);
+      // Bạn có thể thêm logic bổ sung ở đây
    };
 
-   const handleAddToCart = () => {
-      console.log('Add to cart clicked');
+   const handleAddToCart = (productId: number, detailId?: number) => {
+      console.log('Add to cart clicked for product ID:', productId, 'Detail ID:', detailId);
+
+      // Tìm sản phẩm trong danh sách
+      const product = products.find(p => p.id === productId);
+      if (!product) return;
+
+      // Tìm biến thể (variant) đầu tiên hoặc sử dụng detailId đã chọn
+      const variant = detailId
+         ? product.variants?.find(v => v.detailId === detailId)
+         : product.variants?.[0];
+
+      if (!variant) {
+         // Nếu không có biến thể, sử dụng thông tin sản phẩm chính
+         const cartItem = {
+            productId: product.id,
+            name: product.title,
+            price: product.discountPrice || product.price,
+            quantity: 1,
+            imageUrl: product.imageUrl
+         };
+
+         // Thêm vào localStorage hoặc xử lý theo logic giỏ hàng của bạn
+         const cartItems = JSON.parse(localStorage.getItem('cart') || '[]');
+         cartItems.push(cartItem);
+         localStorage.setItem('cart', JSON.stringify(cartItems));
+
+         alert('Đã thêm sản phẩm vào giỏ hàng!');
+      } else {
+         // Nếu có biến thể
+         const cartItem = {
+            productId: product.id,
+            name: product.title,
+            detailId: variant.detailId,
+            size: variant.size,
+            type: variant.type,
+            price: variant.discountPrice || variant.basePrice,
+            quantity: 1,
+            imageUrl: product.imageUrl
+         };
+
+         // Thêm vào localStorage hoặc xử lý theo logic giỏ hàng của bạn
+         const cartItems = JSON.parse(localStorage.getItem('cart') || '[]');
+         cartItems.push(cartItem);
+         localStorage.setItem('cart', JSON.stringify(cartItems));
+
+         alert('Đã thêm sản phẩm vào giỏ hàng!');
+      }
    };
 
    return (
@@ -384,6 +435,7 @@ export default function ProductPage() {
                   {products.map((product) => (
                      <ProductCard
                         key={product.id}
+                        id={product.id}
                         title={product.title}
                         description={product.description || ''}
                         price={product.price}
