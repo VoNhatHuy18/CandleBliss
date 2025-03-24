@@ -1,7 +1,5 @@
-// pages/admin/products/new.js
-
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
@@ -9,7 +7,19 @@ import { useProductForm } from '@/app/context/ProductFormContext';
 
 import Header from '@/app/components/seller/header/page';
 import MenuSideBar from '@/app/components/seller/menusidebar/page';
-import { X } from 'lucide-react';
+import { X, ChevronDown, Loader2 } from 'lucide-react';
+
+// Interface cho danh mục
+interface Category {
+   id: number;
+   name: string;
+   description: string;
+   createdAt?: string;
+   updatedAt?: string;
+   deletedAt?: string | null;
+   isDeleted?: boolean;
+   __entity?: string;
+}
 
 export default function Step1() {
    const router = useRouter();
@@ -17,20 +27,189 @@ export default function Step1() {
 
    const [name, setName] = useState(formData.name || '');
    const [description, setDescription] = useState(formData.description || '');
-   const [category, setCategory] = useState(formData.category || '');
+   const [selectedCategory, setSelectedCategory] = useState<Category | null>(
+      formData.selectedCategory || null
+   );
+   // State cho dropdown
+   const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false);
+   // State cho danh sách danh mục từ API
+   const [categories, setCategories] = useState<Category[]>([]);
+   const [isCategoriesLoading, setIsCategoriesLoading] = useState(false);
+   const [isCategoryDetailLoading, setIsCategoryDetailLoading] = useState(false);
+   const [categoryError, setCategoryError] = useState('');
+
    // Add state for images
    const [productImages, setProductImages] = useState<string[]>(formData.images || []);
    const [imageError, setImageError] = useState<string | null>(null);
    const [videoUrl, setVideoUrl] = useState(formData.videoUrl || '');
-   const [categoryDescription, setCategoryDescription] = useState('');
    const [errors, setErrors] = useState({
       name: '',
       category: '',
       description: '',
       images: '',
-      categoryDescription: '',
    });
-   const [isLoading, setIsLoading] = useState(false); // Thêm state isLoading
+   const [isLoading, setIsLoading] = useState(false);
+
+   // Thêm kiểm tra token khi component mount
+   // filepath: /d:/New folder/candlebliss/src/app/seller/products/createproduct/step1/page.tsx
+
+   useEffect(() => {
+      const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+      if (!token) {
+         setCategoryError('Bạn chưa đăng nhập. Vui lòng đăng nhập để tiếp tục.');
+         router.push('/seller/signin');
+         return;
+      }
+
+      fetchCategories();
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+   }, []); // Loại bỏ router khỏi dependency array và thêm eslint-disable comment
+
+   // Hàm fetch danh sách danh mục
+   const fetchCategories = async () => {
+      try {
+         setIsCategoriesLoading(true);
+         setCategoryError('');
+
+         // Lấy token từ localStorage hoặc sessionStorage
+         const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+         if (!token) {
+            setCategoryError('Bạn chưa đăng nhập hoặc phiên làm việc đã hết hạn');
+            return;
+         }
+
+         const response = await fetch('http://localhost:3000/api/categories', {
+            headers: {
+               'Authorization': `Bearer ${token}`
+            },
+            // Thêm tùy chọn để không tự động theo chuyển hướng
+            redirect: 'manual'
+         });
+
+         // Xử lý mã trạng thái cụ thể
+         if (response.status === 302) {
+            // Phiên đăng nhập đã hết hạn hoặc token không hợp lệ
+            // Xóa token cũ
+            localStorage.removeItem('token');
+            sessionStorage.removeItem('token');
+
+            setCategoryError('Phiên làm việc đã hết hạn. Vui lòng đăng nhập lại.');
+
+            // Tùy chọn: Chuyển hướng người dùng đến trang đăng nhập sau 2 giây
+            setTimeout(() => {
+               router.push('/seller/signin');
+            }, 2000);
+
+            return;
+         }
+
+         if (!response.ok) {
+            throw new Error(`Failed to fetch categories: ${response.status}`);
+         }
+
+         const data = await response.json();
+         setCategories(data);
+
+         // Nếu đã chọn category trước đó, tải thông tin chi tiết
+         if (formData.selectedCategory?.id) {
+            fetchCategoryById(formData.selectedCategory.id);
+         }
+      } catch (error) {
+         console.error('Error fetching categories:', error);
+
+         // Kiểm tra xem lỗi có phải là do mạng không
+         if (error instanceof TypeError && error.message.includes('network')) {
+            setCategoryError('Không thể kết nối đến máy chủ. Vui lòng kiểm tra kết nối internet của bạn.');
+         } else {
+            setCategoryError('Không thể tải danh sách danh mục. Vui lòng thử lại sau.');
+         }
+      } finally {
+         setIsCategoriesLoading(false);
+      }
+   };
+
+   // Hàm lấy thông tin chi tiết của một danh mục theo ID
+   const fetchCategoryById = async (categoryId: number) => {
+      try {
+         setIsCategoryDetailLoading(true);
+
+         const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+         if (!token) {
+            return null;
+         }
+
+         const response = await fetch(`http://localhost:3000/api/categories/${categoryId}`, {
+            headers: {
+               'Authorization': `Bearer ${token}`
+            },
+            // Thêm tùy chọn để không tự động theo chuyển hướng
+            redirect: 'manual'
+         });
+
+         // Xử lý mã trạng thái cụ thể
+         if (response.status === 302) {
+            // Phiên đăng nhập đã hết hạn hoặc token không hợp lệ
+            localStorage.removeItem('token');
+            sessionStorage.removeItem('token');
+
+            setCategoryError('Phiên làm việc đã hết hạn. Vui lòng đăng nhập lại.');
+            return null;
+         }
+
+         if (!response.ok) {
+            throw new Error(`Failed to fetch category details: ${response.status}`);
+         }
+
+         const categoryData = await response.json();
+         setSelectedCategory(categoryData);
+         return categoryData;
+      } catch (error) {
+         console.error(`Error fetching category details for ID ${categoryId}:`, error);
+         return null;
+      } finally {
+         setIsCategoryDetailLoading(false);
+      }
+   };
+
+   // Hàm lấy tên danh mục theo ID
+   const getCategoryNameById = async (categoryId: number): Promise<string> => {
+      try {
+         const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+         if (!token) return 'Không xác định';
+
+         const response = await fetch(`http://localhost:3000/api/categories/${categoryId}`, {
+            headers: {
+               'Authorization': `Bearer ${token}`
+            }
+         });
+
+         if (!response.ok) {
+            console.error(`Failed to fetch category name: ${response.status}`);
+            return 'Không tìm thấy';
+         }
+
+         const category = await response.json();
+         return category.name || 'Không xác định';
+      } catch (error) {
+         console.error(`Error fetching category name for ID ${categoryId}:`, error);
+         return 'Không xác định';
+      }
+   };
+
+   // Xử lý khi người dùng chọn một danh mục
+   const handleCategorySelect = async (category: Category) => {
+      try {
+         // Hiển thị thông tin cơ bản trước
+         setSelectedCategory(category);
+         setIsCategoryDropdownOpen(false);
+         setErrors((prev) => ({ ...prev, category: '' }));
+
+         // Sau đó tải thông tin chi tiết
+         await fetchCategoryById(category.id);
+      } catch (error) {
+         console.error('Error selecting category:', error);
+      }
+   };
 
    // Handle image upload
    const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -87,7 +266,6 @@ export default function Step1() {
          category: '',
          description: '',
          images: '',
-         categoryDescription: '',
       };
 
       if (!name.trim()) {
@@ -95,7 +273,7 @@ export default function Step1() {
          isValid = false;
       }
 
-      if (!category) {
+      if (!selectedCategory) {
          newErrors.category = 'Vui lòng chọn danh mục';
          isValid = false;
       }
@@ -107,11 +285,6 @@ export default function Step1() {
 
       if (productImages.length === 0) {
          newErrors.images = 'Vui lòng tải lên ít nhất 1 hình ảnh';
-         isValid = false;
-      }
-
-      if (!categoryDescription.trim()) {
-         newErrors.categoryDescription = 'Vui lòng nhập mô tả danh mục';
          isValid = false;
       }
 
@@ -139,6 +312,12 @@ export default function Step1() {
          const productFormData = new FormData();
          productFormData.append('name', name.trim());
          productFormData.append('description', description || '');
+
+         // Thêm categoryId nếu đã chọn danh mục
+         if (selectedCategory) {
+            productFormData.append('categoryId', selectedCategory.id.toString());
+         }
+
          if (videoUrl) {
             productFormData.append('video', videoUrl);
          }
@@ -166,7 +345,7 @@ export default function Step1() {
             return;
          }
 
-         // Gửi request tạo sản phẩm
+         // Gửi request tạo sản phẩm với categoryId đã được đính kèm
          const productResponse = await fetch('http://localhost:3000/api/products', {
             method: 'POST',
             headers: {
@@ -188,69 +367,11 @@ export default function Step1() {
          const createdProduct = await productResponse.json();
          const productId = createdProduct.id;
 
-         // Tạo danh mục cho sản phẩm - cập nhật để chỉ gửi thông tin danh mục
-         const categoryData = {
-            name: category.trim(),
-            description: categoryDescription.trim(),
-            // Bỏ trường productId
-         };
-
-         // Gửi request tạo danh mục
-         const categoryResponse = await fetch('http://localhost:3000/api/categories', {
-            method: 'POST',
-            headers: {
-               'Content-Type': 'application/json',
-               Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify(categoryData),
-         });
-
-         if (!categoryResponse.ok) {
-            const errorData = await categoryResponse.json().catch(() => null);
-            const errorText = await categoryResponse.text().catch(() => 'Unknown error');
-            console.error('Category creation failed:', errorData || errorText);
-            alert(`Lỗi khi tạo danh mục: ${errorData?.message || errorText}`);
-            setIsLoading(false);
-            return;
-         }
-
-         // Lấy ID danh mục đã tạo
-         const createdCategory = await categoryResponse.json();
-         const categoryId = createdCategory.id;
-
-         // Cập nhật sản phẩm với categoryId
-         const updateProductData = {
-            categoryId: categoryId,
-         };
-
-         const updateProductResponse = await fetch(
-            `http://localhost:3000/api/products/${productId}`,
-            {
-               method: 'PATCH',
-               headers: {
-                  'Content-Type': 'application/json',
-                  Authorization: `Bearer ${token}`,
-               },
-               body: JSON.stringify(updateProductData),
-            },
-         );
-
-         if (!updateProductResponse.ok) {
-            const errorData = await updateProductResponse.json().catch(() => null);
-            console.error('Product update failed:', errorData);
-            alert(
-               `Lỗi khi cập nhật sản phẩm với danh mục: ${errorData?.message || 'Unknown error'}`,
-            );
-            setIsLoading(false);
-            return;
-         }
-
          // Cập nhật dữ liệu trong context và thêm productId vào để các bước tiếp theo sử dụng
          updateFormData({
             name,
             description,
-            category,
-            categoryDescription, // Thêm mô tả danh mục
+            selectedCategory, // Lưu toàn bộ đối tượng danh mục được chọn
             images: productImages,
             videoUrl,
             productId: productId,
@@ -277,6 +398,17 @@ export default function Step1() {
 
             {/* Main Content */}
             <main className='flex-1 p-6 overflow-auto'>
+               {categoryError && categoryError.includes('Phiên làm việc đã hết hạn') && (
+                  <div className="mb-4 p-4 bg-red-50 border-l-4 border-red-400 text-red-700">
+                     <div className="flex items-center">
+                        <svg className="h-5 w-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                           <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                        </svg>
+                        <p>{categoryError}</p>
+                     </div>
+                     <p className="mt-2 text-sm">Đang chuyển hướng đến trang đăng nhập...</p>
+                  </div>
+               )}
                {/* Breadcrumb */}
                <div className='text-sm mb-6'>
                   <Link href='/seller/products' className='text-gray-500 hover:text-amber-800'>
@@ -385,56 +517,89 @@ export default function Step1() {
                            )}
                         </div>
 
-                        {/* Category */}
+                        {/* Category Dropdown */}
                         <div>
                            <label className='block text-sm font-medium text-gray-700 mb-1'>
                               <span className='text-red-500'>*</span> Danh mục
                            </label>
                            <div className='relative'>
-                              <input
-                                 type='text'
-                                 value={category}
-                                 onChange={(e) => {
-                                    setCategory(e.target.value);
-                                    setErrors((prev) => ({ ...prev, category: '' }));
-                                 }}
-                                 placeholder='Nhập tên danh mục sản phẩm (vd: Nến thơm, Tinh dầu)'
-                                 className={`w-full px-3 py-2 border ${errors.category ? 'border-red-500' : 'border-gray-300'
-                                    } rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500`}
-                              />
-                              {errors.category && (
-                                 <p className='text-red-500 text-xs mt-1'>{errors.category}</p>
+                              <button
+                                 type="button"
+                                 onClick={() => setIsCategoryDropdownOpen(!isCategoryDropdownOpen)}
+                                 className={`w-full px-3 py-2 text-left border ${errors.category ? 'border-red-500' : 'border-gray-300'
+                                    } rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white flex justify-between items-center`}
+                              >
+                                 <span className={selectedCategory ? 'text-gray-900' : 'text-gray-400'}>
+                                    {selectedCategory ? selectedCategory.name : 'Chọn danh mục sản phẩm'}
+                                 </span>
+                                 <ChevronDown className="h-4 w-4 text-gray-500" />
+                              </button>
+
+                              {isCategoryDropdownOpen && (
+                                 <div className="absolute z-10 mt-1 w-full bg-white shadow-lg rounded-md border border-gray-200 py-1 max-h-60 overflow-auto">
+                                    {isCategoriesLoading ? (
+                                       <div className="px-4 py-2 text-sm text-gray-500">
+                                          <div className="flex items-center">
+                                             <Loader2 className="h-4 w-4 mr-2 animate-spin text-amber-500" />
+                                             Đang tải danh mục...
+                                          </div>
+                                       </div>
+                                    ) : categoryError ? (
+                                       <div className="px-4 py-2 text-sm text-red-500">
+                                          {categoryError}
+                                       </div>
+                                    ) : categories.length === 0 ? (
+                                       <div className="px-4 py-2 text-sm text-gray-500">
+                                          Không có danh mục nào. Bạn có thể thêm danh mục mới.
+                                       </div>
+                                    ) : (
+                                       <>
+                                          {categories.map((category) => (
+                                             <button
+                                                key={category.id}
+                                                type="button"
+                                                onClick={() => handleCategorySelect(category)}
+                                                className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-100 ${selectedCategory?.id === category.id ? 'bg-amber-50 text-amber-700' : 'text-gray-700'
+                                                   }`}
+                                             >
+                                                {category.name}
+                                             </button>
+                                          ))}
+                                       </>
+                                    )}
+
+
+                                 </div>
                               )}
                            </div>
+                           {errors.category && (
+                              <p className='text-red-500 text-xs mt-1'>{errors.category}</p>
+                           )}
                            <p className='text-xs text-gray-500 mt-1'>
-                              Nhập tên danh mục để phân loại sản phẩm của bạn
+                              Chọn danh mục phù hợp cho sản phẩm của bạn
                            </p>
                         </div>
 
-                        {/* Category Description - Thêm mới */}
-                        <div>
-                           <label className='block text-sm font-medium text-gray-700 mb-1'>
-                              <span className='text-red-500'>*</span> Mô tả danh mục
-                           </label>
-                           <textarea
-
-                              rows={3}
-                              value={categoryDescription}
-                              onChange={(e) => {
-                                 setCategoryDescription(e.target.value);
-                                 setErrors((prev) => ({ ...prev, categoryDescription: '' }));
-                              }}
-                              placeholder='Mô tả ngắn gọn về danh mục sản phẩm'
-                              className={`w-full px-3 py-2 border ${errors.categoryDescription ? 'border-red-500' : 'border-gray-300'
-                                 } rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500`}
-                           ></textarea>
-                           {errors.categoryDescription && (
-                              <p className='text-red-500 text-xs mt-1'>
-                                 {errors.categoryDescription}
-                              </p>
-                           )}
-
-                        </div>
+                        {/* Display Selected Category Details */}
+                        {selectedCategory && (
+                           <div className="p-3 bg-gray-50 rounded-md relative">
+                              {isCategoryDetailLoading && (
+                                 <div className="absolute inset-0 bg-white/60 flex items-center justify-center">
+                                    <Loader2 className="h-5 w-5 animate-spin text-amber-500" />
+                                 </div>
+                              )}
+                              <h4 className="text-sm font-medium text-gray-700 mb-1">Thông tin danh mục đã chọn</h4>
+                              <div className="flex justify-between items-start">
+                                 <div>
+                                    <p className="text-sm text-gray-600">{selectedCategory.name}</p>
+                                    <p className="text-xs text-gray-500 mt-1">{selectedCategory.description}</p>
+                                 </div>
+                                 <div className="text-xs text-gray-400">
+                                    ID: {selectedCategory.id}
+                                 </div>
+                              </div>
+                           </div>
+                        )}
 
                         {/* Product Image - Updated with functionality */}
                         <div>
@@ -566,10 +731,22 @@ export default function Step1() {
                   {/* Form Navigation */}
                   <div className='flex justify-end'>
                      <button
-                        className='px-4 py-2 bg-amber-600 text-white rounded-md hover:bg-amber-700 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2'
+                        type="button"
+                        className='px-4 py-2 bg-amber-600 text-white rounded-md hover:bg-amber-700 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 flex items-center'
                         onClick={handleNext}
+                        disabled={isLoading}
                      >
-                        Tiếp theo
+                        {isLoading ? (
+                           <>
+                              <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                              </svg>
+                              Đang xử lý...
+                           </>
+                        ) : (
+                           "Tiếp theo"
+                        )}
                      </button>
                   </div>
                </div>

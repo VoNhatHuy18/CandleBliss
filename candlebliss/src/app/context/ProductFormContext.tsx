@@ -1,6 +1,13 @@
 'use client';
 import { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 
+// Định nghĩa interface cho Category
+interface Category {
+   id: number;
+   name: string;
+   description: string;
+}
+
 // Định nghĩa interface cho variant
 interface Variant {
    type: string;
@@ -16,10 +23,8 @@ interface Variant {
 interface ProductFormData {
    name: string;
    description: string;
-   category: string;
-   categoryId?: number;
-   categoryName?: string;
-   categoryDescription?: string; // Thêm trường này
+   // Thay thế các trường category riêng lẻ bằng đối tượng Category
+   selectedCategory: Category | null;
    images: string[];
    videoUrl?: string;
    basePrice?: string;
@@ -35,7 +40,7 @@ interface ProductFormData {
 const defaultFormData: ProductFormData = {
    name: '',
    description: '',
-   category: '',
+   selectedCategory: null,
    images: [],
    variants: [],
 };
@@ -49,8 +54,8 @@ interface ProductFormContextType {
 
 const ProductFormContext = createContext<ProductFormContextType>({
    formData: defaultFormData,
-   updateFormData: () => {},
-   resetFormData: () => {},
+   updateFormData: () => { },
+   resetFormData: () => { },
    isFormComplete: () => false,
 });
 
@@ -93,7 +98,9 @@ export function ProductFormProvider({ children }: { children: ReactNode }) {
 
    const isFormComplete = () => {
       // Kiểm tra điều kiện tối thiểu để hoàn thành form
-      const basicInfoComplete = formData.name && formData.description && formData.category;
+      const basicInfoComplete = formData.name &&
+         formData.description &&
+         formData.selectedCategory !== null;
       const hasImages = formData.images && formData.images.length > 0;
       const hasVariants = formData.variants && formData.variants.length > 0;
       const hasPrice = formData.basePrice && parseFloat(formData.basePrice) > 0;

@@ -243,7 +243,7 @@ const ProductTable = ({
          <div className="border-b border-gray-200 px-6 py-4">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                <div className="flex-1 w-full md:w-auto md:max-w-md relative">
-                  <div className="relative">
+                  <div className="relative flex ">
                      <input
                         type="text"
                         placeholder="Tìm sản phẩm theo tên, ID, danh mục..."
@@ -264,28 +264,25 @@ const ProductTable = ({
                            </svg>
                         </button>
                      )}
+                     <button
+                        onClick={handleRefresh}
+                        className="p-2 text-gray-500 hover:text-amber-600 rounded-lg  transition-colors pl-5"
+                        title="Làm mới"
+                     >
+                        <ArrowPathIcon className="h-5 w-5" />
+                     </button>
                   </div>
                   {searchTerm && (
                      <div className="absolute mt-1 text-xs text-gray-500">
                         Tìm thấy {filteredProducts.length} kết quả
                      </div>
                   )}
+
                </div>
 
                <div className="flex items-center space-x-2">
-                  <button
-                     onClick={handleRefresh}
-                     className="p-2 text-gray-500 hover:text-amber-600 rounded-lg hover:bg-amber-50 transition-colors"
-                     title="Làm mới"
-                  >
-                     <ArrowPathIcon className="h-5 w-5" />
-                  </button>
-                  <button
-                     className="p-2 text-gray-500 hover:text-amber-600 rounded-lg hover:bg-amber-50 transition-colors"
-                     title="Tùy chọn hiển thị"
-                  >
-                     <AdjustmentsHorizontalIcon className="h-5 w-5" />
-                  </button>
+
+
                   <button
                      onClick={() => router.push('/seller/products/createproduct/step1')}
                      className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-amber-600 hover:bg-amber-700 shadow-sm"
@@ -309,7 +306,7 @@ const ProductTable = ({
                      onClick={() => setSearchTerm('')}
                      className="mt-2 text-amber-600 hover:text-amber-800 font-medium"
                   >
-                     Xóa bộ lọc
+                     Xóa từ khóa
                   </button>
                </div>
             ) : (
@@ -447,13 +444,14 @@ const ProductTable = ({
 
                            <div className="hidden md:flex items-center">
                               <div className="text-sm text-gray-700">
-                                 <span>{totalVariants} phiên bản</span>
+
                                  {totalVariants > 0 && (
                                     <Badge
                                        count={activeVariants}
                                        variant={activeVariants > 0 ? 'success' : 'warning'}
                                     />
                                  )}
+                                 <span> Phiên bản</span>
                               </div>
                            </div>
 
@@ -533,13 +531,7 @@ const ProductTable = ({
                            <div className="p-4 bg-gray-50 border-t">
                               <div className="flex justify-between items-center mb-3">
                                  <h4 className="text-sm font-medium">Chi tiết sản phẩm</h4>
-                                 <button
-                                    className="text-xs text-amber-600 hover:text-amber-800 font-medium flex items-center"
-                                    onClick={() => router.push(`/seller/products/variants/${product.id}`)}
-                                 >
-                                    <PlusIcon className="h-3.5 w-3.5 mr-1" />
-                                    Thêm phiên bản
-                                 </button>
+
                               </div>
 
                               {isDetailLoading ? (
@@ -654,13 +646,7 @@ const ProductTable = ({
                               ) : (
                                  <div className="text-center py-8 text-gray-500 bg-white rounded-lg border border-gray-200">
                                     <p>Sản phẩm này chưa có phiên bản. Hãy thêm phiên bản để bắt đầu bán.</p>
-                                    <button
-                                       onClick={() => router.push(`/seller/products/variants/${product.id}`)}
-                                       className="mt-3 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-amber-600 hover:bg-amber-700"
-                                    >
-                                       <PlusIcon className="h-4 w-4 mr-2" />
-                                       Thêm phiên bản
-                                    </button>
+
                                  </div>
                               )}
                            </div>
@@ -911,28 +897,9 @@ export default function ProductManagement() {
                <div className='flex flex-col md:flex-row justify-between items-start md:items-center mb-6'>
                   <div>
                      <h1 className='text-2xl font-semibold text-gray-800'>Quản lý sản phẩm</h1>
-                     <p className="text-sm text-gray-500 mt-1">
-                        Quản lý tất cả các sản phẩm, phiên bản và giá
-                     </p>
+
                   </div>
-                  <Link
-                     href='/seller/products/createproduct/step1'
-                     className='mt-3 md:mt-0 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg flex items-center gap-2 shadow-sm'
-                  >
-                     <svg
-                        xmlns='http://www.w3.org/2000/svg'
-                        className='h-5 w-5'
-                        viewBox='0 0 20 20'
-                        fill='currentColor'
-                     >
-                        <path
-                           fillRule='evenodd'
-                           d='M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z'
-                           clipRule='evenodd'
-                        />
-                     </svg>
-                     Thêm sản phẩm
-                  </Link>
+
                </div>
 
                {/* Filter tabs with counts */}

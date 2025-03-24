@@ -32,31 +32,41 @@ interface Price {
    product_detail: ProductDetail;
 }
 
-// 1. Cập nhật interface Product để phù hợp với API
 interface Product {
    id: number;
    name: string;
    description: string;
    video: string;
-   images: ProductImage | ProductImage[]; // Có thể là một object hoặc mảng
+   images: ProductImage | ProductImage[];
 }
 
 interface ProductCardProps {
    title: string;
+   description: string;
    price: string;
    discountPrice?: string;
    rating: number;
    imageUrl: string;
+   variants?: Array<{
+      detailId: number;
+      size: string;
+      type: string;
+      basePrice: string;
+      discountPrice?: string;
+      inStock: boolean;
+   }>;
    onViewDetail?: () => void;
    onAddToCart?: () => void;
 }
 
 const ProductCard = ({
    title,
+   description,
    price,
    discountPrice,
    rating,
    imageUrl,
+   variants,
    onViewDetail,
    onAddToCart,
 }: ProductCardProps) => {
@@ -83,7 +93,6 @@ const ProductCard = ({
       return stars;
    };
 
-   // Format price to include commas
    const formatPrice = (value: string) => {
       return value.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
    };
@@ -118,8 +127,9 @@ const ProductCard = ({
             </div>
          </div>
          <div className='mt-3'>
-            <h3 className='text-sm font-medium text-gray-700 line-clamp-2'>{title}</h3>
-            <div className='mt-1 flex items-center'>{renderStars()}</div>
+            <h3 className='text-sm font-medium text-gray-700 mb-1'>{title}</h3>
+            <p className='text-xs text-gray-500 line-clamp-2 mb-1'>{description}</p>
+            <div className='flex items-center'>{renderStars()}</div>
             <div className='mt-1'>
                {discountPrice ? (
                   <div className='flex items-center gap-2'>
@@ -132,6 +142,7 @@ const ProductCard = ({
                   <p className='text-sm font-medium text-red-600'>{formatPrice(price)}đ</p>
                )}
             </div>
+
          </div>
       </div>
    );
@@ -143,10 +154,19 @@ export default function ProductPage() {
       Array<{
          id: number;
          title: string;
+         description: string;
          price: string;
          discountPrice?: string;
          rating: number;
          imageUrl: string;
+         variants?: Array<{
+            detailId: number;
+            size: string;
+            type: string;
+            basePrice: string;
+            discountPrice?: string;
+            inStock: boolean;
+         }>;
       }>
    >([]);
    const [loading, setLoading] = useState(true);
@@ -161,16 +181,13 @@ export default function ProductPage() {
             }
             const productsData: Product[] = await productsResponse.json();
 
-            // Chuẩn hóa dữ liệu sản phẩm
             const normalizedProducts = productsData.map((product) => ({
                ...product,
                images: Array.isArray(product.images) ? product.images : [product.images],
             }));
 
-            // Log để kiểm tra dữ liệu đã chuẩn hóa
             console.log('Normalized Products data:', normalizedProducts);
 
-            // Kiểm tra cụ thể về hình ảnh của từng sản phẩm
             normalizedProducts.forEach((product, index) => {
                console.log(`Product ${index}: ${product.name}`);
                console.log(`  - Has images:`, product.images.length > 0);
@@ -180,7 +197,6 @@ export default function ProductPage() {
             });
 
             try {
-               // Fetch prices with authentication
                const pricesResponse = await fetch('http://localhost:3000/api/v1/prices', {
                   headers: {
                      Authorization: 'Bearer ' + localStorage.getItem('token'),
@@ -188,16 +204,15 @@ export default function ProductPage() {
                });
                if (!pricesResponse.ok) {
                   console.warn('Could not fetch prices, using default values');
-                  // Continue with products but use default prices
                   const mappedProducts = normalizedProducts.map((product) => {
-                     // Lấy đường dẫn hình ảnh đầu tiên nếu có
                      const imageUrl =
                         product.images && product.images.length > 0 ? product.images[0].path : null;
 
                      return {
                         id: product.id,
                         title: product.name,
-                        price: '0', // Default price
+                        description: product.description,
+                        price: '0',
                         rating: 4.5,
                         imageUrl: imageUrl || '/images/placeholder.jpg',
                      };
@@ -208,41 +223,79 @@ export default function ProductPage() {
 
                const pricesData: Price[] = await pricesResponse.json();
 
-               // Map products with prices
+               console.log("Price data structure:", pricesData.length > 0 ? pricesData[0] : "No prices");
+
                const mappedProducts = normalizedProducts.map((product) => {
                   console.log(`Mapping product ${product.id}: ${product.name}`);
 
-                  // Lấy đường dẫn hình ảnh đầu tiên nếu có
                   const imageUrl =
                      product.images && product.images.length > 0 ? product.images[0].path : null;
                   console.log(`  - Image path:`, imageUrl);
 
-                  const priceInfo = pricesData.find(
-                     (price) => price.product_detail.id === product.id,
-                  );
+
+                  const productPrices = pricesData.filter((price) => {
+                     if (!price.product_detail) return false;
+
+
+                     return price.product_detail && price.product_detail.id;
+                  });
+
+                  console.log(`  - Found ${productPrices.length} prices for product`);
+
+                  let basePrice = '0';
+                  let discountPrice: string | undefined = undefined;
+
+                  if (productPrices.length > 0) {
+                     productPrices.sort((a, b) => Number(a.base_price) - Number(b.base_price));
+
+                     basePrice = productPrices[0].base_price.toString();
+
+                     const discountPrices = productPrices
+                        .filter(price => price.discount_price && Number(price.discount_price) > 0)
+                        .sort((a, b) => Number(a.discount_price) - Number(b.discount_price));
+
+                     if (discountPrices.length > 0) {
+                        discountPrice = discountPrices[0].discount_price.toString();
+                     }
+
+                     console.log(`  - Selected base price: ${basePrice}`);
+                     console.log(`  - Selected discount price: ${discountPrice || 'None'}`);
+                  }
 
                   console.log(`  - Final imageUrl:`, imageUrl || '/images/placeholder.jpg');
+
+                  const variants = productPrices.map(price => {
+                     const detail = price.product_detail;
+                     return {
+                        detailId: detail.id,
+                        size: detail.size,
+                        type: detail.type,
+                        basePrice: price.base_price.toString(),
+                        discountPrice: price.discount_price ? price.discount_price.toString() : undefined,
+                        inStock: detail.quantities > 0 && detail.isActive
+                     };
+                  });
 
                   return {
                      id: product.id,
                      title: product.name,
-                     price: priceInfo ? priceInfo.base_price.toString() : '0',
-                     discountPrice: priceInfo?.discount_price
-                        ? priceInfo.discount_price.toString()
-                        : undefined,
+                     description: product.description,
+                     price: basePrice,
+                     discountPrice: discountPrice,
                      rating: 4.5,
                      imageUrl: imageUrl || '/images/placeholder.jpg',
+                     variants: variants
                   };
                });
 
                setProducts(mappedProducts);
             } catch (priceErr) {
                console.warn('Error fetching prices:', priceErr);
-               // Handle gracefully and continue with products
                const mappedProducts = normalizedProducts.map((product) => ({
                   id: product.id,
                   title: product.name,
-                  price: '0', // Default price
+                  description: product.description,
+                  price: '0',
                   rating: 4.5,
                   imageUrl: product.images?.[0]?.path || '/images/placeholder.jpg',
                }));
@@ -332,10 +385,12 @@ export default function ProductPage() {
                      <ProductCard
                         key={product.id}
                         title={product.title}
+                        description={product.description || ''}
                         price={product.price}
                         discountPrice={product.discountPrice}
                         rating={product.rating}
                         imageUrl={product.imageUrl}
+                        variants={product.variants}
                         onViewDetail={handleViewDetail}
                         onAddToCart={handleAddToCart}
                      />
