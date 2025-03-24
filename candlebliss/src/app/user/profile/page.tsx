@@ -18,6 +18,7 @@ import Footer from "@/app/components/user/footer/page";
 import ViewedCarousel from "@/app/components/user/viewedcarousel/page";
 
 import Image from "next/image";
+import Link from "next/link";
 
 // Nội dung cho từng tab
 const ProfileContent = () => (
@@ -25,6 +26,23 @@ const ProfileContent = () => (
       <h2 className="text-2xl font-semibold text-gray-800 pb-4 border-b">Thông tin cá nhân</h2>
 
       <div className="flex flex-col md:flex-row gap-8">
+         <div className="w-full md:w-1/3 flex flex-col items-center">
+            <div className="relative w-32 h-32 mb-4">
+               <Image
+                  src=""
+                  alt="Profile picture"
+                  width={128}
+                  height={128}
+                  className="rounded-full object-cover border-4 border-amber-100"
+               />
+               <button className="absolute bottom-0 right-0 bg-amber-500 text-white p-2 rounded-full hover:bg-amber-600">
+                  <FaUser size={14} />
+               </button>
+            </div>
+            <h3 className="text-xl font-semibold">Mai Xuân Toàn</h3>
+            <p className="text-gray-500">Thành viên từ 03/2023</p>
+         </div>
+
          <div className="w-full md:w-2/3">
             <form className="space-y-4">
                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -270,10 +288,54 @@ const SupportContent = () => (
 const UserProfile = () => {
    const [activeContent, setActiveContent] = useState<JSX.Element>(<ProfileContent />);
    const [selectedTab, setSelectedTab] = useState("profile");
+   const router = useRouter();
+   const pathname = usePathname();
 
-   const handleTabChange = (tab: string, content: JSX.Element) => {
+   useEffect(() => {
+      // Kiểm tra URL query param để xác định tab hiện tại
+      const params = new URLSearchParams(window.location.search);
+      const tabParam = params.get('tab');
+
+      if (tabParam && tabParam !== 'orders') {
+         // Xác định tab nếu không phải orders (orders sẽ chuyển hướng)
+         const availableTabs = ["profile", "wishlist", "addresses", "reviews", "support"];
+         if (availableTabs.includes(tabParam)) {
+            handleTabChange(tabParam);
+         }
+      }
+   }, [pathname]);
+
+   const handleTabChange = (tab: string) => {
+      if (tab === "orders") {
+         router.push("/user/order");
+         return;
+      }
+
       setSelectedTab(tab);
-      setActiveContent(content);
+
+      // Cập nhật nội dung theo tab
+      switch (tab) {
+         case "profile":
+            setActiveContent(<ProfileContent />);
+            break;
+         case "wishlist":
+            setActiveContent(<WishlistContent />);
+            break;
+         case "addresses":
+            setActiveContent(<AddressesContent />);
+            break;
+         case "reviews":
+            setActiveContent(<ReviewsContent />);
+            break;
+         case "support":
+            setActiveContent(<SupportContent />);
+            break;
+         default:
+            setActiveContent(<ProfileContent />);
+      }
+
+      // Cập nhật URL
+      router.push(`${pathname}?tab=${tab}`, { scroll: false });
    };
 
    return (
@@ -283,7 +345,7 @@ const UserProfile = () => {
             <div className="flex flex-col md:flex-row gap-6">
                <MenuProfile
                   selectedTab={selectedTab}
-                  onTabChange={(tab, content) => handleTabChange(tab, content)}
+                  onTabChange={handleTabChange}
                />
                <div className="w-full md:w-3/4">
                   {activeContent}
@@ -298,53 +360,54 @@ const UserProfile = () => {
 
 interface MenuProfileProps {
    selectedTab: string;
-   onTabChange: (tab: string, content: JSX.Element) => void;
+   onTabChange: (tab: string) => void;
 }
 
 const MenuProfile: React.FC<MenuProfileProps> = ({ selectedTab, onTabChange }) => {
    const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+   const router = useRouter();
 
    const menuItems = [
       {
          label: "Thông tin cá nhân",
          icon: FaUser,
          tab: "profile",
-         content: <ProfileContent />
       },
       {
          label: "Quản lý đơn hàng",
          icon: FaShoppingBag,
          tab: "orders",
-         content: <OrdersContent />,
          badge: 3,
+         externalLink: true
       },
       {
          label: "Sản phẩm yêu thích",
          icon: FaHeart,
          tab: "wishlist",
-         content: <WishlistContent />,
       },
       {
          label: "Địa chỉ của tôi",
          icon: FaAddressBook,
          tab: "addresses",
-         content: <AddressesContent />,
       },
       {
          label: "Đánh giá sản phẩm",
          icon: FaStar,
          tab: "reviews",
-         content: <ReviewsContent />,
          badge: 2,
       },
       {
          label: "Hỗ trợ & Góp ý",
          icon: FaHeadset,
          tab: "support",
-         content: <SupportContent />,
          badge: 1,
+      },
+      {
+         label: "Đăng xuất",
+         icon: FaSignOutAlt,
+         tab: "logout",
+         isDanger: true
       }
-      ,
    ];
 
    // Xử lý khi chọn tab
@@ -354,14 +417,16 @@ const MenuProfile: React.FC<MenuProfileProps> = ({ selectedTab, onTabChange }) =
          return;
       }
 
-      // Find the selected menu item by tab and pass its content to parent component
-      const selectedMenuItem = menuItems.find(item => item.tab === tab);
-      if (selectedMenuItem && selectedMenuItem.content) {
-         onTabChange(tab, selectedMenuItem.content);
-      }
+      // Gọi hàm callback để đặt tab mới
+      onTabChange(tab);
    };
 
-
+   const handleLogout = () => {
+      // Xử lý logic đăng xuất
+      localStorage.removeItem("token");
+      router.push('/user/signin');
+      setShowLogoutConfirm(false);
+   };
 
    return (
       <div className="w-full md:w-1/4">
@@ -369,7 +434,9 @@ const MenuProfile: React.FC<MenuProfileProps> = ({ selectedTab, onTabChange }) =
             {/* User profile card */}
             <div className="py-5 border-b bg-gradient-to-r from-amber-50 to-amber-100">
                <div className="flex items-center">
-
+                  <div className="h-12 w-12 rounded-full bg-amber-200 flex items-center justify-center text-amber-700 ml-5">
+                     <FaUser size={20} />
+                  </div>
                   <div className="ml-4">
                      <h3 className="font-medium text-gray-800">Xin chào,</h3>
                      <p className="text-amber-700 font-semibold">Mai Xuân Toàn</p>
@@ -384,23 +451,47 @@ const MenuProfile: React.FC<MenuProfileProps> = ({ selectedTab, onTabChange }) =
                      key={item.tab}
                      className={`border-b last:border-none ${selectedTab === item.tab ? "bg-amber-50" : ""}`}
                   >
-                     <button
-                        className={`flex items-center w-full py-3.5 px-5 transition duration-150
-                           ? "text-red-600 hover:bg-red-50 hover:text-red-700"
-                           : selectedTab === item.tab
-                              ? "font-medium text-amber-700"
-                              : "text-gray-700 hover:bg-amber-50"
-                           }`}
-                        onClick={() => handleTabSelect(item.tab)}
-                     >
-
-                        <span>{item.label}</span>
-                        {item.badge && (
-                           <span className="ml-auto bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs">
-                              {item.badge}
-                           </span>
-                        )}
-                     </button>
+                     {item.externalLink ? (
+                        <Link href="/user/order">
+                           <div
+                              className={`flex items-center w-full py-3.5 px-5 transition duration-150 ${item.isDanger
+                                 ? "text-red-600 hover:bg-red-50 hover:text-red-700"
+                                 : "text-gray-700 hover:bg-amber-50"
+                                 }`}
+                           >
+                              <item.icon className="mr-3 text-gray-500" />
+                              <span>{item.label}</span>
+                              {item.badge && (
+                                 <span className="ml-auto bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs">
+                                    {item.badge}
+                                 </span>
+                              )}
+                           </div>
+                        </Link>
+                     ) : (
+                        <button
+                           className={`flex items-center w-full py-3.5 px-5 transition duration-150 ${item.isDanger
+                              ? "text-red-600 hover:bg-red-50 hover:text-red-700"
+                              : selectedTab === item.tab
+                                 ? "font-medium text-amber-700"
+                                 : "text-gray-700 hover:bg-amber-50"
+                              }`}
+                           onClick={() => handleTabSelect(item.tab)}
+                        >
+                           <item.icon className={`mr-3 ${item.isDanger
+                              ? "text-red-500"
+                              : selectedTab === item.tab
+                                 ? "text-amber-600"
+                                 : "text-gray-500"
+                              }`} />
+                           <span>{item.label}</span>
+                           {item.badge && (
+                              <span className="ml-auto bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs">
+                                 {item.badge}
+                              </span>
+                           )}
+                        </button>
+                     )}
                   </div>
                ))}
             </div>
@@ -429,7 +520,31 @@ const MenuProfile: React.FC<MenuProfileProps> = ({ selectedTab, onTabChange }) =
             </div>
          </div>
 
-
+         {/* Logout confirmation modal */}
+         {showLogoutConfirm && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+               <div className="bg-white rounded-lg p-6 max-w-sm mx-4 md:mx-0">
+                  <h3 className="text-lg font-medium text-gray-900 mb-3">Xác nhận đăng xuất</h3>
+                  <p className="text-gray-600 mb-5">
+                     Bạn có chắc chắn muốn đăng xuất khỏi tài khoản của mình?
+                  </p>
+                  <div className="flex justify-end space-x-3">
+                     <button
+                        className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300"
+                        onClick={() => setShowLogoutConfirm(false)}
+                     >
+                        Hủy
+                     </button>
+                     <button
+                        className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
+                        onClick={handleLogout}
+                     >
+                        Đăng xuất
+                     </button>
+                  </div>
+               </div>
+            </div>
+         )}
       </div>
    );
 };
