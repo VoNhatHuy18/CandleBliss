@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import Link from 'next/link';
 import Image from 'next/image';
 import MenuSideBar from '@/app/components/seller/menusidebar/page';
 import Header from '@/app/components/seller/header/page';
@@ -14,9 +13,7 @@ import {
    PlusIcon,
    MagnifyingGlassIcon,
    ArrowPathIcon,
-   AdjustmentsHorizontalIcon
 } from '@heroicons/react/24/outline';
-import { FunnelIcon } from '@heroicons/react/24/solid';
 
 // Định nghĩa các interface
 interface Image {

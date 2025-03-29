@@ -1,10 +1,11 @@
 'use client';
+
 import React from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 
 interface VoucherTagProps {
-   id: string; // Thêm id để định danh voucher
+   id: string;
    code: string;
    discount: string;
    expiryDate: string;
@@ -26,7 +27,6 @@ const VoucherTag: React.FC<VoucherTagProps> = ({ id, code, discount, expiryDate,
          <div className='flex'>
             {/* Left side with curved edge and candle icon */}
             <div className='relative w-16 flex items-center justify-center py-4 border-r border-dashed border-gray-200'>
-               {/* Candle icon */}
                <Image src='/images/logo.png' width={50} height={50} alt='Candle Bliss Logo' className='w-max h-max' />
             </div>
 
@@ -46,7 +46,7 @@ const VoucherTag: React.FC<VoucherTagProps> = ({ id, code, discount, expiryDate,
                   <span className='mr-2 text-gray-600'>Tình Trạng:</span>
                   <span
                      className={`font-medium ${
-                        status === 'Còn Hàng' ? 'text-green-600' : 'text-red-500'
+                        status === 'Còn hiệu lực' ? 'text-green-600' : 'text-red-500'
                      }`}
                   >
                      {status}

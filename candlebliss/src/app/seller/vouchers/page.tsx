@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import Header from '@/app/components/seller/header/page';
 import MenuSidebar from '@/app/components/seller/menusidebar/page';
-import VoucherTag from '@/app/components/seller/vouchertags/page';
+import VoucherTag from '@/app/components/seller/vouchertags/VoucherTag';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
@@ -324,21 +324,20 @@ export default function VoucherPage() {
 
                   {/* Voucher grid when we have data */}
                   {!loading && !error && filteredVouchers.length > 0 && (
-                     <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5'>
+                     <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5'>
                         {filteredVouchers.map((voucher) => (
-                           <div key={voucher.id} className='flex flex-col'>
-                              <VoucherTag
-                                 id={voucher.id}
-                                 code={voucher.code}
-                                 discount={
-                                    voucher.percent_off > 0
-                                       ? `${voucher.percent_off}%`
-                                       : `${voucher.amount_off.toLocaleString('vi-VN')}đ`
-                                 }
-                                 expiryDate={formatDate(voucher.end_date)}
-                                 status={getVoucherStatus(voucher)}
-                              />
-                           </div>
+                           <VoucherTag
+                              key={voucher.id}
+                              id={voucher.id}
+                              code={voucher.code}
+                              discount={
+                                 voucher.percent_off > 0
+                                    ? `${voucher.percent_off}%`
+                                    : `${voucher.amount_off.toLocaleString('vi-VN')}đ`
+                              }
+                              expiryDate={formatDate(voucher.end_date)}
+                              status={getVoucherStatus(voucher)}
+                           />
                         ))}
                      </div>
                   )}

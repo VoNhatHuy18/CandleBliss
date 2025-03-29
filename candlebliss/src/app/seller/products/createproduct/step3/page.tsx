@@ -6,7 +6,6 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import Toast from '@/app/components/ui/toast/page';
 
 // Interface for variant
 interface Variant {
@@ -211,8 +210,7 @@ export default function Step3() {
       } catch (error) {
          console.error('Error creating product pricing:', error);
          alert(
-            `Lỗi khi cài đặt giá sản phẩm: ${
-               error instanceof Error ? error.message : 'Lỗi không xác định'
+            `Lỗi khi cài đặt giá sản phẩm: ${error instanceof Error ? error.message : 'Lỗi không xác định'
             }`,
          );
       } finally {
@@ -416,9 +414,8 @@ export default function Step3() {
                                     </div>
                                     <svg
                                        xmlns='http://www.w3.org/2000/svg'
-                                       className={`h-5 w-5 transform transition-transform ${
-                                          variant.isExpanded ? 'rotate-180' : ''
-                                       }`}
+                                       className={`h-5 w-5 transform transition-transform ${variant.isExpanded ? 'rotate-180' : ''
+                                          }`}
                                        fill='none'
                                        viewBox='0 0 24 24'
                                        stroke='currentColor'
@@ -493,9 +490,8 @@ export default function Step3() {
                                                    <Image
                                                       key={imgIndex}
                                                       src={img}
-                                                      alt={`Variant ${index + 1} image ${
-                                                         imgIndex + 1
-                                                      }`}
+                                                      alt={`Variant ${index + 1} image ${imgIndex + 1
+                                                         }`}
                                                       className='w-20 h-20 object-cover rounded border'
                                                       width={80}
                                                       height={80}

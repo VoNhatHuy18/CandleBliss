@@ -2,7 +2,7 @@
 
 import { useRef, useEffect, useState } from 'react';
 import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
-import { ShoppingBagIcon, HeartIcon } from '@heroicons/react/24/outline';
+import { ShoppingBagIcon } from '@heroicons/react/24/outline';
 import Image from 'next/image';
 import Link from 'next/link';
 
@@ -79,13 +79,13 @@ export default function GlideSlide() {
   const sliderRef = useRef<HTMLDivElement>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isHovering, setIsHovering] = useState(false);
-  
+
   const visibleItems = 4; // Number of items visible at once
   const totalItems = products.length;
 
   useEffect(() => {
     if (isHovering) return; // Don't auto-scroll when user is hovering
-    
+
     const interval = setInterval(() => {
       handleNext();
     }, 4000);
@@ -96,7 +96,7 @@ export default function GlideSlide() {
     if (sliderRef.current) {
       const newIndex = Math.max(currentIndex - 1, 0);
       setCurrentIndex(newIndex);
-      
+
       const cardWidth = sliderRef.current.querySelector('div')?.clientWidth || 0;
       const gap = 16; // gap-4 = 16px
       sliderRef.current.scrollLeft = newIndex * (cardWidth + gap);
@@ -117,13 +117,13 @@ export default function GlideSlide() {
       }
     }
   };
-  
+
   // Generate star rating UI
   const renderRating = (rating: number) => {
     const stars = [];
     const fullStars = Math.floor(rating);
     const hasHalfStar = rating % 1 !== 0;
-    
+
     for (let i = 0; i < fullStars; i++) {
       stars.push(
         <svg key={`full-${i}`} className="w-4 h-4 text-amber-400" fill="currentColor" viewBox="0 0 20 20">
@@ -131,7 +131,7 @@ export default function GlideSlide() {
         </svg>
       );
     }
-    
+
     if (hasHalfStar) {
       stars.push(
         <svg key="half" className="w-4 h-4 text-amber-400" fill="currentColor" viewBox="0 0 20 20">
@@ -145,7 +145,7 @@ export default function GlideSlide() {
         </svg>
       );
     }
-    
+
     // Add empty stars
     for (let i = stars.length; i < 5; i++) {
       stars.push(
@@ -154,7 +154,7 @@ export default function GlideSlide() {
         </svg>
       );
     }
-    
+
     return stars;
   };
 
@@ -167,14 +167,14 @@ export default function GlideSlide() {
           <div className="h-1 w-24 bg-amber-500 mt-2"></div>
         </div>
         <div className="hidden md:flex space-x-2">
-          <button 
+          <button
             onClick={handlePrev}
             className="p-2 rounded-full border border-gray-300 hover:bg-amber-50 hover:border-amber-300 transition-colors"
             aria-label="Previous"
           >
             <ChevronLeftIcon className="h-5 w-5 text-gray-600" />
           </button>
-          <button 
+          <button
             onClick={handleNext}
             className="p-2 rounded-full border border-gray-300 hover:bg-amber-50 hover:border-amber-300 transition-colors"
             aria-label="Next"
@@ -186,8 +186,8 @@ export default function GlideSlide() {
 
       {/* Carousel Container */}
       <div className="relative overflow-hidden">
-        <div 
-          ref={sliderRef} 
+        <div
+          ref={sliderRef}
           className="flex gap-8 overflow-x-scroll scrollbar-hide scroll-smooth transition-transform duration-500"
           onMouseEnter={() => setIsHovering(true)}
           onMouseLeave={() => setIsHovering(false)}
@@ -209,7 +209,7 @@ export default function GlideSlide() {
                     Mới
                   </span>
                 )}
-                
+
                 {/* Product Image */}
                 <Image
                   src={product.image}
@@ -218,17 +218,17 @@ export default function GlideSlide() {
                   height={240}
                   className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                 />
-                
+
                 {/* Quick action buttons - visible on hover */}
                 <div className="absolute bottom-0 left-0 right-0 flex justify-center items-center gap-2 translate-y-full group-hover:translate-y-0 transition-transform duration-300 bg-gradient-to-t from-black/70 to-transparent p-4">
-                 
+
                   <button className="bg-[#553C26] text-white px-4 py-2 rounded-full flex items-center gap-1 hover:bg-amber-600 transition-colors">
                     <ShoppingBagIcon className="h-5 w-5" />
                     <span>Thêm vào giỏ</span>
                   </button>
                 </div>
               </div>
-              
+
               {/* Product Details */}
               <div className="p-4 bg-white">
                 {/* Rating */}
@@ -238,17 +238,17 @@ export default function GlideSlide() {
                   </div>
                   <span className="text-xs text-gray-500 ml-2">({product.rating})</span>
                 </div>
-                
+
                 {/* Product Name */}
                 <Link href={`/product/${product.id}`}>
                   <h3 className="font-medium text-gray-800 hover:text-amber-600 transition-colors cursor-pointer mb-1 font-mont">
                     {product.name}
                   </h3>
                 </Link>
-                
+
                 {/* Description */}
                 <p className="text-sm text-gray-500 mb-3 line-clamp-2">{product.description}</p>
-                
+
                 {/* Price */}
                 <div className="flex items-center">
                   <span className="text-lg font-semibold text-amber-800">{product.price}</span>
@@ -260,16 +260,16 @@ export default function GlideSlide() {
             </div>
           ))}
         </div>
-        
+
         {/* Mobile navigation buttons */}
         <div className="md:hidden flex justify-between w-full absolute top-1/2 transform -translate-y-1/2 px-2 pointer-events-none">
-          <button 
+          <button
             onClick={handlePrev}
             className="bg-white/80 backdrop-blur-sm p-2 rounded-full shadow-md hover:bg-white pointer-events-auto"
           >
             <ChevronLeftIcon className="h-5 w-5 text-gray-700" />
           </button>
-          <button 
+          <button
             onClick={handleNext}
             className="bg-white/80 backdrop-blur-sm p-2 rounded-full shadow-md hover:bg-white pointer-events-auto"
           >
@@ -277,15 +277,14 @@ export default function GlideSlide() {
           </button>
         </div>
       </div>
-      
+
       {/* Progress Indicators */}
       <div className="flex justify-center mt-6 gap-2">
         {[...Array(Math.ceil(totalItems / visibleItems))].map((_, index) => (
           <button
             key={index}
-            className={`w-2 h-2 rounded-full transition-all ${
-              index === currentIndex ? 'bg-amber-500 w-6' : 'bg-gray-300'
-            }`}
+            className={`w-2 h-2 rounded-full transition-all ${index === currentIndex ? 'bg-amber-500 w-6' : 'bg-gray-300'
+              }`}
             onClick={() => {
               setCurrentIndex(index);
               if (sliderRef.current) {

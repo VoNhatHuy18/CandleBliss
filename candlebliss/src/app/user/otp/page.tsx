@@ -1,5 +1,5 @@
 'use client';
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import NavBar from '@/app/components/user/nav/page';
 import Footer from '@/app/components/user/footer/page';
@@ -12,7 +12,6 @@ export default function OTPPage() {
    const [otp, setOtp] = useState('');
    const [error, setError] = useState('');
    const [loading, setLoading] = useState(false);
-   const [resendLoading, setResendLoading] = useState(false);
    const [message, setMessage] = useState('');
 
    const handleVerifyOTP = async () => {

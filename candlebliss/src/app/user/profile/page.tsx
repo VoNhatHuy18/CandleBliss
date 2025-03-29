@@ -81,41 +81,7 @@ const ProfileContent = () => (
    </div>
 );
 
-const OrdersContent = () => (
-   <div className="space-y-6 bg-white p-6 rounded-lg shadow-sm">
-      <h2 className="text-2xl font-semibold text-gray-800 pb-4 border-b">Quản lý đơn hàng</h2>
 
-      <div className="bg-amber-50 p-4 rounded-lg mb-6 flex items-center">
-         <div className="mr-4 text-amber-600">
-            <FaShoppingBag size={20} />
-         </div>
-         <p className="text-amber-800">Bạn có 3 đơn hàng đang được xử lý</p>
-      </div>
-
-      <div className="space-y-4">
-         {[1, 2, 3].map((order) => (
-            <div key={order} className="border rounded-lg p-4 hover:shadow-md transition">
-               <div className="flex justify-between items-center mb-3">
-                  <span className="font-medium">Đơn hàng #{1000 + order}</span>
-                  <span className={`px-3 py-1 rounded-full text-xs font-medium ${order === 1 ? "bg-blue-100 text-blue-800" :
-                     order === 2 ? "bg-amber-100 text-amber-800" :
-                        "bg-green-100 text-green-800"
-                     }`}>
-                     {order === 1 ? "Đang giao" : order === 2 ? "Đang xử lý" : "Hoàn thành"}
-                  </span>
-               </div>
-               <div className="flex justify-between text-sm text-gray-500 mb-4">
-                  <span>Ngày đặt: {`${20 + order}/03/2025`}</span>
-                  <span>Tổng tiền: {320000 + order * 50000}đ</span>
-               </div>
-               <button className="text-amber-600 text-sm font-medium flex items-center hover:underline">
-                  Xem chi tiết <FaChevronRight size={12} className="ml-1" />
-               </button>
-            </div>
-         ))}
-      </div>
-   </div>
-);
 
 const WishlistContent = () => (
    <div className="space-y-6 bg-white p-6 rounded-lg shadow-sm">

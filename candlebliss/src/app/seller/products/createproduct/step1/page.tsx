@@ -171,30 +171,7 @@ export default function Step1() {
       }
    };
 
-   // Hàm lấy tên danh mục theo ID
-   const getCategoryNameById = async (categoryId: number): Promise<string> => {
-      try {
-         const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-         if (!token) return 'Không xác định';
-
-         const response = await fetch(`http://localhost:3000/api/categories/${categoryId}`, {
-            headers: {
-               'Authorization': `Bearer ${token}`
-            }
-         });
-
-         if (!response.ok) {
-            console.error(`Failed to fetch category name: ${response.status}`);
-            return 'Không tìm thấy';
-         }
-
-         const category = await response.json();
-         return category.name || 'Không xác định';
-      } catch (error) {
-         console.error(`Error fetching category name for ID ${categoryId}:`, error);
-         return 'Không xác định';
-      }
-   };
+   
 
    // Xử lý khi người dùng chọn một danh mục
    const handleCategorySelect = async (category: Category) => {
