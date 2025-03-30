@@ -314,10 +314,10 @@ export default function Step1() {
                // Create object URL
                const objectUrl = URL.createObjectURL(file);
                processedImages.push(objectUrl);
-               
+
                // Artificial delay to show loading state (can be removed in production)
                await new Promise(resolve => setTimeout(resolve, 300));
-               
+
                setImageProcessingCount(prev => Math.max(0, prev - 1));
             } catch (error) {
                console.error('Error processing image:', error);
@@ -421,14 +421,14 @@ export default function Step1() {
          let hasImages = false;
          console.log(`Xử lý ${safeProductImages.length} hình ảnh...`);
          setImageProcessingCount(safeProductImages.length);
-         
+
          for (const [index, blobUrl] of safeProductImages.entries()) {
             if (!blobUrl || !blobUrl.startsWith('blob:')) {
                console.log(`Bỏ qua hình ảnh không hợp lệ: ${blobUrl}`);
                setImageProcessingCount(prev => Math.max(0, prev - 1));
                continue;
             }
-            
+
             try {
                console.log(`Đang xử lý hình ảnh ${index + 1}/${safeProductImages.length}...`);
                const response = await fetch(blobUrl);
@@ -473,10 +473,10 @@ export default function Step1() {
 
          // Lấy dữ liệu từ response
          const productData = await productResponse.json();
-         
+
          // Trích xuất ID sản phẩm từ phản hồi
          const productId = productData.id;
-         
+
          console.log('Sản phẩm đã được tạo thành công với ID:', productId);
 
          // Cập nhật dữ liệu trong context
@@ -623,7 +623,7 @@ export default function Step1() {
                                  setName(e.target.value);
                                  setErrors((prev) => ({ ...prev, name: '' }));
                               }}
-                              placeholder='Tên sản phẩm + Thương hiệu + Model + Thông số kỹ thuật'
+                              placeholder='Tên sản phẩm '
                               className={`w-full px-3 py-2 border ${errors.name ? 'border-red-500' : 'border-gray-300'
                                  } rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500`}
                            />
@@ -692,28 +692,6 @@ export default function Step1() {
                               Chọn danh mục phù hợp cho sản phẩm của bạn
                            </p>
                         </div>
-
-                        {/* Display Selected Category Details */}
-                        {selectedCategory && (
-                           <div className="p-3 bg-gray-50 rounded-md relative">
-                              {isCategoryDetailLoading && (
-                                 <div className="absolute inset-0 bg-white/60 flex items-center justify-center">
-                                    <Loader2 className="h-5 w-5 animate-spin text-amber-500" />
-                                 </div>
-                              )}
-                              <h4 className="text-sm font-medium text-gray-700 mb-1">Thông tin danh mục đã chọn</h4>
-                              <div className="flex justify-between items-start">
-                                 <div>
-                                    <p className="text-sm text-gray-600">{selectedCategory.name}</p>
-                                    <p className="text-xs text-gray-500 mt-1">{selectedCategory.description}</p>
-                                 </div>
-                                 <div className="text-xs text-gray-400">
-                                    ID: {selectedCategory.id}
-                                 </div>
-                              </div>
-                           </div>
-                        )}
-
                         {/* Product Image - Updated with functionality */}
                         <div>
                            <label className='block text-sm font-medium text-gray-700 mb-1'>
@@ -725,16 +703,17 @@ export default function Step1() {
                            >
                               {/* Image Preview Grid */}
                               {productImages.length > 0 && (
-                                 <div className='grid grid-cols-3 gap-4 mb-4'>
+                                 <div className='grid grid-cols-4 gap-3 mb-4'>
                                     {productImages.map((image, index) => (
                                        <div key={index} className='relative group'>
-                                          <div className='aspect-w-1 aspect-h-1 w-full overflow-hidden rounded-md bg-gray-100'>
+                                          {/* Use a fixed aspect ratio container with smaller dimensions */}
+                                          <div className='aspect-square w-full max-w-[120px] h-[120px] relative rounded-md bg-gray-100 overflow-hidden'>
                                              <Image
                                                 src={image}
                                                 alt={`Product image ${index + 1}`}
-                                                width={100}
-                                                height={100}
-                                                className='object-cover w-full h-full'
+                                                fill={true} 
+                                                style={{ objectFit: 'cover' }} 
+                                                className='transition-all duration-200'
                                              />
                                           </div>
                                           <button

@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import Image from 'next/image';
 import MenuSideBar from '@/app/components/seller/menusidebar/page';
 import Header from '@/app/components/seller/header/page';
+import Toast from '@/app/components/ui/toast/page';
 import { useRouter } from 'next/navigation';
 import {
    ChevronDownIcon,
@@ -136,14 +137,16 @@ const ProductTable = ({
    fetchAllProductData,
    handleEditProduct,
    handleDeleteProduct,
-   getCategoryNameById
+   getCategoryNameById,
+   showToast
 }: {
    products: ProductViewModel[],
    loading: boolean,
    fetchAllProductData: () => Promise<void>,
    handleEditProduct: (productId: number) => void,
    handleDeleteProduct: (productId: number) => void,
-   getCategoryNameById: (categoryId: number | undefined) => Promise<string>
+   getCategoryNameById: (categoryId: number | undefined) => Promise<string>,
+   showToast: (message: string, type: 'success' | 'error' | 'info') => void
 }) => {
    const [expandedProduct, setExpandedProduct] = useState<number | null>(null);
    const [detailPrices, setDetailPrices] = useState<Record<number, { base_price: number, discount_price: number | null }>>({});
@@ -600,7 +603,7 @@ const ProductTable = ({
                                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                                 Loại
                                              </th>
-                                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                                 Giá trị
                                              </th>
                                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -725,6 +728,20 @@ export default function ProductManagement() {
    const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState<boolean>(false);
    const [productToDelete, setProductToDelete] = useState<number | null>(null);
 
+   const [toast, setToast] = useState({
+      show: false,
+      message: '',
+      type: 'info' as 'success' | 'error' | 'info'
+   });
+
+   const showToast = (message: string, type: 'success' | 'error' | 'info') => {
+      setToast({
+         show: true,
+         message,
+         type
+      });
+   };
+
    const router = useRouter();
    const tabs: { id: keyof typeof tabCounts; label: string }[] = [
       { id: 'Tất cả', label: 'Tất cả' },
@@ -743,6 +760,7 @@ export default function ProductManagement() {
          const token = localStorage.getItem('token') || sessionStorage.getItem('token');
 
          if (!token) {
+            showToast('Bạn chưa đăng nhập hoặc phiên làm việc đã hết hạn', 'error');
             setError('Bạn chưa đăng nhập hoặc phiên làm việc đã hết hạn');
             setLoading(false);
             return;
@@ -846,7 +864,9 @@ export default function ProductManagement() {
          setProducts(productsWithDetails);
       } catch (err) {
          console.error('Error fetching product data:', err);
-         setError(err instanceof Error ? err.message : 'Failed to load products');
+         const errorMessage = err instanceof Error ? err.message : 'Failed to load products';
+         setError(errorMessage);
+         showToast(errorMessage, 'error');
       } finally {
          setLoading(false);
       }
@@ -906,9 +926,20 @@ export default function ProductManagement() {
 
    // Handle delete product confirmation
    const handleDeleteProduct = useCallback((productId: number) => {
-      setProductToDelete(productId);
-      setIsDeleteConfirmOpen(true);
-   }, []);
+      const productToDelete = products.find(product => product.id === productId);
+      
+      if (productToDelete) {
+         // Set the product ID to delete
+         setProductToDelete(productId);
+         
+         // Show the confirmation modal with product details
+         setIsDeleteConfirmOpen(true);
+      } else {
+         const errorMessage = `Không tìm thấy thông tin sản phẩm ID: ${productId}`;
+         setError(errorMessage);
+         showToast(errorMessage, 'error');
+      }
+   }, [products]);
 
    // Confirm delete product
    const confirmDeleteProduct = async () => {
@@ -919,10 +950,12 @@ export default function ProductManagement() {
          const token = localStorage.getItem('token') || sessionStorage.getItem('token');
 
          if (!token) {
-            setError('Bạn chưa đăng nhập hoặc phiên làm việc đã hết hạn');
+            showToast('Bạn chưa đăng nhập hoặc phiên làm việc đã hết hạn', 'error');
+            router.push('/seller/signin');
             return;
          }
 
+         // First, we'll make a DELETE request to the API
          const response = await fetch(`http://localhost:3000/api/products/${productToDelete}`, {
             method: 'DELETE',
             headers: {
@@ -931,20 +964,48 @@ export default function ProductManagement() {
             }
          });
 
+         // Check if the deletion was successful
          if (response.ok) {
-            // Refresh product list
-            await fetchAllProductData();
+            // Remove the product from local state to update UI immediately
+            setProducts(prev => prev.filter(product => product.id !== productToDelete));
+            
+            // Show success message with toast instead of alert
+            showToast('Sản phẩm đã được xóa thành công', 'success');
+            
+            // Close the modal
             setIsDeleteConfirmOpen(false);
             setProductToDelete(null);
+            
+            // Refresh the product list to ensure everything is in sync
+            await fetchAllProductData();
          } else {
-            const errorData = await response.json();
-            throw new Error(errorData.message || 'Không thể xóa sản phẩm');
+            // If deletion failed, get error details
+            let errorMessage = 'Không thể xóa sản phẩm';
+            
+            try {
+               // Try to parse error response as JSON
+               const errorData = await response.json();
+               errorMessage = errorData.message || errorMessage;
+            } catch {
+               // If response isn't valid JSON, try to get text
+               try {
+                  const errorText = await response.text();
+                  errorMessage = errorText || errorMessage;
+               } catch {
+                  // If all else fails, use status text
+                  errorMessage = `Không thể xóa sản phẩm (${response.status}: ${response.statusText})`;
+               }
+            }
+            
+            throw new Error(errorMessage);
          }
       } catch (err) {
          console.error('Error deleting product:', err);
          setError(err instanceof Error ? err.message : 'Không thể xóa sản phẩm');
+         showToast(err instanceof Error ? err.message : 'Không thể xóa sản phẩm', 'error');
       } finally {
          setLoading(false);
+         setIsDeleteConfirmOpen(false);
       }
    };
 
@@ -1062,6 +1123,7 @@ export default function ProductManagement() {
                   handleEditProduct={handleEditProduct}
                   handleDeleteProduct={handleDeleteProduct}
                   getCategoryNameById={getCategoryNameById}
+                  showToast={showToast} // Add this prop
                />
             </main>
          </div>
@@ -1075,14 +1137,22 @@ export default function ProductManagement() {
                         <TrashIcon className="h-6 w-6 text-red-600" />
                      </div>
                      <h3 className="text-lg font-medium text-gray-900">Xác nhận xóa sản phẩm</h3>
+                     {productToDelete && (
+                        <p className="font-medium text-gray-800 mt-1">
+                           {products.find(p => p.id === productToDelete)?.name}
+                        </p>
+                     )}
                      <p className="text-sm text-gray-500 mt-2">
-                        Bạn có chắc chắn muốn xóa sản phẩm này? Hành động này không thể hoàn tác.
+                        Bạn có chắc chắn muốn xóa sản phẩm này? Hành động này không thể hoàn tác và sẽ xóa tất cả phiên bản, giá và thông tin liên quan.
                      </p>
                   </div>
                   <div className="flex justify-end space-x-3">
                      <button
                         className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300"
-                        onClick={() => setIsDeleteConfirmOpen(false)}
+                        onClick={() => {
+                           setIsDeleteConfirmOpen(false);
+                           setProductToDelete(null);
+                        }}
                         disabled={loading}
                      >
                         Hủy
@@ -1108,6 +1178,15 @@ export default function ProductManagement() {
                </div>
             </div>
          )}
+
+         <Toast
+            show={toast.show}
+            message={toast.message}
+            type={toast.type}
+            onClose={() => setToast(prev => ({ ...prev, show: false }))}
+            duration={3000}
+            position="top-right"
+         />
       </div>
    );
 }

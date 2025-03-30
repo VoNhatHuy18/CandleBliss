@@ -6,16 +6,18 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
+import Toast from '@/app/components/ui/toast/page'; // Add Toast import
 
-// Interface for variant
+// Interface for variant that's compatible with both Step2 and Step3
 interface Variant {
    type: string;
-   value: string;
+   values?: string; // From Step2
+   value?: string;  // For Step3 compatibility
    isExpanded?: boolean;
    size?: string;
    images?: string[];
    quantity?: number;
-   detailId?: number; // Đảm bảo có trường này
+   detailId?: number;
 }
 
 export default function Step3() {
@@ -27,13 +29,31 @@ export default function Step3() {
    const [endDate, setEndDate] = useState('');
    const [variants, setVariants] = useState<Variant[]>(formData.variants || []);
    const [isActive, setIsActive] = useState(true);
-   const [videoUrl, setVideoUrl] = useState('');
+   const [videoUrl, setVideoUrl] = useState(formData.videoUrl || '');
    const [promotion, setPromotion] = useState('');
    const [isLoading, setIsLoading] = useState(false);
    const [calculatedPrice, setCalculatedPrice] = useState('');
+   
+   // Add toast state
+   const [toast, setToast] = useState({
+      show: false,
+      message: '',
+      type: 'info' as 'success' | 'error' | 'info'
+   });
+
+   // Helper function to show toast messages
+   const showToast = (message: string, type: 'success' | 'error' | 'info') => {
+      setToast({
+         show: true,
+         message,
+         type
+      });
+   };
 
    // Initialize dates if empty
    useEffect(() => {
+      console.log("Received form data:", formData);
+      
       if (!startDate) {
          setStartDate(new Date().toISOString().split('T')[0]);
       }
@@ -53,6 +73,10 @@ export default function Step3() {
       }
    }, []);
 
+   // Access data from previous steps
+   const { name, description, selectedCategory, images, productId } = formData;
+   const category = selectedCategory?.name || '';
+
    // Calculate display price whenever basePrice or discountPrice changes
    useEffect(() => {
       if (discountPrice && Number(discountPrice) > 0 && Number(discountPrice) < Number(basePrice)) {
@@ -61,9 +85,6 @@ export default function Step3() {
          setCalculatedPrice(basePrice);
       }
    }, [basePrice, discountPrice]);
-
-   // Access data from previous steps
-   const { name, description, category, images } = formData;
 
    // Toggle expanded state of a variant
    const toggleVariantExpanded = (index: number) => {
@@ -98,29 +119,24 @@ export default function Step3() {
    };
 
    const handleSubmit = async () => {
-      if (!validateForm()) return;
+      if (!validateForm()) {
+         showToast('Vui lòng kiểm tra lại thông tin giá và ngày áp dụng', 'error');
+         return;
+      }
 
       setIsLoading(true);
       try {
          // Lấy token
          const token = localStorage.getItem('token') || sessionStorage.getItem('token');
          if (!token) {
-            alert('Bạn chưa đăng nhập hoặc phiên làm việc đã hết hạn');
+            showToast('Bạn chưa đăng nhập hoặc phiên làm việc đã hết hạn', 'error');
             router.push('/seller/signin');
-            return;
-         }
-
-         // Lấy productId từ context
-         const productId = formData.productId;
-         if (!productId) {
-            alert('Không tìm thấy thông tin sản phẩm. Vui lòng quay lại bước 1.');
-            router.push('/seller/products/createproduct/step1');
             return;
          }
 
          // Kiểm tra xem variants có tồn tại và có dữ liệu không
          if (!variants || variants.length === 0) {
-            alert('Không tìm thấy thông tin biến thể. Vui lòng quay lại bước 2.');
+            showToast('Không tìm thấy thông tin biến thể. Vui lòng quay lại bước 2.', 'error');
             router.push('/seller/products/createproduct/step2');
             return;
          }
@@ -165,7 +181,7 @@ export default function Step3() {
                const errorData = await priceResponse.json().catch(() => null);
                const errorText = await priceResponse.text().catch(() => 'Unknown error');
                console.error('Price creation failed:', errorData || errorText);
-               alert(`Lỗi khi tạo giá sản phẩm: ${errorData?.message || errorText}`);
+               showToast(`Lỗi khi tạo giá sản phẩm: ${errorData?.message || errorText}`, 'error');
                setIsLoading(false);
                return;
             }
@@ -191,16 +207,17 @@ export default function Step3() {
 
          if (!updateProductResponse.ok) {
             console.error('Failed to update product status');
+            showToast('Không thể cập nhật trạng thái sản phẩm', 'error');
          }
 
          // Success! Navigate back to products page
-         alert('Sản phẩm đã được tạo thành công!');
+         showToast('Sản phẩm đã được tạo thành công!', 'success');
 
          // Reset form data
          updateFormData({
             name: '',
             description: '',
-            category: '',
+            categoryId: undefined,
             images: [],
             variants: [],
             productId: undefined, // Clear productId
@@ -209,12 +226,26 @@ export default function Step3() {
          router.push('/seller/products');
       } catch (error) {
          console.error('Error creating product pricing:', error);
-         alert(
-            `Lỗi khi cài đặt giá sản phẩm: ${error instanceof Error ? error.message : 'Lỗi không xác định'
-            }`,
+         showToast(
+            `Lỗi khi cài đặt giá sản phẩm: ${error instanceof Error ? error.message : 'Lỗi không xác định'}`, 
+            'error'
          );
       } finally {
          setIsLoading(false);
+      }
+   };
+
+   // Update the cancel button onClick handler
+   const handleCancel = () => {
+      if (window.confirm('Bạn có chắc muốn hủy tạo sản phẩm không?')) {
+         updateFormData({
+            name: '',
+            description: '',
+            categoryId: undefined,
+            images: [],
+            variants: [],
+         });
+         router.push('/seller/products');
       }
    };
 
@@ -450,7 +481,7 @@ export default function Step3() {
                                              </label>
                                              <input
                                                 type='text'
-                                                value={variant.value || ''}
+                                                value={variant.values || variant.value || ''}
                                                 className='w-full p-2 border rounded-md bg-gray-50'
                                                 readOnly
                                              />
@@ -616,7 +647,15 @@ export default function Step3() {
                            // Update formData with current values before going back
                            updateFormData({
                               ...formData,
-                              variants: variants,
+                              variants: variants.map(variant => ({
+                                 type: variant.type,
+                                 values: variant.values || variant.value || '', // Ensure values is always a string, not undefined
+                                 size: variant.size || '',
+                                 images: variant.images || [],
+                                 quantity: variant.quantity || 0,
+                                 detailId: variant.detailId,
+                                 isExpanded: variant.isExpanded
+                              })),
                            });
                            // Wait for formData update to complete before navigating
                            setTimeout(() => {
@@ -630,16 +669,11 @@ export default function Step3() {
                      </button>
                      <button
                         onClick={() => {
-                           if (window.confirm('Bạn có chắc muốn hủy tạo sản phẩm không?')) {
-                              updateFormData({
-                                 name: '',
-                                 description: '',
-                                 category: '',
-                                 images: [],
-                                 variants: [],
-                              });
-                              router.push('/seller/products');
-                           }
+                           showToast('Bạn có chắc muốn hủy tạo sản phẩm không?', 'info');
+                           // Wait a bit to show the toast before showing confirm dialog
+                           setTimeout(() => {
+                              handleCancel();
+                           }, 100);
                         }}
                         className='px-4 py-2 bg-white border border-gray-300 rounded-md hover:bg-gray-100'
                         disabled={isLoading}
@@ -656,6 +690,15 @@ export default function Step3() {
                   </div>
                </div>
             </main>
+            {/* Add Toast component at the end of your return statement */}
+            <Toast 
+               show={toast.show}
+               message={toast.message}
+               type={toast.type}
+               onClose={() => setToast(prev => ({ ...prev, show: false }))} 
+               duration={3000}
+               position="top-right"
+            />
          </div>
       </div>
    );
