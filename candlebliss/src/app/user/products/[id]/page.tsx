@@ -19,6 +19,7 @@ interface ProductDetail {
    id: number;
    size: string;
    type: string;
+   values: string;
    quantities: number;
    images: ProductImage[];
    isActive: boolean;
@@ -76,6 +77,16 @@ export default function ProductDetailPage() {
    const [detailPrices, setDetailPrices] = useState<Record<number, { base_price: number, discount_price: number | null }>>({});
    const [selectedDetailId, setSelectedDetailId] = useState<number | null>(null);
    const [showCartNotification, setShowCartNotification] = useState(false);
+
+   // Get selected detail object - MOVE THIS HERE before the useEffect that depends on it
+   const selectedDetail = selectedDetailId
+      ? productDetails.find(detail => detail.id === selectedDetailId)
+      : null;
+
+   // Reset active thumbnail when selected detail changes
+   useEffect(() => {
+      setActiveThumbnail(0);
+   }, [selectedDetailId]);
 
    // Fetch product detail
    useEffect(() => {
@@ -168,6 +179,7 @@ export default function ProductDetailPage() {
                id: 0,
                size: 'Standard',
                type: 'Default',
+               values: '',
                quantities: 100,
                images: [],
                isActive: true,
@@ -221,6 +233,7 @@ export default function ProductDetailPage() {
             id: 0,
             size: 'Standard',
             type: 'Default',
+            values: '',
             quantities: 100,
             images: [],
             isActive: true,
@@ -344,10 +357,40 @@ export default function ProductDetailPage() {
       }
    }, [selectedSize, selectedType, productDetails]);
 
-   // Get selected detail object
-   const selectedDetail = selectedDetailId
-      ? productDetails.find(detail => detail.id === selectedDetailId)
-      : null;
+   // Update selected detail when size or values change - We now have access to selectedDetail
+   useEffect(() => {
+      if (productDetails.length > 0 && selectedDetail?.values) {
+         // Find detail matching selected size and value
+         const matchingDetail = productDetails.find(
+            detail => detail.size === selectedSize &&
+               detail.values === selectedDetail.values &&
+               detail.isActive
+         );
+
+         if (matchingDetail) {
+            setSelectedDetailId(matchingDetail.id);
+            setSelectedType(matchingDetail.type);
+         } else {
+            // If no exact match, find another detail with the same size
+            const sameSize = productDetails.find(
+               detail => detail.size === selectedSize && detail.isActive
+            );
+
+            if (sameSize) {
+               setSelectedDetailId(sameSize.id);
+               setSelectedType(sameSize.type);
+            } else {
+               // Still no match, just pick the first active detail
+               const firstActive = productDetails.find(detail => detail.isActive);
+               if (firstActive) {
+                  setSelectedDetailId(firstActive.id);
+                  setSelectedSize(firstActive.size);
+                  setSelectedType(firstActive.type);
+               }
+            }
+         }
+      }
+   }, [selectedSize, productDetails, selectedDetail]);
 
    // Get price info for selected detail
    const selectedPriceInfo = selectedDetailId && detailPrices[selectedDetailId]
@@ -366,6 +409,31 @@ export default function ProductDetailPage() {
          .filter(detail => detail.isActive && detail.size === selectedSize)
          .map(detail => detail.type)
    )];
+
+   // Add these helper functions after the availableTypes calculation
+
+   // Get all unique values across all product details
+   const allValues = [...new Set(
+      productDetails
+         .filter(detail => detail.isActive && detail.values)
+         .map(detail => detail.values)
+   )];
+
+   // Get values available for the selected size
+   const availableValuesForSize = [...new Set(
+      productDetails
+         .filter(detail => detail.isActive && detail.size === selectedSize && detail.values)
+         .map(detail => detail.values)
+   )];
+
+   // Function to check if a value is available for the selected size
+   const isValueAvailableForSize = (value: string) => {
+      return productDetails.some(
+         detail => detail.size === selectedSize &&
+            detail.values === value &&
+            detail.isActive
+      );
+   };
 
    // Handle quantity changes
    const decreaseQuantity = () => {
@@ -394,8 +462,8 @@ export default function ProductDetailPage() {
 
       // Tạo đối tượng cartItem phù hợp với cấu trúc giỏ hàng
       const cartItem = {
-         id: product.id, // Sử dụng id sản phẩm
-         detailId: selectedDetail.id, // Lưu detail ID để sau này có thể chọn đúng variant
+         id: product.id,
+         detailId: selectedDetail.id,
          name: product.name,
          price: price,
          quantity: quantity,
@@ -404,10 +472,12 @@ export default function ProductDetailPage() {
             : Array.isArray(product.images) && product.images.length > 0
                ? product.images[0].path
                : '/images/placeholder.jpg',
-         type: `Mùi hương: ${selectedDetail.type}`,
+         type: `Loại: ${selectedDetail.type}`,
          options: [
             { name: 'Kích thước', value: selectedDetail.size },
-            { name: 'Loại', value: selectedDetail.type }
+            { name: 'Loại', value: selectedDetail.type },
+            // Add Values option if available
+            ...(selectedDetail.values ? [{ name: 'Giá trị', value: selectedDetail.values }] : [])
          ]
       };
 
@@ -498,35 +568,77 @@ export default function ProductDetailPage() {
             <div className='flex flex-col md:flex-row -mx-4'>
                {/* Product Images */}
                <div className='md:w-1/2 px-4 mb-6'>
+                  {/* Main Product Image */}
                   <div className='relative bg-white mb-4 h-96 rounded-lg shadow-sm'>
                      <Image
-                        src={
-                           Array.isArray(product.images) && product.images.length > 0 && activeThumbnail < product.images.length
-                              ? product.images[activeThumbnail]?.path || '/images/placeholder.jpg'
-                              : '/images/placeholder.jpg'
-                        }
+                        src={(() => {
+                           // Create combined array similar to thumbnails
+                           const combinedImages = [
+                              ...(selectedDetail?.images || []),
+                              ...(Array.isArray(product.images) ? product.images : [])
+                           ];
+
+                           // Get the image at the active thumbnail index
+                           return combinedImages[activeThumbnail]?.path || '/images/placeholder.jpg';
+                        })()}
                         alt={product.name}
                         layout='fill'
                         objectFit='contain'
                         className='p-4'
                      />
+
+                     {/* Image source indicator */}
+                     {activeThumbnail >= 0 && (
+                        <div className="absolute bottom-3 right-3 bg-black bg-opacity-60 text-white text-xs px-2 py-1 rounded">
+                           {activeThumbnail < (selectedDetail?.images?.length || 0)
+                              ? ` ${selectedDetail?.size} - ${selectedDetail?.values}`
+                              : 'Sản phẩm'}
+                        </div>
+                     )}
                   </div>
-                  <div className='flex -mx-2'>
-                     {Array.isArray(product.images) && product.images.map((img, index: number) => (
+
+                  {/* Thumbnails Gallery - Show all images in a single row */}
+                  <div className='flex flex-wrap -mx-1 overflow-x-auto pb-2'>
+                     {/* Combine product and detail images into a single array for display */}
+                     {[
+                        // Detail images first if available
+                        ...(selectedDetail?.images && selectedDetail.images.length > 0
+                           ? selectedDetail.images.map((img, index) => ({
+                              path: img.path,
+                              id: `detail-${index}`,
+                              source: 'detail',
+                              sourceIndex: index,
+                              label: `${product.name} variant ${index + 1}`
+                           }))
+                           : []),
+                        // Then product images
+                        ...(Array.isArray(product.images) && product.images.length > 0
+                           ? product.images.map((img, index) => ({
+                              path: img.path,
+                              id: `product-${index}`,
+                              source: 'product',
+                              sourceIndex: index,
+                              label: `${product.name} image ${index + 1}`
+                           }))
+                           : [])
+                     ].map((img, combinedIndex) => (
                         <div
-                           key={index}
-                           className={`px-2 w-1/5 cursor-pointer ${activeThumbnail === index ? 'ring-2 ring-orange-500' : ''
-                              }`}
-                           onClick={() => setActiveThumbnail(index)}
+                           key={img.id}
+                           className={`p-1 w-1/6 cursor-pointer ${activeThumbnail === combinedIndex ? 'ring-2 ring-orange-500' : ''}`}
+                           onClick={() => setActiveThumbnail(combinedIndex)}
                         >
-                           <div className='relative bg-white h-16 rounded'>
+                           <div className='relative bg-white h-16 rounded shadow-sm'>
                               <Image
                                  src={img.path || '/images/placeholder.jpg'}
-                                 alt={`${product.name} thumbnail ${index + 1}`}
+                                 alt={img.label}
                                  layout='fill'
                                  objectFit='contain'
                                  className='p-1'
                               />
+                              {/* Optional: Source indicator */}
+                              <div className="absolute bottom-0 right-0 left-0 bg-black bg-opacity-30 text-white text-xs px-1 text-center">
+                                 {img.source === 'detail' ? '' : ''}
+                              </div>
                            </div>
                         </div>
                      ))}
@@ -534,18 +646,18 @@ export default function ProductDetailPage() {
                </div>
 
                {/* Product Details */}
-               <div className='md:w-1/2 px-4'>
-                  <h1 className='text-3xl font-medium mb-2'>{product.name}</h1>
-                  <div className='flex items-center mb-4'>
-                     <div className='flex items-center'>
-                        <span className='text-gray-500 text-sm mr-2'>Mã SP: {product.id}</span>
-                        <span className='mx-2 text-gray-300'>|</span>
-                        <div className='flex items-center text-sm'>
+               <div className="md:w-1/2 px-4">
+                  <h1 className="text-3xl font-medium mb-2">{product.name}</h1>
+                  <div className="flex items-center mb-4">
+                     <div className="flex items-center">
+                        <span className="text-gray-500 text-sm mr-2">Mã SP: {product.id}</span>
+                        <span className="mx-2 text-gray-300">|</span>
+                        <div className="flex items-center text-sm">
                            <span className={selectedDetail?.isActive && selectedDetail?.quantities > 0 ? 'text-green-600' : 'text-red-600'}>
                               {selectedDetail?.isActive && selectedDetail?.quantities > 0 ? 'Còn hàng' : 'Hết hàng'}
                            </span>
                            {selectedDetail && (
-                              <span className='text-gray-500 ml-1'>
+                              <span className="text-gray-500 ml-1">
                                  ({selectedDetail.quantities} sản phẩm)
                               </span>
                            )}
@@ -553,18 +665,18 @@ export default function ProductDetailPage() {
                      </div>
                   </div>
 
-                  <div className='mb-6 bg-gray-50 p-4 rounded'>
+                  <div className="mb-6 bg-gray-50 p-4 rounded">
                      {selectedPriceInfo && (
-                        <div className='flex items-center'>
+                        <div className="flex items-center">
                            {selectedPriceInfo.discount_price ? (
                               <>
-                                 <span className='text-red-600 text-2xl font-medium'>
+                                 <span className="text-red-600 text-2xl font-medium">
                                     {formatPrice(selectedPriceInfo.discount_price)}
                                  </span>
-                                 <span className='ml-2 text-gray-500 line-through'>
+                                 <span className="ml-2 text-gray-500 line-through">
                                     {formatPrice(selectedPriceInfo.base_price)}
                                  </span>
-                                 <div className='bg-red-600 text-white text-xs px-2 py-1 rounded ml-2'>
+                                 <div className="bg-red-600 text-white text-xs px-2 py-1 rounded ml-2">
                                     Giảm {calculateDiscountPercentage(
                                        selectedPriceInfo.base_price,
                                        selectedPriceInfo.discount_price
@@ -572,7 +684,7 @@ export default function ProductDetailPage() {
                                  </div>
                               </>
                            ) : (
-                              <span className='text-red-600 text-2xl font-medium'>
+                              <span className="text-red-600 text-2xl font-medium">
                                  {formatPrice(selectedPriceInfo.base_price)}
                               </span>
                            )}
@@ -580,12 +692,12 @@ export default function ProductDetailPage() {
                      )}
                   </div>
 
-                  <div className='mb-6'>
+                  <div className="mb-6">
                      {/* Size Field */}
                      {availableSizes.length > 0 && (
-                        <div className='flex items-center mb-4'>
-                           <span className='text-gray-700 w-24 font-medium'>Kích thước:</span>
-                           <div className='flex gap-2'>
+                        <div className="flex items-center mb-4">
+                           <span className="text-gray-700 w-24 font-medium">Kích thước:</span>
+                           <div className="flex gap-2">
                               {availableSizes.map((size) => (
                                  <label
                                     key={size}
@@ -595,11 +707,14 @@ export default function ProductDetailPage() {
                                        } rounded px-3 py-1.5 cursor-pointer`}
                                  >
                                     <input
-                                       type='radio'
-                                       name='size'
-                                       className='mr-1.5'
+                                       type="radio"
+                                       name="size"
+                                       className="mr-1.5"
                                        checked={selectedSize === size}
-                                       onChange={() => setSelectedSize(size)}
+                                       onChange={() => {
+                                          setSelectedSize(size);
+                                          setActiveThumbnail(0); // Reset thumbnail position when changing size
+                                       }}
                                     />
                                     <span>{size}</span>
                                  </label>
@@ -608,52 +723,75 @@ export default function ProductDetailPage() {
                         </div>
                      )}
 
-                     {/* Fragrance/Type Field */}
-                     {availableTypes.length > 0 && (
-                        <div className='flex items-center mb-4'>
-                           <span className='text-gray-700 w-24 font-medium'>Mùi hương:</span>
-                           <div className='flex flex-wrap gap-2'>
-                              {availableTypes.map((type) => (
-                                 <label
-                                    key={type}
-                                    className={`flex items-center border ${selectedType === type
-                                       ? 'border-orange-500 bg-orange-50'
-                                       : 'border-gray-300'
-                                       } rounded px-3 py-1.5 cursor-pointer hover:bg-gray-50`}
-                                 >
-                                    <input
-                                       type='radio'
-                                       name='fragrance'
-                                       className='mr-1.5'
-                                       checked={selectedType === type}
-                                       onChange={() => setSelectedType(type)}
-                                    />
-                                    <span>{type}</span>
-                                 </label>
-                              ))}
+                     {/* Values Field - Show all values but disable those not available for selected size */}
+                     {allValues.length > 0 && (
+                        <div className="flex items-center mb-4">
+                           <span className="text-gray-700 w-24 font-medium">{selectedDetail?.type}:</span>
+                           <div className="flex flex-wrap gap-2">
+                              {allValues.map((value) => {
+                                 const isAvailable = isValueAvailableForSize(value);
+                                 const isSelected = selectedDetail?.values === value;
+
+                                 return (
+                                    <label
+                                       key={value}
+                                       className={`flex items-center border ${isSelected
+                                          ? 'border-orange-500 bg-orange-50'
+                                          : isAvailable
+                                             ? 'border-gray-300 hover:bg-gray-50'
+                                             : 'border-gray-200 bg-gray-100'
+                                          } rounded px-3 py-1.5 ${isAvailable ? 'cursor-pointer' : 'opacity-50 cursor-not-allowed'}`}
+                                    >
+                                       <input
+                                          type="radio"
+                                          name="values"
+                                          className="mr-1.5"
+                                          checked={isSelected}
+                                          onChange={() => {
+                                             if (isAvailable) {
+                                                // Find a detail with this size and value combination
+                                                const detailWithValue = productDetails.find(
+                                                   detail => detail.size === selectedSize &&
+                                                      detail.values === value &&
+                                                      detail.isActive
+                                                );
+
+                                                if (detailWithValue) {
+                                                   setSelectedDetailId(detailWithValue.id);
+                                                   setSelectedType(detailWithValue.type);
+                                                   setActiveThumbnail(0); // Reset thumbnail position when changing values
+                                                }
+                                             }
+                                          }}
+                                          disabled={!isAvailable}
+                                       />
+                                       <span>{value}</span>
+                                    </label>
+                                 );
+                              })}
                            </div>
                         </div>
                      )}
 
                      {/* Quantity */}
-                     <div className='flex items-center mb-4'>
-                        <span className='text-gray-700 w-24 font-medium'>Số lượng:</span>
-                        <div className='flex shadow-sm'>
+                     <div className="flex items-center mb-4">
+                        <span className="text-gray-700 w-24 fưont-medium">Số lượng:</span>
+                        <div className="flex shadow-sm">
                            <button
-                              className='border border-gray-300 px-3 py-1 rounded-l hover:bg-gray-100'
+                              className="border border-gray-300 px-3 py-1 rounded-l hover:bg-gray-100"
                               onClick={decreaseQuantity}
                               disabled={!selectedDetail?.isActive || selectedDetail?.quantities <= 0}
                            >
                               -
                            </button>
                            <input
-                              type='text'
-                              className='border-t border-b border-gray-300 w-12 text-center'
+                              type="text"
+                              className="border-t border-b border-gray-300 w-12 text-center"
                               value={quantity}
                               readOnly
                            />
                            <button
-                              className='border border-gray-300 px-3 py-1 rounded-r hover:bg-gray-100'
+                              className="border border-gray-300 px-3 py-1 rounded-r hover:bg-gray-100"
                               onClick={increaseQuantity}
                               disabled={!selectedDetail?.isActive || selectedDetail?.quantities <= 0}
                            >
@@ -663,58 +801,58 @@ export default function ProductDetailPage() {
                      </div>
 
                      {/* Action Buttons */}
-                     <div className='grid grid-cols-2 gap-3 mb-4'>
+                     <div className="grid grid-cols-2 gap-3 mb-4">
                         <button
-                           className='flex justify-center items-center bg-white border border-gray-300 py-2.5 text-sm text-gray-700 rounded hover:bg-gray-50 transition disabled:opacity-50'
+                           className="flex justify-center items-center bg-white border border-gray-300 py-2.5 text-sm text-gray-700 rounded hover:bg-gray-50 transition disabled:opacity-50"
                            onClick={handleAddToCart}
                            disabled={!selectedDetail?.isActive || selectedDetail?.quantities <= 0}
                         >
                            <svg
-                              xmlns='http://www.w3.org/2000/svg'
-                              className='h-4 w-4 mr-1'
-                              fill='none'
-                              viewBox='0 0 24 24'
-                              stroke='currentColor'
+                              xmlns="http://www.w3.org/2000/svg"
+                              className="h-4 w-4 mr-1"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke="currentColor"
                            >
                               <path
-                                 strokeLinecap='round'
-                                 strokeLinejoin='round'
+                                 strokeLinecap="round"
+                                 strokeLinejoin="round"
                                  strokeWidth={2}
-                                 d='M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z'
+                                 d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"
                               />
                            </svg>
                            <span>Thêm vào giỏ hàng</span>
                         </button>
                         <button
-                           className='flex justify-center items-center bg-white border border-gray-300 py-2.5 text-sm text-gray-700 rounded hover:bg-gray-50 transition'
+                           className="flex justify-center items-center bg-white border border-gray-300 py-2.5 text-sm text-gray-700 rounded hover:bg-gray-50 transition"
                         >
                            <svg
-                              xmlns='http://www.w3.org/2000/svg'
-                              className='h-4 w-4 mr-1'
-                              fill='none'
-                              viewBox='0 0 24 24'
-                              stroke='currentColor'
+                              xmlns="http://www.w3.org/2000/svg"
+                              className="h-4 w-4 mr-1"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke="currentColor"
                            >
                               <path
-                                 strokeLinecap='round'
-                                 strokeLinejoin='round'
+                                 strokeLinecap="round"
+                                 strokeLinejoin="round"
                                  strokeWidth={2}
-                                 d='M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z'
+                                 d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
                               />
                            </svg>
                            <span>Thêm vào yêu thích</span>
                         </button>
                      </div>
 
-                     <div className='grid grid-cols-1 gap-3 mb-2'>
+                     <div className="grid grid-cols-1 gap-3 mb-2">
                         <button
-                           className='bg-orange-700 border border-orange-700 py-3 text-sm text-white rounded hover:bg-orange-800 transition font-medium disabled:opacity-50 disabled:hover:bg-orange-700'
+                           className="bg-orange-700 border border-orange-700 py-3 text-sm text-white rounded hover:bg-orange-800 transition font-medium disabled:opacity-50 disabled:hover:bg-orange-700"
                            onClick={handleBuyNow}
                            disabled={!selectedDetail?.isActive || selectedDetail?.quantities <= 0}
                         >
                            Mua ngay
                         </button>
-                        <button className='bg-orange-50 border border-orange-700 py-3 text-sm text-orange-700 rounded hover:bg-orange-100 transition font-medium'>
+                        <button className="bg-orange-50 border border-orange-700 py-3 text-sm text-orange-700 rounded hover:bg-orange-100 transition font-medium">
                            Nhắn tin với shop
                         </button>
                      </div>
@@ -768,28 +906,29 @@ export default function ProductDetailPage() {
                   )}
 
                   {activeTab === 1 && (
-                     <div className='bg-white'>
-                        <table className='w-full border-collapse'>
+                     <div className="bg-white">
+                        <table className="w-full border-collapse">
                            <tbody>
-                              <tr className='border-b'>
-                                 <td className='py-3 font-medium w-1/3'>Thương hiệu</td>
-                                 <td className='py-3'>CandleBliss</td>
+                              <tr className="border-b">
+                                 <td className="py-3 font-medium w-1/3">Thương hiệu</td>
+                                 <td className="py-3">CandleBliss</td>
                               </tr>
-                              <tr className='border-b'>
-                                 <td className='py-3 font-medium'>Xuất xứ</td>
-                                 <td className='py-3'>Việt Nam</td>
+                              <tr className="border-b">
+                                 <td className="py-3 font-medium">Xuất xứ</td>
+                                 <td className="py-3">Việt Nam</td>
                               </tr>
-                              <tr className='border-b'>
-                                 <td className='py-3 font-medium'>Loại</td>
-                                 <td className='py-3'>{selectedDetail?.type || 'N/A'}</td>
+
+                              <tr className="border-b">
+                                 <td className="py-3 font-medium">Kích thước</td>
+                                 <td className="py-3">{selectedDetail?.size || 'N/A'}</td>
                               </tr>
-                              <tr className='border-b'>
-                                 <td className='py-3 font-medium'>Kích thước</td>
-                                 <td className='py-3'>{selectedDetail?.size || 'N/A'}</td>
+                              <tr className="border-b">
+                                 <td className="py-3 font-medium">{selectedDetail?.type}</td>
+                                 <td className="py-3">{selectedDetail?.values || 'Không có thông tin'}</td>
                               </tr>
                               <tr>
-                                 <td className='py-3 font-medium'>Hướng dẫn sử dụng</td>
-                                 <td className='py-3'>
+                                 <td className="py-3 font-medium">Hướng dẫn sử dụng</td>
+                                 <td className="py-3">
                                     Thắp nến trong không gian thoáng mát, tránh xa vật dễ cháy
                                  </td>
                               </tr>

@@ -11,7 +11,7 @@ interface Category {
 // Định nghĩa interface cho variant
 interface Variant {
    type: string;
-   value: string;
+   values: string;
    isExpanded?: boolean;
    size?: string;
    images?: string[];
@@ -25,6 +25,7 @@ interface ProductFormData {
    description: string;
    // Thay thế các trường category riêng lẻ bằng đối tượng Category
    selectedCategory: Category | null;
+   categoryId?: number; // Add this field to match what's used in page.tsx
    images: string[];
    videoUrl?: string;
    basePrice?: string;

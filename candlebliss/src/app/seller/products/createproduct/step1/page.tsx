@@ -50,6 +50,11 @@ export default function Step1() {
    });
    const [isLoading, setIsLoading] = useState(false);
 
+   // Bổ sung thêm states cho việc loading
+   const [imageUploading, setImageUploading] = useState(false);
+   const [videoUrlValidating, setVideoUrlValidating] = useState(false);
+   const [imageProcessingCount, setImageProcessingCount] = useState(0);
+
    // Thêm kiểm tra token khi component mount
    // filepath: /d:/New folder/candlebliss/src/app/seller/products/createproduct/step1/page.tsx
 
@@ -67,62 +72,120 @@ export default function Step1() {
 
    // Hàm fetch danh sách danh mục
    const fetchCategories = async () => {
+      const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+      if (!token) {
+         setCategoryError('Bạn chưa đăng nhập. Vui lòng đăng nhập để tiếp tục.');
+         return;
+      }
+
       try {
          setIsCategoriesLoading(true);
          setCategoryError('');
 
-         // Lấy token từ localStorage hoặc sessionStorage
-         const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-         if (!token) {
-            setCategoryError('Bạn chưa đăng nhập hoặc phiên làm việc đã hết hạn');
-            return;
-         }
+         console.log('Fetching categories with token:', token ? 'Token exists' : 'No token');
 
          const response = await fetch('http://localhost:3000/api/categories', {
             headers: {
-               'Authorization': `Bearer ${token}`
-            },
-            // Thêm tùy chọn để không tự động theo chuyển hướng
-            redirect: 'manual'
+               Authorization: `Bearer ${token}`,
+               'Content-Type': 'application/json'
+            }
          });
 
-         // Xử lý mã trạng thái cụ thể
+         console.log('Categories API response status:', response.status);
+
+         let categoriesData;
+
          if (response.status === 302) {
-            // Phiên đăng nhập đã hết hạn hoặc token không hợp lệ
-            // Xóa token cũ
-            localStorage.removeItem('token');
-            sessionStorage.removeItem('token');
+            // Special case: API returns redirect status but includes data
+            const responseText = await response.text();
+            console.log('Received 302 response with text:', responseText);
 
-            setCategoryError('Phiên làm việc đã hết hạn. Vui lòng đăng nhập lại.');
+            try {
+               // Try to parse the response text directly as JSON
+               categoriesData = JSON.parse(responseText);
+               console.log('Successfully parsed categories from 302 response:', categoriesData);
+            } catch (parseError) {
+               console.error('Failed to parse categories from 302 response:', parseError);
 
-            // Tùy chọn: Chuyển hướng người dùng đến trang đăng nhập sau 2 giây
-            setTimeout(() => {
-               router.push('/seller/signin');
-            }, 2000);
+               // Try to extract JSON array from the text if it contains array markers
+               if (responseText.includes('[') && responseText.includes(']')) {
+                  const jsonStart = responseText.indexOf('[');
+                  const jsonEnd = responseText.lastIndexOf(']') + 1;
+                  const jsonString = responseText.substring(jsonStart, jsonEnd);
 
-            return;
+                  try {
+                     categoriesData = JSON.parse(jsonString);
+                     console.log('Extracted categories from 302 response text:', categoriesData);
+                  } catch (nestedError) {
+                     console.error('Failed to extract categories from 302 response text:', nestedError);
+                     throw new Error('Không thể xử lý dữ liệu danh mục từ máy chủ');
+                  }
+               } else {
+                  throw new Error('Không thể xử lý dữ liệu danh mục từ máy chủ');
+               }
+            }
+         } else if (!response.ok) {
+            const errorText = await response.text();
+            console.error('API Error response:', errorText);
+
+            // Try to extract JSON array from error response if it contains array markers
+            if (errorText.includes('[') && errorText.includes(']')) {
+               const jsonStart = errorText.indexOf('[');
+               const jsonEnd = errorText.lastIndexOf(']') + 1;
+               const jsonString = errorText.substring(jsonStart, jsonEnd);
+
+               try {
+                  categoriesData = JSON.parse(jsonString);
+                  console.log('Extracted categories from error response:', categoriesData);
+               } catch (parseError) {
+                  console.error('Failed to extract categories from error response:', parseError);
+                  throw new Error(`Không thể tải danh mục sản phẩm (${response.status}): ${errorText}`);
+               }
+            } else {
+               throw new Error(`Không thể tải danh mục sản phẩm (${response.status}): ${errorText}`);
+            }
+         } else {
+            // Normal case: API returns success status
+            categoriesData = await response.json();
+            console.log('Categories loaded successfully:', categoriesData);
          }
 
-         if (!response.ok) {
-            throw new Error(`Failed to fetch categories: ${response.status}`);
-         }
-
-         const data = await response.json();
-         setCategories(data);
-
-         // Nếu đã chọn category trước đó, tải thông tin chi tiết
-         if (formData.selectedCategory?.id) {
-            fetchCategoryById(formData.selectedCategory.id);
+         if (Array.isArray(categoriesData)) {
+            console.log('Setting categories:', categoriesData);
+            setCategories(categoriesData);
+            setCategoryError(''); // Clear any previous error
+         } else {
+            console.error('Categories data is not an array:', categoriesData);
+            setCategories([]);
+            setCategoryError('Định dạng dữ liệu danh mục không hợp lệ');
          }
       } catch (error) {
          console.error('Error fetching categories:', error);
 
-         // Kiểm tra xem lỗi có phải là do mạng không
-         if (error instanceof TypeError && error.message.includes('network')) {
-            setCategoryError('Không thể kết nối đến máy chủ. Vui lòng kiểm tra kết nối internet của bạn.');
-         } else {
-            setCategoryError('Không thể tải danh sách danh mục. Vui lòng thử lại sau.');
+         // Try to extract category data from error message if it contains JSON
+         const errorMessage = error instanceof Error ? error.message : 'Lỗi không xác định';
+
+         if (errorMessage.includes('[{') && errorMessage.includes('"}]')) {
+            try {
+               // Extract JSON from error message by finding the first '[' and last ']'
+               const jsonStart = errorMessage.indexOf('[');
+               const jsonEnd = errorMessage.lastIndexOf(']') + 1;
+               const jsonString = errorMessage.substring(jsonStart, jsonEnd);
+
+               const extractedData = JSON.parse(jsonString);
+               console.log('Successfully extracted categories from error message:', extractedData);
+
+               if (Array.isArray(extractedData)) {
+                  setCategories(extractedData);
+                  setCategoryError(''); // Clear error since we successfully extracted the data
+                  return; // Exit early since we've handled the data
+               }
+            } catch (parseError) {
+               console.error('Failed to parse categories from error message:', parseError);
+            }
          }
+
+         setCategoryError('Không thể tải danh mục: ' + errorMessage);
       } finally {
          setIsCategoriesLoading(false);
       }
@@ -171,29 +234,54 @@ export default function Step1() {
       }
    };
 
-   
+   const handleOpenCategoryDropdown = () => {
+      setIsCategoryDropdownOpen(!isCategoryDropdownOpen);
+   };
 
    // Xử lý khi người dùng chọn một danh mục
    const handleCategorySelect = async (category: Category) => {
       try {
-         // Hiển thị thông tin cơ bản trước
-         setSelectedCategory(category);
+         setIsCategoryDetailLoading(true);
+         console.log('Selected category:', category);
+         setSelectedCategory(category); // Set the category immediately for better UX
+         setErrors(prev => ({ ...prev, category: '' }));
          setIsCategoryDropdownOpen(false);
-         setErrors((prev) => ({ ...prev, category: '' }));
 
-         // Sau đó tải thông tin chi tiết
-         await fetchCategoryById(category.id);
+         // Fetch detailed category information if needed
+         const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+         const response = await fetch(`http://localhost:3000/api/categories/${category.id}`, {
+            headers: {
+               Authorization: `Bearer ${token}`
+            }
+         });
+
+         if (!response.ok) {
+            console.error(`Failed to fetch category details: ${response.status}`);
+            // We already set the category above, so no need to throw an error
+            return;
+         }
+
+         const categoryDetail = await response.json();
+         console.log('Received category detail:', categoryDetail);
+
+         // Only update if we get valid data back
+         if (categoryDetail && categoryDetail.id) {
+            setSelectedCategory(categoryDetail);
+         }
       } catch (error) {
-         console.error('Error selecting category:', error);
+         console.error('Error fetching category details:', error);
+         // We already set the category at the beginning, so no need to do anything else
+      } finally {
+         setIsCategoryDetailLoading(false);
       }
    };
 
    // Handle image upload
-   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
       setImageError(null);
       const files = e.target.files;
 
-      if (!files) return;
+      if (!files || files.length === 0) return;
 
       // Check if adding these files would exceed the 9 image limit
       if (productImages.length + files.length > 9) {
@@ -201,30 +289,52 @@ export default function Step1() {
          return;
       }
 
-      // Process each file
-      const newImages = Array.from(files)
-         .map((file) => {
-            // Validate file type
-            if (!['image/jpeg', 'image/png', 'image/webp', 'image/jpg'].includes(file.type)) {
-               setImageError('Chỉ chấp nhận các định dạng: JPG, JPEG, PNG, WEBP');
-               return null;
+      setImageUploading(true);
+      setImageProcessingCount(files.length);
+
+      try {
+         // Process each file
+         const filesToProcess = Array.from(files);
+         const processedImages: string[] = [];
+
+         for (const file of filesToProcess) {
+            try {
+               // Validate file type
+               if (!['image/jpeg', 'image/png', 'image/webp', 'image/jpg'].includes(file.type)) {
+                  setImageError('Chỉ chấp nhận các định dạng: JPG, JPEG, PNG, WEBP');
+                  continue;
+               }
+
+               // Validate file size (max 5MB)
+               if (file.size > 5 * 1024 * 1024) {
+                  setImageError('Kích thước ảnh không được vượt quá 5MB');
+                  continue;
+               }
+
+               // Create object URL
+               const objectUrl = URL.createObjectURL(file);
+               processedImages.push(objectUrl);
+               
+               // Artificial delay to show loading state (can be removed in production)
+               await new Promise(resolve => setTimeout(resolve, 300));
+               
+               setImageProcessingCount(prev => Math.max(0, prev - 1));
+            } catch (error) {
+               console.error('Error processing image:', error);
             }
+         }
 
-            // Validate file size (max 5MB)
-            if (file.size > 5 * 1024 * 1024) {
-               setImageError('Kích thước ảnh không được vượt quá 5MB');
-               return null;
-            }
-
-            return URL.createObjectURL(file);
-         })
-         .filter((image) => image !== null) as string[];
-
-      setProductImages((prev) => [...prev, ...newImages]);
-      setErrors((prev) => ({ ...prev, images: '' }));
-
-      // Reset the input value so the same file can be selected again
-      e.target.value = '';
+         setProductImages(prev => [...prev, ...processedImages]);
+         setErrors(prev => ({ ...prev, images: '' }));
+      } catch (error) {
+         console.error('Error during image upload:', error);
+         setImageError('Có lỗi xảy ra khi xử lý hình ảnh.');
+      } finally {
+         setImageUploading(false);
+         setImageProcessingCount(0);
+         // Reset the input value so the same file can be selected again
+         e.target.value = '';
+      }
    };
 
    // Remove an image
@@ -285,75 +395,102 @@ export default function Step1() {
             return;
          }
 
-         // Tạo FormData để gửi dữ liệu bao gồm hình ảnh
+         // Đảm bảo productImages luôn là một mảng hợp lệ
+         const safeProductImages = Array.isArray(productImages) ? productImages : [];
+
+         // Hiển thị thông báo tiến trình
+         // Tạo FormData để upload
+         console.log('Chuẩn bị dữ liệu sản phẩm...');
          const productFormData = new FormData();
          productFormData.append('name', name.trim());
-         productFormData.append('description', description || '');
+         productFormData.append('description', description.trim());
 
          // Thêm categoryId nếu đã chọn danh mục
          if (selectedCategory) {
-            productFormData.append('categoryId', selectedCategory.id.toString());
+            const categoryId = parseInt(selectedCategory.id.toString());
+            console.log(`Thêm danh mục: ${selectedCategory.name} (ID: ${categoryId})`);
+            productFormData.append('category_id', categoryId.toString());
          }
 
          if (videoUrl) {
+            console.log('Thêm video URL:', videoUrl);
             productFormData.append('video', videoUrl);
          }
 
          // Xử lý và thêm các hình ảnh
          let hasImages = false;
-         for (const blobUrl of productImages) {
-            if (!blobUrl || !blobUrl.startsWith('blob:')) continue;
+         console.log(`Xử lý ${safeProductImages.length} hình ảnh...`);
+         setImageProcessingCount(safeProductImages.length);
+         
+         for (const [index, blobUrl] of safeProductImages.entries()) {
+            if (!blobUrl || !blobUrl.startsWith('blob:')) {
+               console.log(`Bỏ qua hình ảnh không hợp lệ: ${blobUrl}`);
+               setImageProcessingCount(prev => Math.max(0, prev - 1));
+               continue;
+            }
+            
             try {
+               console.log(`Đang xử lý hình ảnh ${index + 1}/${safeProductImages.length}...`);
                const response = await fetch(blobUrl);
                const blob = await response.blob();
-               const file = new File([blob], `image-${Date.now()}.jpg`, { type: blob.type });
+               const fileName = `image-${Date.now()}-${Math.random().toString(36).substring(2, 10)}.jpg`;
+               const file = new File([blob], fileName, { type: blob.type });
                productFormData.append('images', file);
                hasImages = true;
+               setImageProcessingCount(prev => Math.max(0, prev - 1));
             } catch (error) {
-               console.error('Error processing image:', error);
-               alert('Lỗi khi xử lý hình ảnh sản phẩm');
+               console.error(`Lỗi xử lý hình ảnh ${index + 1}:`, error);
+               setImageProcessingCount(prev => Math.max(0, prev - 1));
             }
          }
 
-         // Kiểm tra có hình ảnh không
-         if (!hasImages) {
-            setErrors((prev) => ({ ...prev, images: 'Vui lòng tải lên ít nhất 1 hình ảnh' }));
+         // Kiểm tra có hình ảnh không - nhưng chỉ nếu hình ảnh bắt buộc
+         if (!hasImages && productImages.length > 0) {
+            console.error('Không thể xử lý hình ảnh nào');
+            setImageError('Không thể xử lý hình ảnh. Vui lòng thử lại với hình ảnh khác.');
             setIsLoading(false);
             return;
          }
 
-         // Gửi request tạo sản phẩm với categoryId đã được đính kèm
+         console.log('Đang gửi dữ liệu sản phẩm đến máy chủ...');
+
+         // Gửi request tạo sản phẩm
          const productResponse = await fetch('http://localhost:3000/api/products', {
             method: 'POST',
             headers: {
-               Authorization: `Bearer ${token}`,
+               'Authorization': `Bearer ${token}`
+               // Không set Content-Type khi dùng FormData, trình duyệt sẽ tự thêm với boundary
             },
-            body: productFormData,
+            body: productFormData
          });
 
+         console.log('Phản hồi từ máy chủ:', productResponse.status);
+
          if (!productResponse.ok) {
-            const errorData = await productResponse.json().catch(() => null);
-            const errorText = await productResponse.text().catch(() => 'Unknown error');
-            console.error('Product creation failed:', errorData || errorText);
-            alert(`Lỗi khi tạo sản phẩm: ${errorData?.message || errorText}`);
-            setIsLoading(false);
-            return;
+            const errorText = await productResponse.text();
+            throw new Error(`Lỗi khi tạo sản phẩm (${productResponse.status}): ${errorText}`);
          }
 
-         // Lấy ID sản phẩm đã tạo
-         const createdProduct = await productResponse.json();
-         const productId = createdProduct.id;
+         // Lấy dữ liệu từ response
+         const productData = await productResponse.json();
+         
+         // Trích xuất ID sản phẩm từ phản hồi
+         const productId = productData.id;
+         
+         console.log('Sản phẩm đã được tạo thành công với ID:', productId);
 
-         // Cập nhật dữ liệu trong context và thêm productId vào để các bước tiếp theo sử dụng
+         // Cập nhật dữ liệu trong context
+         console.log('Hoàn tất tạo sản phẩm, cập nhật dữ liệu...');
          updateFormData({
             name,
             description,
-            selectedCategory, // Lưu toàn bộ đối tượng danh mục được chọn
-            images: productImages,
+            selectedCategory,
+            images: safeProductImages,
             videoUrl,
-            productId: productId,
+            productId: productId, // Sử dụng productId từ response API
          });
 
+         console.log('Chuyển hướng đến bước tiếp theo...');
          // Chuyển đến bước tiếp theo
          router.push('/seller/products/createproduct/step2');
       } catch (error) {
@@ -361,6 +498,7 @@ export default function Step1() {
          alert(`Đã xảy ra lỗi: ${error instanceof Error ? error.message : 'Lỗi không xác định'}`);
       } finally {
          setIsLoading(false);
+         setImageProcessingCount(0);
       }
    };
 
@@ -502,12 +640,12 @@ export default function Step1() {
                            <div className='relative'>
                               <button
                                  type="button"
-                                 onClick={() => setIsCategoryDropdownOpen(!isCategoryDropdownOpen)}
+                                 onClick={handleOpenCategoryDropdown}
                                  className={`w-full px-3 py-2 text-left border ${errors.category ? 'border-red-500' : 'border-gray-300'
                                     } rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white flex justify-between items-center`}
                               >
                                  <span className={selectedCategory ? 'text-gray-900' : 'text-gray-400'}>
-                                    {selectedCategory ? selectedCategory.name : 'Chọn danh mục sản phẩm'}
+                                    {selectedCategory ? (selectedCategory.name || `Danh mục ${selectedCategory.id}`) : 'Chọn danh mục sản phẩm'}
                                  </span>
                                  <ChevronDown className="h-4 w-4 text-gray-500" />
                               </button>
@@ -521,13 +659,13 @@ export default function Step1() {
                                              Đang tải danh mục...
                                           </div>
                                        </div>
-                                    ) : categoryError ? (
-                                       <div className="px-4 py-2 text-sm text-red-500">
-                                          {categoryError}
-                                       </div>
                                     ) : categories.length === 0 ? (
                                        <div className="px-4 py-2 text-sm text-gray-500">
-                                          Không có danh mục nào. Bạn có thể thêm danh mục mới.
+                                          {categoryError ? (
+                                             <div className="text-red-500">{categoryError}</div>
+                                          ) : (
+                                             "Không có danh mục nào. Bạn có thể thêm danh mục mới."
+                                          )}
                                        </div>
                                     ) : (
                                        <>
@@ -539,13 +677,11 @@ export default function Step1() {
                                                 className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-100 ${selectedCategory?.id === category.id ? 'bg-amber-50 text-amber-700' : 'text-gray-700'
                                                    }`}
                                              >
-                                                {category.name}
+                                                {category.name || `Danh mục ${category.id}`}
                                              </button>
                                           ))}
                                        </>
                                     )}
-
-
                                  </div>
                               )}
                            </div>
@@ -646,37 +782,37 @@ export default function Step1() {
                                     </>
                                  ) : (
                                     <p className='text-amber-600 text-sm'>
-                                       Đã đạt giới hạn 9 hình ảnh
+                                       Đã đạt giới hạn tối đa 9 hình ảnh
                                     </p>
                                  )}
-                                 <p className='text-xs text-gray-400 mt-1'>
-                                    ({productImages.length}/9)
+                                 <p className='mt-2 text-xs text-gray-500 text-center'>
+                                    Định dạng: JPG, JPEG, PNG, WEBP. Kích thước tối đa: 5MB/ảnh
                                  </p>
-                                 {imageError && (
-                                    <p className='text-red-500 text-xs mt-2'>{imageError}</p>
-                                 )}
-                                 {errors.images && (
-                                    <p className='text-red-500 text-xs mt-2'>{errors.images}</p>
-                                 )}
                               </div>
                            </div>
-                           <p className='text-xs text-gray-500 mt-1'>
-                              Hỗ trợ: JPG, JPEG, PNG, WEBP (Tối đa 5MB/ảnh)
-                           </p>
+                           {errors.images && (
+                              <p className='text-red-500 text-xs mt-1'>{errors.images}</p>
+                           )}
+                           {imageError && (
+                              <p className='text-red-500 text-xs mt-1'>{imageError}</p>
+                           )}
                         </div>
 
-                        {/* Product Video */}
+                        {/* Video URL */}
                         <div>
                            <label className='block text-sm font-medium text-gray-700 mb-1'>
-                              Video sản phẩm:
+                              Video sản phẩm (tùy chọn)
                            </label>
                            <input
                               type='text'
                               value={videoUrl}
                               onChange={(e) => setVideoUrl(e.target.value)}
-                              placeholder='Link video về sản phẩm'
+                              placeholder='Nhập URL video (YouTube, TikTok, ...)'
                               className='w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500'
                            />
+                           <p className='text-xs text-gray-500 mt-1'>
+                              Video sẽ giúp khách hàng hiểu rõ hơn về sản phẩm của bạn
+                           </p>
                         </div>
 
                         {/* Product Description */}
@@ -685,44 +821,40 @@ export default function Step1() {
                               <span className='text-red-500'>*</span> Mô tả sản phẩm
                            </label>
                            <textarea
-                              rows={6}
-                              placeholder='Mô tả chi tiết về sản phẩm'
-                              className={`w-full px-3 py-2 border ${errors.description ? 'border-red-500' : 'border-gray-300'
-                                 } rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500`}
+                              rows={5}
                               value={description}
                               onChange={(e) => {
                                  setDescription(e.target.value);
                                  setErrors((prev) => ({ ...prev, description: '' }));
                               }}
-                           ></textarea>
+                              placeholder='Mô tả chi tiết về sản phẩm, tính năng, đặc điểm nổi bật...'
+                              className={`w-full px-3 py-2 border ${errors.description ? 'border-red-500' : 'border-gray-300'
+                                 } rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500`}
+                           />
                            {errors.description && (
                               <p className='text-red-500 text-xs mt-1'>{errors.description}</p>
                            )}
-                           <div className='text-right text-xs text-gray-500 mt-1'>
-                              {description.length}/3000
-                           </div>
                         </div>
                      </div>
                   </div>
 
-                  {/* Form Navigation */}
-                  <div className='flex justify-end'>
+                  {/* Next/Cancel Buttons */}
+                  <div className='flex justify-end space-x-4'>
+                     <Link href='/seller/products' className='px-6 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50'>
+                        Hủy
+                     </Link>
                      <button
-                        type="button"
-                        className='px-4 py-2 bg-amber-600 text-white rounded-md hover:bg-amber-700 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 flex items-center'
                         onClick={handleNext}
                         disabled={isLoading}
+                        className='px-6 py-2 bg-amber-500 rounded-md text-white hover:bg-amber-600 disabled:bg-amber-300 flex items-center'
                      >
                         {isLoading ? (
                            <>
-                              <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                              </svg>
+                              <Loader2 className="animate-spin h-4 w-4 mr-2" />
                               Đang xử lý...
                            </>
                         ) : (
-                           "Tiếp theo"
+                           'Tiếp theo'
                         )}
                      </button>
                   </div>

@@ -18,6 +18,7 @@ interface ProductDetail {
    id: number;
    size: string;
    type: string;
+   values: string;
    quantities: number;
    images: ProductImage[];
    isActive: boolean;

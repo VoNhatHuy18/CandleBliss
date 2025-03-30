@@ -10,7 +10,7 @@ import { useProductForm } from '@/app/context/ProductFormContext';
 // Define the variant interface
 interface Variant {
    type: string;
-   value: string;
+   values: string;
    isExpanded?: boolean;
    size?: string;
    images?: string[];
@@ -39,7 +39,7 @@ export default function Step2() {
       type: {
          required: true,
       },
-      value: {
+      values: {
          required: true,
       },
       size: {
@@ -106,7 +106,7 @@ export default function Step2() {
          return;
       }
       setErrors({});
-      setVariants([...variants, { type: '', value: '', isExpanded: false, images: [] }]);
+      setVariants([...variants, { type: '', values: '', isExpanded: false, images: [] }]);
    };
 
    // Function to remove a variant row
@@ -129,8 +129,8 @@ export default function Step2() {
       const updatedVariants = [...variants];
       if (field === 'type') {
          updatedVariants[index].type = value;
-      } else if (field === 'value') {
-         updatedVariants[index].value = value;
+      } else if (field === 'values') {
+         updatedVariants[index].values = value;
       } else if (field === 'size') {
          updatedVariants[index].size = value;
       } else if (field === 'quantity') {
@@ -154,7 +154,7 @@ export default function Step2() {
             ...variants,
             {
                type: newVariantType,
-               value: newVariantValue,
+               values: newVariantValue, // Changed from value to values
                isExpanded: true,
                size: '',
                images: [],
@@ -240,7 +240,7 @@ export default function Step2() {
       const newErrors: { [key: string]: string } = {};
 
       variants.forEach((variant, index) => {
-         ['type', 'value', 'size', 'quantity'].forEach((field) => {
+         ['type', 'values', 'size', 'quantity'].forEach((field) => {
             const value = variant[field as keyof Variant];
             const error = validateField(
                field,
@@ -259,6 +259,7 @@ export default function Step2() {
          return;
       }
 
+      // Set loading state to true before starting the process
       setIsLoading(true);
 
       try {
@@ -289,6 +290,7 @@ export default function Step2() {
             detailFormData.append('product_id', String(productId));
             detailFormData.append('size', variant.size || '');
             detailFormData.append('type', variant.type || '');
+            detailFormData.append('values', variant.values || '');
             detailFormData.append('quantities', String(variant.quantity || 0));
             detailFormData.append('isActive', 'true');
 
@@ -525,7 +527,7 @@ export default function Step2() {
                                        onClick={() => toggleVariantExpanded(index)}
                                     >
                                        {index + 1}. {variant.type || 'Phiên bản mới'}
-                                       {variant.value && ` - ${variant.value}`}
+                                       {variant.values && ` - ${variant.values}`}
                                     </div>
                                     <div className='flex items-center'>
                                        <button
@@ -550,9 +552,8 @@ export default function Step2() {
                                        </button>
                                        <svg
                                           xmlns='http://www.w3.org/2000/svg'
-                                          className={`h-5 w-5 transform cursor-pointer ${
-                                             variant.isExpanded ? 'rotate-180' : ''
-                                          }`}
+                                          className={`h-5 w-5 transform cursor-pointer ${variant.isExpanded ? 'rotate-180' : ''
+                                             }`}
                                           fill='none'
                                           viewBox='0 0 24 24'
                                           stroke='currentColor'
@@ -588,11 +589,10 @@ export default function Step2() {
                                                       )
                                                    }
                                                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500 
-                                                   ${
-                                                      errors[`type_${index}`]
+                                                   ${errors[`type_${index}`]
                                                          ? 'border-red-500'
                                                          : 'border-gray-300'
-                                                   }`}
+                                                      }`}
                                                    placeholder='Nhập phân loại'
                                                 />
                                                 {errors[`type_${index}`] && (
@@ -607,25 +607,24 @@ export default function Step2() {
                                                 </label>
                                                 <input
                                                    type='text'
-                                                   value={variant.value || ''}
+                                                   value={variant.values || ''} // Changed from variant.value to variant.values
                                                    onChange={(e) =>
                                                       handleVariantChange(
                                                          index,
-                                                         'value',
+                                                         'values', // Changed from 'value' to 'values'
                                                          e.target.value,
                                                       )
                                                    }
                                                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500 
-                                                   ${
-                                                      errors[`value_${index}`]
+                                                   ${errors[`values_${index}`] // Changed from value_${index} to values_${index}
                                                          ? 'border-red-500'
                                                          : 'border-gray-300'
-                                                   }`}
+                                                      }`}
                                                    placeholder='Nhập giá trị'
                                                 />
-                                                {errors[`value_${index}`] && (
+                                                {errors[`values_${index}`] && ( // Changed from value_${index} to values_${index}
                                                    <p className='text-red-500 text-xs mt-1'>
-                                                      {errors[`value_${index}`]}
+                                                      {errors[`values_${index}`]} // Changed from value_${index} to values_${index}
                                                    </p>
                                                 )}
                                              </div>
@@ -647,11 +646,10 @@ export default function Step2() {
                                                       )
                                                    }
                                                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500 
-                                                   ${
-                                                      errors[`size_${index}`]
+                                                   ${errors[`size_${index}`]
                                                          ? 'border-red-500'
                                                          : 'border-gray-300'
-                                                   }`}
+                                                      }`}
                                                    placeholder='Nhập size hoặc màu sắc'
                                                 />
                                                 {errors[`size_${index}`] && (
@@ -676,11 +674,10 @@ export default function Step2() {
                                                    }
                                                    placeholder='0'
                                                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500 
-                                                   ${
-                                                      errors[`quantity_${index}`]
+                                                   ${errors[`quantity_${index}`]
                                                          ? 'border-red-500'
                                                          : 'border-gray-300'
-                                                   }`}
+                                                      }`}
                                                 />
                                                 {errors[`quantity_${index}`] && (
                                                    <p className='text-red-500 text-xs mt-1'>
@@ -703,9 +700,8 @@ export default function Step2() {
                                                       >
                                                          <Image
                                                             src={img}
-                                                            alt={`${variant.type} image ${
-                                                               imgIndex + 1
-                                                            }`}
+                                                            alt={`${variant.type} image ${imgIndex + 1
+                                                               }`}
                                                             width={64}
                                                             height={64}
                                                             className='object-cover'

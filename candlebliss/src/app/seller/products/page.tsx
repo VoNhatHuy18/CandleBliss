@@ -26,6 +26,7 @@ interface ProductDetail {
    id: number;
    size: string;
    type: string;
+   values: string;
    quantities: number;
    images: Image[];
    product?: any;
@@ -45,6 +46,7 @@ interface Price {
 interface Category {
    id: number;
    name: string;
+   description: string;
 }
 
 interface Product {
@@ -53,6 +55,7 @@ interface Product {
    description: string;
    video: string;
    images: Image[] | Image;
+   category_id?: number; // Thêm trường này
    details?: ProductDetail[];
    pricing?: Price[];
    categories?: Category[];
@@ -132,18 +135,21 @@ const ProductTable = ({
    loading,
    fetchAllProductData,
    handleEditProduct,
-   handleDeleteProduct
+   handleDeleteProduct,
+   getCategoryNameById
 }: {
    products: ProductViewModel[],
    loading: boolean,
    fetchAllProductData: () => Promise<void>,
    handleEditProduct: (productId: number) => void,
-   handleDeleteProduct: (productId: number) => void
+   handleDeleteProduct: (productId: number) => void,
+   getCategoryNameById: (categoryId: number | undefined) => Promise<string>
 }) => {
    const [expandedProduct, setExpandedProduct] = useState<number | null>(null);
    const [detailPrices, setDetailPrices] = useState<Record<number, { base_price: number, discount_price: number | null }>>({});
    const [searchTerm, setSearchTerm] = useState<string>('');
    const [detailLoading, setDetailLoading] = useState<Record<number, boolean>>({});
+   const [categoryNames, setCategoryNames] = useState<Record<number, string>>({});
    const router = useRouter();
 
    // Filter products based on search term
@@ -223,6 +229,44 @@ const ProductTable = ({
          setDetailLoading(prev => ({ ...prev, [productId]: false }));
       }
    };
+
+   // Fetch category names
+   useEffect(() => {
+      const fetchCategoryNames = async () => {
+         const uniqueCategoryIds: number[] = [];
+
+         // Thu thập tất cả category_id từ sản phẩm
+         products.forEach(product => {
+            if (product.category_id && !uniqueCategoryIds.includes(product.category_id)) {
+               uniqueCategoryIds.push(product.category_id);
+            } else if (product.categories && product.categories.length > 0) {
+               // Backup: Nếu không có category_id, thử lấy từ categories array
+               const catId = product.categories[0].id;
+               if (catId && !uniqueCategoryIds.includes(catId)) {
+                  uniqueCategoryIds.push(catId);
+               }
+            }
+         });
+
+         const categoryNamesMap: Record<number, string> = {};
+
+         await Promise.all(uniqueCategoryIds.map(async (categoryId) => {
+            try {
+               const name = await getCategoryNameById(categoryId);
+               categoryNamesMap[categoryId] = name;
+            } catch (error) {
+               console.error(`Lỗi khi lấy tên danh mục ${categoryId}:`, error);
+               categoryNamesMap[categoryId] = `ID: ${categoryId}`;
+            }
+         }));
+
+         setCategoryNames(categoryNamesMap);
+      };
+
+      if (products.length > 0) {
+         fetchCategoryNames();
+      }
+   }, [products, getCategoryNameById]);
 
    // Toggle product expansion
    const toggleProductExpansion = useCallback((productId: number) => {
@@ -306,13 +350,14 @@ const ProductTable = ({
                      Xóa từ khóa
                   </button>
                </div>
-            ) : (
-               <EmptyState
-                  message="Chưa có sản phẩm nào"
-                  actionLabel="Thêm sản phẩm mới"
-                  onAction={() => router.push('/seller/products/createproduct/step1')}
-               />
             )
+               : (
+                  <EmptyState
+                     message="Chưa có sản phẩm nào"
+                     actionLabel="Thêm sản phẩm đầu tiên"
+                     onAction={() => router.push('/seller/products/createproduct/step1')}
+                  />
+               )
          ) : (
             <div>
                {/* Header */}
@@ -427,9 +472,13 @@ const ProductTable = ({
                                  <div className="truncate">
                                     <p className="text-sm font-medium text-gray-800 truncate">{product.name}</p>
                                     <p className="text-xs text-gray-500 mt-1 truncate">
-                                       {product.categories && product.categories.length > 0
-                                          ? product.categories.map(c => c.name).join(', ')
-                                          : 'Chưa có danh mục'}
+                                       {product.category_id ?
+                                          (categoryNames[product.category_id] ?
+                                             `${categoryNames[product.category_id]} ` :
+                                             `Đang tải... (ID: ${product.category_id})`) :
+                                          product.categories && product.categories.length > 0 ?
+                                             `${product.categories[0].name} ` :
+                                             'Chưa có danh mục'}
                                     </p>
                                  </div>
                               </div>
@@ -515,9 +564,11 @@ const ProductTable = ({
                               <div className="col-span-2 text-xs text-gray-500 mt-1">
                                  <span>Danh mục: </span>
                                  <span className="text-gray-700">
-                                    {product.categories && product.categories.length > 0
-                                       ? product.categories.map(c => c.name).join(', ')
-                                       : 'Chưa có danh mục'}
+                                    {product.category_id ?
+                                       (categoryNames[product.category_id] || `Đang tải... (ID: ${product.category_id})`) :
+                                       product.categories && product.categories.length > 0 ?
+                                          `${product.categories[0].name} (ID: ${product.categories[0].id})` :
+                                          'Chưa có danh mục'}
                                  </span>
                               </div>
                            </div>
@@ -548,6 +599,9 @@ const ProductTable = ({
                                              </th>
                                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                                 Loại
+                                             </th>
+                                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                Giá trị
                                              </th>
                                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                                 Tồn kho
@@ -604,6 +658,9 @@ const ProductTable = ({
                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
                                                       {detail.type || '—'}
                                                    </td>
+                                                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                                                      {detail.values || '—'}
+                                                   </td>
                                                    <td className="px-6 py-4 whitespace-nowrap text-sm">
                                                       <span className={`font-medium ${detail.quantities === 0 ? 'text-red-500' : 'text-gray-700'}`}>
                                                          {detail.quantities}
@@ -655,10 +712,13 @@ const ProductTable = ({
          )}
       </div>
    );
+
 };
+
 
 export default function ProductManagement() {
    const [products, setProducts] = useState<ProductViewModel[]>([]);
+   const [categories, setCategories] = useState<Category[]>([]);
    const [loading, setLoading] = useState<boolean>(true);
    const [error, setError] = useState<string | null>(null);
    const [activeTab, setActiveTab] = useState<string>('Tất cả');
@@ -791,6 +851,53 @@ export default function ProductManagement() {
          setLoading(false);
       }
    }, []);
+
+   const getCategoryNameById = useCallback(async (categoryId: number | undefined): Promise<string> => {
+      if (!categoryId) return 'Chưa có danh mục';
+
+      // Kiểm tra nếu đã có trong cache
+      const cachedCategory = categories.find(c => c.id === categoryId);
+      if (cachedCategory && cachedCategory.name) {
+         return cachedCategory.name;
+      }
+
+      try {
+         const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+         if (!token) return `ID: ${categoryId}`;
+
+         // Sửa lại URL API endpoint đúng với cấu trúc của bạn
+         const response = await fetch(`http://localhost:3000/api/categories/${categoryId}`, {
+            headers: {
+               'Authorization': `Bearer ${token}`
+            }
+         });
+
+         if (!response.ok) {
+            console.error(`Không thể lấy thông tin danh mục ID: ${categoryId}`);
+            return `ID: ${categoryId}`;
+         }
+
+         const categoryData = await response.json();
+
+         // Cập nhật cache categories
+         if (categoryData && categoryData.name) {
+            setCategories(prev => {
+               const exists = prev.some(c => c.id === categoryId);
+               if (!exists) {
+                  return [...prev, categoryData];
+               }
+               return prev.map(c => c.id === categoryId ? categoryData : c);
+            });
+
+            return categoryData.name;
+         }
+
+         return `ID: ${categoryId}`;
+      } catch (error) {
+         console.error(`Lỗi khi lấy thông tin danh mục ${categoryId}:`, error);
+         return `ID: ${categoryId}`;
+      }
+   }, [categories]);
 
    // Handle edit product
    const handleEditProduct = useCallback((productId: number) => {
@@ -931,7 +1038,7 @@ export default function ProductManagement() {
                {error && (
                   <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded flex items-start">
                      <svg className="h-5 w-5 text-red-400 mr-2 mt-0.5 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293-1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
                      </svg>
                      <div className="flex-1">
                         <p className="font-medium">Đã xảy ra lỗi</p>
@@ -954,6 +1061,7 @@ export default function ProductManagement() {
                   fetchAllProductData={fetchAllProductData}
                   handleEditProduct={handleEditProduct}
                   handleDeleteProduct={handleDeleteProduct}
+                  getCategoryNameById={getCategoryNameById}
                />
             </main>
          </div>
