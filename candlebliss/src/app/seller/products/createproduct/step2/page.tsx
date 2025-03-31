@@ -18,6 +18,16 @@ interface Variant {
    detailId?: number; // Thêm field này để lưu ID của product detail
 }
 
+// Add a LoadingOverlay component
+const LoadingOverlay = ({ message = "Đang xử lý..." }: { message?: string }) => (
+   <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white p-6 rounded-lg shadow-lg max-w-sm w-full text-center">
+         <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-amber-500 mb-4"></div>
+         <p className="text-gray-700">{message}</p>
+      </div>
+   </div>
+);
+
 export default function Step2() {
    const router = useRouter();
    const { formData, updateFormData } = useProductForm();
@@ -33,6 +43,7 @@ export default function Step2() {
    const [errors, setErrors] = useState<{ [key: string]: string }>({});
    const [isFormValid, setIsFormValid] = useState<boolean>(true);
    const [isLoading, setIsLoading] = useState(false);
+   const [loadingMessage, setLoadingMessage] = useState("Đang xử lý...");
 
    // Validation rules
    const VALIDATION_RULES = {
@@ -261,6 +272,7 @@ export default function Step2() {
 
       // Set loading state to true before starting the process
       setIsLoading(true);
+      setLoadingMessage("Đang chuẩn bị xử lý dữ liệu sản phẩm...");
 
       try {
          // Lấy token và productId từ context
@@ -283,6 +295,7 @@ export default function Step2() {
 
          // Lưu từng biến thể vào database
          for (let i = 0; i < updatedVariants.length; i++) {
+            setLoadingMessage(`Đang xử lý phiên bản ${i + 1}/${updatedVariants.length}...`);
             const variant = updatedVariants[i];
 
             // Tạo FormData cho biến thể sản phẩm
@@ -296,6 +309,7 @@ export default function Step2() {
 
             // Thêm hình ảnh cho biến thể nếu có
             if (variant.images && variant.images.length > 0) {
+               setLoadingMessage(`Đang xử lý hình ảnh cho phiên bản ${i + 1}...`);
                for (const imgUrl of variant.images) {
                   if (imgUrl.startsWith('blob:')) {
                      try {
@@ -313,6 +327,7 @@ export default function Step2() {
             }
 
             // Gửi request tạo chi tiết sản phẩm
+            setLoadingMessage(`Đang lưu thông tin phiên bản ${i + 1}...`);
             const detailResponse = await fetch('http://localhost:3000/api/product-details', {
                method: 'POST',
                headers: {
@@ -338,12 +353,14 @@ export default function Step2() {
          setVariants(updatedVariants);
 
          // Cập nhật dữ liệu trong context với IDs của các biến thể
+         setLoadingMessage("Đang cập nhật dữ liệu...");
          updateFormData({
             ...formData,
             variants: updatedVariants, // Sử dụng updatedVariants thay vì variants
          });
 
          // Chuyển đến bước tiếp theo
+         setLoadingMessage("Hoàn tất! Đang chuyển hướng...");
          router.push('/seller/products/createproduct/step3');
       } catch (error) {
          console.error('Error creating product variants:', error);
@@ -355,6 +372,9 @@ export default function Step2() {
 
    return (
       <div className='flex h-screen bg-gray-50'>
+         {/* Show the loading overlay when isLoading is true */}
+         {isLoading && <LoadingOverlay message={loadingMessage} />}
+
          {/* Sidebar */}
          <MenuSideBar />
 

@@ -921,7 +921,7 @@ export default function ProductManagement() {
 
    // Handle edit product
    const handleEditProduct = useCallback((productId: number) => {
-      router.push(`/seller/products/edit/${productId}`);
+      router.push(`/seller/products/${productId}`);
    }, [router]);
 
    // Handle delete product confirmation
