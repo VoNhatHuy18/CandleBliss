@@ -190,50 +190,6 @@ export default function Step1() {
          setIsCategoriesLoading(false);
       }
    };
-
-   // Hàm lấy thông tin chi tiết của một danh mục theo ID
-   const fetchCategoryById = async (categoryId: number) => {
-      try {
-         setIsCategoryDetailLoading(true);
-
-         const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-         if (!token) {
-            return null;
-         }
-
-         const response = await fetch(`http://localhost:3000/api/categories/${categoryId}`, {
-            headers: {
-               'Authorization': `Bearer ${token}`
-            },
-            // Thêm tùy chọn để không tự động theo chuyển hướng
-            redirect: 'manual'
-         });
-
-         // Xử lý mã trạng thái cụ thể
-         if (response.status === 302) {
-            // Phiên đăng nhập đã hết hạn hoặc token không hợp lệ
-            localStorage.removeItem('token');
-            sessionStorage.removeItem('token');
-
-            setCategoryError('Phiên làm việc đã hết hạn. Vui lòng đăng nhập lại.');
-            return null;
-         }
-
-         if (!response.ok) {
-            throw new Error(`Failed to fetch category details: ${response.status}`);
-         }
-
-         const categoryData = await response.json();
-         setSelectedCategory(categoryData);
-         return categoryData;
-      } catch (error) {
-         console.error(`Error fetching category details for ID ${categoryId}:`, error);
-         return null;
-      } finally {
-         setIsCategoryDetailLoading(false);
-      }
-   };
-
    const handleOpenCategoryDropdown = () => {
       setIsCategoryDropdownOpen(!isCategoryDropdownOpen);
    };
