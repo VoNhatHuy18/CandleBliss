@@ -33,7 +33,7 @@ export default function Step3() {
    const [promotion, setPromotion] = useState('');
    const [isLoading, setIsLoading] = useState(false);
    const [calculatedPrice, setCalculatedPrice] = useState('');
-   
+
    // Add toast state
    const [toast, setToast] = useState({
       show: false,
@@ -53,7 +53,7 @@ export default function Step3() {
    // Initialize dates if empty
    useEffect(() => {
       console.log("Received form data:", formData);
-      
+
       if (!startDate) {
          setStartDate(new Date().toISOString().split('T')[0]);
       }
@@ -79,13 +79,14 @@ export default function Step3() {
 
    // Calculate display price whenever basePrice or discountPrice changes
    useEffect(() => {
-      if (discountPrice && Number(discountPrice) > 0 && Number(discountPrice) < Number(basePrice)) {
-         setCalculatedPrice(discountPrice);
+      if (discountPrice && Number(discountPrice) > 0 && Number(discountPrice) <= 100) {
+         const discountAmount = (Number(basePrice) * Number(discountPrice)) / 100;
+         const finalPrice = Number(basePrice) - discountAmount;
+         setCalculatedPrice(finalPrice.toString());
       } else {
          setCalculatedPrice(basePrice);
       }
    }, [basePrice, discountPrice]);
-
    // Toggle expanded state of a variant
    const toggleVariantExpanded = (index: number) => {
       const updatedVariants = [...variants];
@@ -99,7 +100,7 @@ export default function Step3() {
          return false;
       }
 
-      if (discountPrice && Number(discountPrice) > Number(basePrice)) {
+      if (discountPrice && (Number(discountPrice) < 0 || Number(discountPrice) > 100)) {
          return false;
       }
 
@@ -156,9 +157,17 @@ export default function Step3() {
                new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
             // Tạo dữ liệu giá
+            const basePriceValue = Number(basePrice) || 0;
+            const discountPercentage = Number(discountPrice) || 0;
+            let discountPriceValue = 0;
+
+            if (discountPercentage > 0 && discountPercentage <= 100) {
+               discountPriceValue = basePriceValue - (basePriceValue * discountPercentage / 100);
+            }
+
             const priceData = {
-               base_price: Number(basePrice) || 0,
-               discount_price: Number(discountPrice) || 0,
+               base_price: basePriceValue,
+               discount_price: discountPriceValue,
                start_date: formattedStartDate,
                end_date: formattedEndDate,
                productId: variant.detailId, // Sử dụng detailId
@@ -227,7 +236,7 @@ export default function Step3() {
       } catch (error) {
          console.error('Error creating product pricing:', error);
          showToast(
-            `Lỗi khi cài đặt giá sản phẩm: ${error instanceof Error ? error.message : 'Lỗi không xác định'}`, 
+            `Lỗi khi cài đặt giá sản phẩm: ${error instanceof Error ? error.message : 'Lỗi không xác định'}`,
             'error'
          );
       } finally {
@@ -563,17 +572,24 @@ export default function Step3() {
                            />
                         </div>
 
-                        {/* Giá khuyến mãi */}
+                        {/* Giá khuyến mãi thành phần trăm khuyến mãi */}
                         <div className='mb-4'>
                            <label className='block text-sm font-medium mb-1'>
-                              Giá khuyến mãi (VNĐ)
+                              Phần trăm khuyến mãi (%)
                            </label>
                            <input
                               type='number'
                               className='w-full p-2 border rounded-md'
                               value={discountPrice}
-                              onChange={(e) => setDiscountPrice(e.target.value)}
-                              placeholder='Nhập giá khuyến mãi (nếu có)'
+                              onChange={(e) => {
+                                 const value = e.target.value;
+                                 if (Number(value) >= 0 && Number(value) <= 100) {
+                                    setDiscountPrice(value);
+                                 }
+                              }}
+                              min="0"
+                              max="100"
+                              placeholder='Nhập % khuyến mãi (nếu có)'
                            />
                         </div>
                      </div>
@@ -691,11 +707,11 @@ export default function Step3() {
                </div>
             </main>
             {/* Add Toast component at the end of your return statement */}
-            <Toast 
+            <Toast
                show={toast.show}
                message={toast.message}
                type={toast.type}
-               onClose={() => setToast(prev => ({ ...prev, show: false }))} 
+               onClose={() => setToast(prev => ({ ...prev, show: false }))}
                duration={3000}
                position="top-right"
             />

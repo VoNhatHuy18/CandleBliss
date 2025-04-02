@@ -35,6 +35,7 @@ export default function EditVoucher() {
    const [error, setError] = useState('');
    const [discountType, setDiscountType] = useState<'percent' | 'fixed'>('percent');
    const [hasLimitedUses, setHasLimitedUses] = useState(true);
+   
 
    // Format currency for display
    const formatCurrency = (amount: number) => {
@@ -156,7 +157,7 @@ export default function EditVoucher() {
          const token = localStorage.getItem('token') || sessionStorage.getItem('token');
          
          // Only include fields that have changed in update request
-         const changedFields: Partial<Voucher> = {};
+         const changedFields: Record<string, string | number | boolean | null> = {};
          
          Object.keys(voucher).forEach((key) => {
             const voucherKey = key as keyof Voucher;

@@ -599,45 +599,65 @@ export default function ProductDetailPage() {
 
                   {/* Thumbnails Gallery - Show all images in a single row */}
                   <div className='flex flex-wrap -mx-1 overflow-x-auto pb-2'>
-                     {/* Combine product and detail images into a single array for display */}
-                     {[
-                        // Detail images first if available
-                        ...(selectedDetail?.images && selectedDetail.images.length > 0
-                           ? selectedDetail.images.map((img, index) => ({
-                              path: img.path,
-                              id: `detail-${index}`,
-                              source: 'detail',
-                              sourceIndex: index,
-                              label: `${product.name} variant ${index + 1}`
-                           }))
-                           : []),
-                        // Then product images
-                        ...(Array.isArray(product.images) && product.images.length > 0
-                           ? product.images.map((img, index) => ({
-                              path: img.path,
-                              id: `product-${index}`,
-                              source: 'product',
-                              sourceIndex: index,
-                              label: `${product.name} image ${index + 1}`
-                           }))
-                           : [])
-                     ].map((img, combinedIndex) => (
+                     {/* Map all images with their detail metadata */}
+                     {productDetails.map((detail) =>
+                        // Only show images from active product details
+                        detail.isActive && detail.images && detail.images.map((img, detailImgIndex) => (
+                           <div
+                              key={`detail-${detail.id}-${detailImgIndex}`}
+                              className={`p-1 w-1/6 cursor-pointer ${selectedDetailId === detail.id && activeThumbnail === detailImgIndex
+                                    ? 'ring-2 ring-orange-500'
+                                    : ''
+                                 }`}
+                              onClick={() => {
+                                 // When clicking on a detail image, set both the detail and the image
+                                 setSelectedDetailId(detail.id);
+                                 setSelectedSize(detail.size);
+                                 setSelectedType(detail.type);
+                                 setActiveThumbnail(detailImgIndex);
+                              }}
+                           >
+                              <div className='relative bg-white h-16 rounded shadow-sm'>
+                                 <Image
+                                    src={img.path || '/images/placeholder.jpg'}
+                                    alt={`${product.name} - ${detail.size} ${detail.values}`}
+                                    layout='fill'
+                                    objectFit='contain'
+                                    className='p-1'
+                                 />
+                                 {/* Show detail info on thumbnail */}
+                                 <div className="absolute bottom-0 right-0 left-0 bg-black bg-opacity-30 text-white text-xs px-1 text-center truncate">
+                                    {detail.size} - {detail.values || detail.type}
+                                 </div>
+                              </div>
+                           </div>
+                        ))
+                     )}
+
+                     {/* Product generic images */}
+                     {Array.isArray(product.images) && product.images.map((img, productImgIndex) => (
                         <div
-                           key={img.id}
-                           className={`p-1 w-1/6 cursor-pointer ${activeThumbnail === combinedIndex ? 'ring-2 ring-orange-500' : ''}`}
-                           onClick={() => setActiveThumbnail(combinedIndex)}
+                           key={`product-${productImgIndex}`}
+                           className={`p-1 w-1/6 cursor-pointer ${activeThumbnail === ((selectedDetail?.images?.length || 0) + productImgIndex)
+                                 ? 'ring-2 ring-orange-500'
+                                 : ''
+                              }`}
+                           onClick={() => {
+                              // When clicking on a product image, adjust the index to account for detail images
+                              const detailImagesLength = selectedDetail?.images?.length || 0;
+                              setActiveThumbnail(detailImagesLength + productImgIndex);
+                           }}
                         >
                            <div className='relative bg-white h-16 rounded shadow-sm'>
                               <Image
                                  src={img.path || '/images/placeholder.jpg'}
-                                 alt={img.label}
+                                 alt={`${product.name} image ${productImgIndex + 1}`}
                                  layout='fill'
                                  objectFit='contain'
                                  className='p-1'
                               />
-                              {/* Optional: Source indicator */}
                               <div className="absolute bottom-0 right-0 left-0 bg-black bg-opacity-30 text-white text-xs px-1 text-center">
-                                 {img.source === 'detail' ? '' : ''}
+                                 Sản phẩm
                               </div>
                            </div>
                         </div>

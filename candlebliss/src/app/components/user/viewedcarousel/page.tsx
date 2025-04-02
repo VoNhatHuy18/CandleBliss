@@ -1,329 +1,255 @@
 'use client';
 
-import { useRef, useEffect, useState } from 'react';
-import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
-import { ShoppingBagIcon, HeartIcon } from '@heroicons/react/24/outline';
+import { useState, useEffect } from 'react';
+import { Eye, ShoppingCart, Star, StarHalf } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 
-const products = [
-   {
-      id: 1,
-      name: 'Nến Thơm Quế',
-      description: 'Hương thơm đặc trưng của Quế',
-      price: '650,000đ',
-      discount: '-5%',
-      originalPrice: '685,000đ',
-      image: '/images/trending.png',
-      isNew: false,
-      rating: 4.5,
-   },
-   {
-      id: 2,
-      name: 'Nến Thơm Nhiệt Đới',
-      description: 'Mùi thơm của mùa hè',
-      price: '650,000đ',
-      discount: '-10%',
-      originalPrice: '722,000đ',
-      image: '/images/trending.png',
-      isNew: false,
-      rating: 4.2,
-   },
-   {
-      id: 3,
-      name: 'Nến Thơm Cà Phê',
-      description: 'Mùi hương của cà phê',
-      price: '650,000đ',
-      discount: null,
-      originalPrice: null,
-      image: '/images/trending.png',
-      isNew: false,
-      rating: 4.7,
-   },
-   {
-      id: 4,
-      name: 'Nến Thơm Thư Giãn',
-      description: 'Mùi hương của sự yên bình',
-      price: '500,000đ',
-      discount: null,
-      originalPrice: null,
-      image: '/images/trending.png',
-      isNew: true,
-      rating: 5.0,
-   },
-   {
-      id: 5,
-      name: 'Nến Thơm Trà Trắng',
-      description: 'Mùi thơm của thiên nhiên',
-      price: '200,000đ',
-      discount: null,
-      originalPrice: null,
-      image: '/images/trending.png',
-      isNew: true,
-      rating: 4.8,
-   },
-   {
-      id: 6,
-      name: 'Nến Thơm Hoa Nhài',
-      description: 'Hương hoa nhài dịu nhẹ',
-      price: '350,000đ',
-      discount: '-15%',
-      originalPrice: '412,000đ',
-      image: '/images/trending.png',
-      isNew: false,
-      rating: 4.6,
-   },
-];
+// Interface for viewed products
+interface ViewedProduct {
+   id: number;
+   name: string;
+   image: string;
+   price: number;
+   discountPrice: number | null;
+   timestamp: number;
+   description?: string;
+   rating?: number;
+   hasVariants?: boolean;
+}
 
-export default function GlideSlide() {
-   const sliderRef = useRef<HTMLDivElement>(null);
-   const [currentIndex, setCurrentIndex] = useState(0);
-   const [isHovering, setIsHovering] = useState(false);
+export default function ViewedCarousel() {
+   const [viewedProducts, setViewedProducts] = useState<ViewedProduct[]>([]);
+   const [loading, setLoading] = useState(true);
 
-   const visibleItems = 4; // Number of items visible at once
-   const totalItems = products.length;
+   // Thêm hook để đảm bảo giá được tính toán lại sau khi client-side hydration
+   const [formattedPrices, setFormattedPrices] = useState<Record<number, {
+      price: string,
+      discountPrice: string | null
+   }>>({});
 
+   // Load viewed products from localStorage
    useEffect(() => {
-      if (isHovering) return; // Don't auto-scroll when user is hovering
+      // Only run on client side
+      if (typeof window !== 'undefined') {
+         try {
+            const storedProducts = localStorage.getItem('viewedProducts');
+            if (storedProducts) {
+               const parsedProducts = JSON.parse(storedProducts);
+               console.log("Loaded viewed products:", parsedProducts);
 
-      const interval = setInterval(() => {
-         handleNext();
-      }, 4000);
-      return () => clearInterval(interval);
-   }, [isHovering, currentIndex]);
+               // Kiểm tra và log chi tiết để debug
+               if (Array.isArray(parsedProducts)) {
+                  parsedProducts.forEach((product: any, index: number) => {
+                     console.log(`Product ${index} - ${product.name}:`, {
+                        price: typeof product.price,
+                        priceValue: product.price,
+                        discountPrice: typeof product.discountPrice,
+                        discountPriceValue: product.discountPrice
+                     });
+                  });
+               }
 
-   const handlePrev = () => {
-      if (sliderRef.current) {
-         const newIndex = Math.max(currentIndex - 1, 0);
-         setCurrentIndex(newIndex);
-
-         const cardWidth = sliderRef.current.querySelector('div')?.clientWidth || 0;
-         const gap = 16; // gap-4 = 16px
-         sliderRef.current.scrollLeft = newIndex * (cardWidth + gap);
-      }
-   };
-
-   const handleNext = () => {
-      if (sliderRef.current) {
-         const newIndex =
-            currentIndex + 1 >= Math.ceil(totalItems - visibleItems + 1) ? 0 : currentIndex + 1;
-         setCurrentIndex(newIndex);
-
-         if (newIndex === 0) {
-            sliderRef.current.scrollLeft = 0;
-         } else {
-            const cardWidth = sliderRef.current.querySelector('div')?.clientWidth || 0;
-            const gap = 16; // gap-4 = 16px
-            sliderRef.current.scrollLeft = newIndex * (cardWidth + gap);
+               setViewedProducts(parsedProducts);
+            }
+         } catch (error) {
+            console.error('Error loading viewed products:', error);
+         } finally {
+            setLoading(false);
          }
       }
+   }, []);
+
+   // Tính toán giá đã format sau khi component đã mount
+   useEffect(() => {
+      if (viewedProducts.length > 0) {
+         const prices: Record<number, { price: string, discountPrice: string | null }> = {};
+
+         viewedProducts.forEach(product => {
+            prices[product.id] = {
+               price: formatPrice(product.price),
+               discountPrice: product.discountPrice ? formatPrice(product.discountPrice) : null
+            };
+         });
+
+         setFormattedPrices(prices);
+      }
+   }, [viewedProducts]);
+
+   // Debug viewed products data
+   useEffect(() => {
+      if (viewedProducts.length > 0) {
+         console.log("Viewed products data:", viewedProducts);
+      }
+   }, [viewedProducts]);
+
+   // If no viewed products or still loading, return empty
+   if (loading || viewedProducts.length === 0) {
+      return null;
+   }
+
+   // Format price helper function
+   const formatPrice = (price: number | string | null): string => {
+      if (price === null || price === undefined) return "0";
+
+      // Chuyển đổi giá trị thành số
+      let numPrice: number;
+
+      if (typeof price === 'string') {
+         // Nếu price là chuỗi, loại bỏ các ký tự định dạng và chuyển thành số
+         numPrice = parseFloat(price.replace(/[^\d.]/g, ''));
+      } else {
+         numPrice = price;
+      }
+
+      // Kiểm tra nếu không phải là số hợp lệ
+      if (isNaN(numPrice)) return "0";
+
+      // Format số với dấu phẩy ngăn cách hàng nghìn
+      return numPrice.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
    };
 
-   // Generate star rating UI
-   const renderRating = (rating: number) => {
+   // Giới hạn số lượng sản phẩm hiển thị
+   const displayLimit = 4;
+   const displayProducts = viewedProducts.slice(0, displayLimit);
+
+   // Helper function to render rating stars
+   const renderStars = (rating: number = 4.5) => {
       const stars = [];
       const fullStars = Math.floor(rating);
       const hasHalfStar = rating % 1 !== 0;
 
       for (let i = 0; i < fullStars; i++) {
-         stars.push(
-            <svg
-               key={`full-${i}`}
-               className='w-4 h-4 text-amber-400'
-               fill='currentColor'
-               viewBox='0 0 20 20'
-            >
-               <path d='M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z'></path>
-            </svg>,
-         );
+         stars.push(<Star key={`star-${i}`} className="w-4 h-4 fill-yellow-400 text-yellow-400" />);
       }
 
       if (hasHalfStar) {
          stars.push(
-            <svg
-               key='half'
-               className='w-4 h-4 text-amber-400'
-               fill='currentColor'
-               viewBox='0 0 20 20'
-            >
-               <defs>
-                  <linearGradient id='halfGradient'>
-                     <stop offset='50%' stopColor='currentColor' />
-                     <stop offset='50%' stopColor='#D1D5DB' />
-                  </linearGradient>
-               </defs>
-               <path
-                  fill='url(#halfGradient)'
-                  d='M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z'
-               ></path>
-            </svg>,
+            <StarHalf key="half-star" className="w-4 h-4 fill-yellow-400 text-yellow-400" />,
          );
       }
 
-      // Add empty stars
-      for (let i = stars.length; i < 5; i++) {
-         stars.push(
-            <svg
-               key={`empty-${i}`}
-               className='w-4 h-4 text-gray-300'
-               fill='currentColor'
-               viewBox='0 0 20 20'
-            >
-               <path d='M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z'></path>
-            </svg>,
-         );
+      const remainingStars = 5 - Math.ceil(rating);
+      for (let i = 0; i < remainingStars; i++) {
+         stars.push(<Star key={`empty-star-${i}`} className="w-4 h-4 text-yellow-400" />);
       }
 
       return stars;
    };
 
+   // Handle add to cart
+   const handleAddToCart = (product: ViewedProduct) => {
+      const cartItem = {
+         productId: product.id,
+         name: product.name,
+         price: product.discountPrice || product.price,
+         quantity: 1,
+         imageUrl: product.image
+      };
+
+      const cartItems = JSON.parse(localStorage.getItem('cart') || '[]');
+
+      const existingItemIndex = cartItems.findIndex(
+         (item: any) => item.productId === product.id
+      );
+
+      if (existingItemIndex >= 0) {
+         cartItems[existingItemIndex].quantity += 1;
+      } else {
+         cartItems.push(cartItem);
+      }
+
+      localStorage.setItem('cart', JSON.stringify(cartItems));
+      alert('Đã thêm sản phẩm vào giỏ hàng!');
+   };
+
    return (
-      <div className='relative w-full max-w-7xl mx-auto px-4 my-12'>
-         {/* Section Header */}
-         <div className='flex justify-between items-center mb-8'>
-            <div>
-               <h2 className='text-3xl font-bold text-gray-800 font-mont'>
-                  Sản Phẩm Đã Xem Gần Đây
-               </h2>
-               <div className='h-1 w-24 bg-amber-500 mt-2'></div>
-            </div>
-            <div className='hidden md:flex space-x-2'>
-               <button
-                  onClick={handlePrev}
-                  className='p-2 rounded-full border border-gray-300 hover:bg-amber-50 hover:border-amber-300 transition-colors'
-                  aria-label='Previous'
-               >
-                  <ChevronLeftIcon className='h-5 w-5 text-gray-600' />
-               </button>
-               <button
-                  onClick={handleNext}
-                  className='p-2 rounded-full border border-gray-300 hover:bg-amber-50 hover:border-amber-300 transition-colors'
-                  aria-label='Next'
-               >
-                  <ChevronRightIcon className='h-5 w-5 text-gray-600' />
-               </button>
-            </div>
+      <div className="my-12">
+         <div className="px-4 pb-8">
+            <p className="text-center text-[#555659] text-lg font-mont">G Ầ N &nbsp; Đ Â Y</p>
+            <p className="text-center font-mont font-semibold text-xl lg:text-3xl pb-4">Sản Phẩm Đã Xem</p>
          </div>
 
-         {/* Carousel Container */}
-         <div className='relative overflow-hidden'>
-            <div
-               ref={sliderRef}
-               className='flex gap-4 overflow-x-scroll scrollbar-hide scroll-smooth transition-transform duration-500'
-               onMouseEnter={() => setIsHovering(true)}
-               onMouseLeave={() => setIsHovering(false)}
-            >
-               {products.map((product) => (
-                  <div
-                     key={product.id}
-                     className='min-w-[280px] max-w-[280px] group bg-white rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-all duration-300'
-                  >
-                     {/* Product Image Container */}
-                     <div className='relative h-60 overflow-hidden bg-[#F9F6F3]'>
-                        {product.discount && (
-                           <span className='absolute top-3 left-3 z-10 bg-red-500 text-white text-xs font-bold px-2 py-1 rounded'>
-                              {product.discount}
-                           </span>
-                        )}
-                        {product.isNew && (
-                           <span className='absolute top-3 left-3 z-10 bg-amber-800 text-white text-xs font-bold px-2 py-1 rounded'>
-                              Mới
-                           </span>
-                        )}
-
-                        {/* Product Image */}
-                        <Image
-                           src={product.image}
-                           alt={product.name}
-                           width={280}
-                           height={240}
-                           className='w-full h-full object-cover transition-transform duration-500 group-hover:scale-105'
-                        />
-
-                        {/* Quick action buttons - visible on hover */}
-                        <div className='absolute bottom-0 left-0 right-0 flex justify-center items-center gap-2 translate-y-full group-hover:translate-y-0 transition-transform duration-300 bg-gradient-to-t from-black/70 to-transparent p-4'>
-                           <button className='bg-white rounded-full p-2 hover:bg-amber-500 hover:text-white transition-colors'>
-                              <HeartIcon className='h-5 w-5' />
+         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 px-4 lg:px-0 max-w-7xl mx-auto">
+            {displayProducts.map((product) => (
+               <div key={product.id} className="rounded-lg bg-white p-3 shadow-lg hover:shadow-md transition-shadow">
+                  <div className="relative aspect-square overflow-hidden rounded-lg group">
+                     <Image
+                        src={product.image || '/images/placeholder.jpg'}
+                        alt={product.name}
+                        height={400}
+                        width={400}
+                        className="h-full w-full object-cover transition-all duration-300 group-hover:blur-sm"
+                     />
+                     <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                        <Link href={`/user/products/${product.id}`}>
+                           <button
+                              className="bg-white/90 hover:bg-white text-gray-800 px-4 py-2 rounded-full flex items-center gap-2 transition-colors duration-200 border border-black"
+                           >
+                              <Eye className="w-4 h-4" />
+                              <span>Xem chi tiết</span>
                            </button>
-                           <button className='bg-[#553C26] text-white px-4 py-2 rounded-full flex items-center gap-1 hover:bg-amber-600 transition-colors'>
-                              <ShoppingBagIcon className='h-5 w-5' />
-                              <span>Thêm vào giỏ</span>
-                           </button>
-                        </div>
-                     </div>
-
-                     {/* Product Details */}
-                     <div className='p-4 bg-white'>
-                        {/* Rating */}
-                        <div className='flex items-center mb-2'>
-                           <div className='flex items-center'>{renderRating(product.rating)}</div>
-                           <span className='text-xs text-gray-500 ml-2'>({product.rating})</span>
-                        </div>
-
-                        {/* Product Name */}
-                        <Link href={`/product/${product.id}`}>
-                           <h3 className='font-medium text-gray-800 hover:text-amber-600 transition-colors cursor-pointer mb-1 font-mont'>
-                              {product.name}
-                           </h3>
                         </Link>
-
-                        {/* Description */}
-                        <p className='text-sm text-gray-500 mb-3 line-clamp-2'>
-                           {product.description}
-                        </p>
-
-                        {/* Price */}
-                        <div className='flex items-center'>
-                           <span className='text-lg font-semibold text-amber-800'>
-                              {product.price}
-                           </span>
-                           {product.originalPrice && (
-                              <span className='ml-2 text-sm text-gray-500 line-through'>
-                                 {product.originalPrice}
-                              </span>
-                           )}
-                        </div>
+                        <button
+                           onClick={() => handleAddToCart(product)}
+                           className="bg-white/90 hover:bg-white text-gray-800 px-4 py-2 rounded-full flex items-center gap-2 transition-colors duration-200 border border-black"
+                        >
+                           <ShoppingCart className="w-4 h-4" />
+                           <span>Thêm vào giỏ</span>
+                        </button>
                      </div>
                   </div>
-               ))}
-            </div>
+                  <div className="mt-3">
+                     <h3 className="text-sm font-medium text-gray-700 mb-1">{product.name}</h3>
+                     <p className="text-xs text-gray-500 line-clamp-2 mb-1">
+                        {product.description || ''}
+                     </p>
 
-            {/* Mobile navigation buttons */}
-            <div className='md:hidden flex justify-between w-full absolute top-1/2 transform -translate-y-1/2 px-2 pointer-events-none'>
-               <button
-                  onClick={handlePrev}
-                  className='bg-white/80 backdrop-blur-sm p-2 rounded-full shadow-md hover:bg-white pointer-events-auto'
-               >
-                  <ChevronLeftIcon className='h-5 w-5 text-gray-700' />
-               </button>
-               <button
-                  onClick={handleNext}
-                  className='bg-white/80 backdrop-blur-sm p-2 rounded-full shadow-md hover:bg-white pointer-events-auto'
-               >
-                  <ChevronRightIcon className='h-5 w-5 text-gray-700' />
-               </button>
-            </div>
-         </div>
 
-         {/* Progress Indicators */}
-         <div className='flex justify-center mt-6 gap-2'>
-            {[...Array(Math.ceil(totalItems / visibleItems))].map((_, index) => (
-               <button
-                  key={index}
-                  className={`w-2 h-2 rounded-full transition-all ${
-                     index === currentIndex ? 'bg-amber-500 w-6' : 'bg-gray-300'
-                  }`}
-                  onClick={() => {
-                     setCurrentIndex(index);
-                     if (sliderRef.current) {
-                        const cardWidth = sliderRef.current.querySelector('div')?.clientWidth || 0;
-                        const gap = 16;
-                        sliderRef.current.scrollLeft = index * visibleItems * (cardWidth + gap);
-                     }
-                  }}
-               />
+
+                     <div className="flex items-center">{renderStars(product.rating || 4.5)}</div>
+                     <div className="mt-1">
+
+
+                        {/* Sử dụng formattedPrices thay vì gọi formatPrice trực tiếp */}
+                        {formattedPrices[product.id] && (
+                           <div>
+                              {product.discountPrice ? (
+                                 <div className="flex items-center gap-2">
+                                    <p className="text-sm font-medium text-red-600">
+                                       {formattedPrices[product.id].discountPrice}đ
+                                    </p>
+                                    <p className="text-xs text-gray-500 line-through">
+                                       {formattedPrices[product.id].price}đ
+                                    </p>
+                                 </div>
+                              ) : (
+                                 <p className="text-sm font-medium text-red-600">
+                                    {formattedPrices[product.id].price}đ
+                                 </p>
+                              )}
+                           </div>
+                        )}
+
+                        {/* Phương án dự phòng - hiển thị trực tiếp nếu formattedPrices chưa sẵn sàng */}
+                        {!formattedPrices[product.id] && (
+                           <p className="text-sm font-medium text-red-600">
+                              {product.discountPrice ? formatPrice(product.discountPrice) : formatPrice(product.price)}đ
+                           </p>
+                        )}
+                     </div>
+                  </div>
+               </div>
             ))}
          </div>
+
+         {viewedProducts.length > displayLimit && (
+            <div className="text-center mt-8">
+               <Link href="/user/products" className="inline-block bg-orange-700 text-white px-6 py-2 rounded-md hover:bg-orange-800 transition-colors">
+                  Xem tất cả sản phẩm
+               </Link>
+            </div>
+         )}
       </div>
    );
 }

@@ -78,6 +78,14 @@ const formatPrice = (price: number): string => {
    }).format(price);
 };
 
+// Utility to calculate discount percentage
+const calculateDiscountPercent = (basePrice: number, discountPrice: number): number => {
+   if (!basePrice || !discountPrice || basePrice <= 0) return 0;
+   // Calculate the discount percentage
+   const discountPercent = Math.round((1 - discountPrice / basePrice) * 100);
+   return discountPercent > 0 ? discountPercent : 0;
+};
+
 // Loading Skeleton Component
 const TableSkeleton = () => {
    return (
@@ -623,9 +631,10 @@ const ProductTable = ({
                                        <tbody className="bg-white divide-y divide-gray-200">
                                           {product.details.map((detail) => {
                                              const priceInfo = detailPrices[detail.id] || { base_price: 0, discount_price: null };
-                                             const discountPercent = priceInfo.discount_price && priceInfo.base_price
-                                                ? Math.round((1 - priceInfo.discount_price / priceInfo.base_price) * 100)
-                                                : 0;
+                                             const discountPercent = calculateDiscountPercent(
+                                                priceInfo.base_price,
+                                                priceInfo.discount_price || 0
+                                             );
 
                                              return (
                                                 <tr key={detail.id} className="hover:bg-gray-50 transition-colors">
@@ -927,11 +936,11 @@ export default function ProductManagement() {
    // Handle delete product confirmation
    const handleDeleteProduct = useCallback((productId: number) => {
       const productToDelete = products.find(product => product.id === productId);
-      
+
       if (productToDelete) {
          // Set the product ID to delete
          setProductToDelete(productId);
-         
+
          // Show the confirmation modal with product details
          setIsDeleteConfirmOpen(true);
       } else {
@@ -968,20 +977,20 @@ export default function ProductManagement() {
          if (response.ok) {
             // Remove the product from local state to update UI immediately
             setProducts(prev => prev.filter(product => product.id !== productToDelete));
-            
+
             // Show success message with toast instead of alert
             showToast('Sản phẩm đã được xóa thành công', 'success');
-            
+
             // Close the modal
             setIsDeleteConfirmOpen(false);
             setProductToDelete(null);
-            
+
             // Refresh the product list to ensure everything is in sync
             await fetchAllProductData();
          } else {
             // If deletion failed, get error details
             let errorMessage = 'Không thể xóa sản phẩm';
-            
+
             try {
                // Try to parse error response as JSON
                const errorData = await response.json();
@@ -996,7 +1005,7 @@ export default function ProductManagement() {
                   errorMessage = `Không thể xóa sản phẩm (${response.status}: ${response.statusText})`;
                }
             }
-            
+
             throw new Error(errorMessage);
          }
       } catch (err) {
@@ -1019,7 +1028,7 @@ export default function ProductManagement() {
          case 'Khuyến Mãi':
             return products.filter((product) =>
                product.pricing?.some(
-                  (price) => price.discount_price > 0 && price.discount_price < price.base_price,
+                  (price) => calculateDiscountPercent(price.base_price, price.discount_price) > 0
                ),
             );
          case 'Hết hàng':
@@ -1044,7 +1053,7 @@ export default function ProductManagement() {
          'Tất cả': products.length,
          'Hoạt động': products.filter(p => p.details?.some(d => d.isActive)).length,
          'Khuyến Mãi': products.filter(p => p.pricing?.some(
-            price => price.discount_price > 0 && price.discount_price < price.base_price)).length,
+            price => calculateDiscountPercent(price.base_price, price.discount_price) > 0)).length,
          'Hết hàng': products.filter(p => {
             const totalQuantity = p.details?.reduce((sum, d) => sum + (Number(d.quantities) || 0), 0) || 0;
             return totalQuantity === 0;

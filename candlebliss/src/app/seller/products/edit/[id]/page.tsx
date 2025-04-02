@@ -723,34 +723,7 @@ export default function EditProduct() {
         });
     };
 
-    const updateDetailPrice = async (detailId: number, priceData: Price) => {
-        try {
-            const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-            if (!token) return false;
 
-            const response = await fetch(`http://localhost:3000/api/v1/prices/product-detail/${detailId}`, {
-                method: 'PATCH',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    base_price: priceData.base_price,
-                    discount_price: priceData.discount_price
-                })
-            });
-
-            if (!response.ok) {
-                console.error(`Price update failed: ${response.statusText}`);
-                return false;
-            }
-
-            return true;
-        } catch (error) {
-            console.error("Error updating price:", error);
-            return false;
-        }
-    };
     const uploadDetailImages = async (detailId: number, files: File[]) => {
         if (files.length === 0) return true;
 
@@ -807,172 +780,236 @@ export default function EditProduct() {
                 return;
             }
 
-            // 1. Cập nhật thông tin cơ bản và chi tiết sản phẩm
-            const updatedDetails = product.details.map(detail => {
-                return {
-                    id: detail.id,
-                    size: detail.size,
-                    type: detail.type,
-                    values: detail.values,
-                    quantities: detail.quantities,
-                    isActive: detail.isActive
-                };
-            }).filter(detail => !variantsToDelete.includes(detail.id));
+            // ----- CONSOLE LOG: Dữ liệu ban đầu -----
+            console.group('🔍 DEBUG: Tổng quan dữ liệu sản phẩm trước khi gửi');
+            console.log('Product ID:', productId);
+            console.log('Product state:', product);
+            console.log('Form data:', formData);
+            console.log('Detail prices:', detailPrices);
+            console.log('Variants to delete:', variantsToDelete);
+            console.log('New variants:', newVariants);
+            console.groupEnd();
 
-            const newDetailsData = newVariants.map(variant => ({
-                size: variant.size,
-                type: variant.type,
-                values: variant.values,
-                quantities: variant.quantities,
-                isActive: variant.isActive,
-                price: {
-                    base_price: variant.price.base_price,
-                    discount_price: variant.price.discount_price
-                }
-            }));
-
-            const priceUpdates = Object.entries(detailPrices).map(([detailId, price]) => ({
-                product_detail_id: parseInt(detailId),
-                base_price: price.base_price,
-                discount_price: price.discount_price
-            }));
-
-            const updateData = {
+            // 1. Cập nhật thông tin cơ bản sản phẩm (không bao gồm chi tiết)
+            const basicProductData = {
                 name: formData.name,
                 description: formData.description,
                 video: formData.video,
                 category_id: formData.category_id,
-                details: updatedDetails,
-                new_details: newDetailsData,
-                prices: priceUpdates,
                 variants_to_delete: variantsToDelete,
                 keep_existing_images: true
             };
 
-            console.log('Sending update data:', updateData);
+            console.log('Sending basic product update data:', basicProductData);
 
-            // Bước 1: Cập nhật thông tin cơ bản sản phẩm
+            // Cập nhật thông tin cơ bản sản phẩm
             const response = await fetch(`http://localhost:3000/api/products/${productId}`, {
                 method: 'PATCH',
                 headers: {
                     'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify(updateData)
+                body: JSON.stringify(basicProductData)
             });
 
             if (!response.ok) {
                 const errorText = await response.text();
-                console.error(`Update failed (${response.status}): ${errorText}`);
-                throw new Error(`Không thể cập nhật sản phẩm: ${response.statusText}`);
+                console.error(`Basic product update failed (${response.status}): ${errorText}`);
+                throw new Error(`Không thể cập nhật thông tin cơ bản sản phẩm: ${response.statusText}`);
             }
 
             const updatedProduct = await response.json();
-            console.log('Product updated successfully:', updatedProduct);
+            console.log('Basic product info updated successfully:', updatedProduct);
 
-            // Bước 2: Cập nhật thông tin chi tiết sản phẩm và giá
+            // 2. Cập nhật từng chi tiết sản phẩm với xử lý lỗi tốt hơn
             const detailsToUpdate = product.details.filter(detail => !variantsToDelete.includes(detail.id));
 
-            // Hiển thị thông báo
             if (detailsToUpdate.length > 0) {
                 showToast('Đang cập nhật chi tiết sản phẩm...', 'info');
+
+                // Xử lý tuần tự từng chi tiết sản phẩm để tránh race condition
+                // Trong handleSubmit, thay thế phần cập nhật chi tiết:
+                for (const detail of detailsToUpdate) {
+                    try {
+                        // Chuẩn bị dữ liệu cập nhật
+                        const detailData = {
+                            size: String(detail.size || ""),
+                            type: String(detail.type || ""),
+                            values: String(detail.values || ""),
+                            quantities: Number(detail.quantities || 0),
+                            isActive: Boolean(detail.isActive),
+                            // Thêm trường này để API backend biết đây là cập nhật không có hình ảnh
+                        };
+
+                        console.log(`Đang cập nhật chi tiết ID ${detail.id} với:`, detailData);
+
+                        // Gọi API cập nhật chi tiết sản phẩm
+                        const detailRes = await fetch(`http://localhost:3000/api/product-details/${detail.id}`, {
+                            method: 'PATCH',
+                            headers: {
+                                'Authorization': `Bearer ${token}`,
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify(detailData)
+                        });
+
+                        // Log kết quả
+                        if (!detailRes.ok) {
+                            const errorText = await detailRes.text();
+                            console.error(`Chi tiết cập nhật thất bại cho ID ${detail.id} (${detailRes.status}):`, errorText);
+                            showToast(`Chi tiết ID ${detail.id} không cập nhật được: ${detailRes.statusText}`, 'error');
+                        } else {
+                            console.log(`Chi tiết ${detail.id} cập nhật thành công`);
+                        }
+
+                        // Thêm độ trễ nhỏ để giảm tải cho server
+                        await new Promise(r => setTimeout(r, 300));
+
+                    } catch (err) {
+                        console.error(`Lỗi khi cập nhật chi tiết ${detail.id}:`, err);
+                        showToast(`Lỗi cập nhật chi tiết ID ${detail.id}`, 'error');
+                    }
+                }
             }
 
-            // Cập nhật từng chi tiết sản phẩm
-            // Cải thiện phần cập nhật chi tiết sản phẩm trong handleSubmit
-            for (const detail of detailsToUpdate) {
+
+            const detailUpdatePromises = detailsToUpdate.map(async (detail) => {
                 try {
-                    // 1. Cập nhật thông tin chi tiết sản phẩm (kích thước, loại, giá trị, số lượng)
-                    const detailUpdateData = {
+                    // Prepare data for API
+                    const detailData = {
                         size: String(detail.size || ""),
                         type: String(detail.type || ""),
                         values: String(detail.values || ""),
-                        quantities: Math.max(0, Number(detail.quantities || 0)),
+                        quantities: Number(detail.quantities || 0),
                         isActive: Boolean(detail.isActive)
                     };
 
-                    console.log(`Updating product detail ${detail.id} with data:`, detailUpdateData);
+                    console.log(`Updating detail ${detail.id} with:`, detailData);
 
-                    // Gọi API để cập nhật chi tiết sản phẩm - PATCH /api/product-details/{id}
-                    const detailResponse = await fetch(`http://localhost:3000/api/product-details/${detail.id}`, {
+                    // Call API with better error handling
+                    try {
+                        const detailRes = await fetch(`http://localhost:3000/api/product-details/${detail.id}`, {
+                            method: 'PATCH',
+                            headers: {
+                                'Authorization': `Bearer ${token}`,
+                                'Content-Type': 'application/json',
+                                'Accept': 'application/json'
+                            },
+                            body: JSON.stringify(detailData)
+                        });
+
+                        // Log the full response for debugging
+                        let responseText = await detailRes.text();
+                        console.log(`Raw response for detail ${detail.id}:`, responseText);
+
+                        // Try to parse as JSON if possible
+                        let responseData;
+                        try {
+                            responseData = JSON.parse(responseText);
+                        } catch (e) {
+                            // Not JSON, keep as text
+                            responseData = responseText;
+                        }
+
+                        if (!detailRes.ok) {
+                            console.error(`Detail update failed for ID ${detail.id} (${detailRes.status}):`, responseData);
+                            showToast(`Lỗi cập nhật chi tiết ID ${detail.id}: ${detailRes.status} - ${detailRes.statusText}`, 'error');
+                            return false;
+                        }
+
+                        // Successfully updated
+                        console.log(`Successfully updated detail ${detail.id}:`, responseData);
+
+                        // Update product state with the returned values from the API
+                        if (responseData && typeof responseData === 'object') {
+                            setProduct(prevProduct => {
+                                if (!prevProduct) return prevProduct;
+
+                                const updatedDetails = prevProduct.details.map(d => {
+                                    if (d.id === detail.id) {
+                                        return {
+                                            ...d,
+                                            size: responseData.size || d.size,
+                                            type: responseData.type || d.type,
+                                            values: responseData.values || d.values,
+                                            quantities: responseData.quantities || d.quantities,
+                                            isActive: responseData.isActive ?? d.isActive,
+                                            images: d.images // Keep existing images
+                                        };
+                                    }
+                                    return d;
+                                });
+
+                                return {
+                                    ...prevProduct,
+                                    details: updatedDetails
+                                };
+                            });
+                        }
+
+                        return true;
+                    } catch (err) {
+                        console.error(`Network error updating detail ${detail.id}:`, err);
+                        showToast(`Lỗi kết nối khi cập nhật chi tiết ID ${detail.id}`, 'error');
+                        return false;
+                    }
+                } catch (err) {
+                    console.error(`Error updating detail ${detail.id}:`, err);
+                    showToast(`Lỗi khi cập nhật chi tiết ID ${detail.id}: ${err instanceof Error ? err.message : 'Lỗi không xác định'}`, 'error');
+                    return false;
+                }
+            });
+
+            // Bước 3: Cập nhật giá cho từng chi tiết sản phẩm
+            const priceUpdatePromises = Object.entries(detailPrices).map(async ([detailId, price]) => {
+                try {
+                    if (variantsToDelete.includes(parseInt(detailId))) return true;
+
+                    // Chuẩn bị dữ liệu giá
+                    const priceData = {
+                        base_price: String(parseFloat(price.base_price.toString())),
+                        discount_price: price.discount_price != null ?
+                            String(parseFloat(price.discount_price.toString())) : null
+                    };
+
+                    console.log(`Updating price for detail ${detailId} with:`, priceData);
+
+                    // Gọi API cập nhật giá
+                    const priceRes = await fetch(`http://localhost:3000/api/v1/prices/${detailId}`, {
                         method: 'PATCH',
                         headers: {
                             'Authorization': `Bearer ${token}`,
                             'Content-Type': 'application/json'
                         },
-                        body: JSON.stringify(detailUpdateData)
+                        body: JSON.stringify(priceData)
                     });
 
-                    // Xử lý kết quả cập nhật chi tiết
-                    if (!detailResponse.ok) {
-                        const errorText = await detailResponse.text();
-                        console.error(`Detail update failed for ID ${detail.id} (${detailResponse.status}): ${errorText}`);
-                        showToast(`Lỗi cập nhật chi tiết ID ${detail.id}: ${detailResponse.statusText}`, 'error');
-
-                        // Tiếp tục với chi tiết tiếp theo, không dừng lại
-                        continue;
+                    if (!priceRes.ok) {
+                        console.error(`Failed to update price for detail ${detailId}: ${priceRes.statusText}`);
                     }
 
-                    const updatedDetailData = await detailResponse.json();
-                    console.log(`Detail ${detail.id} updated successfully:`, updatedDetailData);
-
-                    // 2. Cập nhật giá bằng API riêng biệt - PATCH /api/v1/prices/{id}
-                    if (detailPrices[detail.id]) {
-                        try {
-                            // Chuẩn bị dữ liệu giá - đảm bảo định dạng đúng
-                            const priceData = {
-                                base_price: String(parseFloat(detailPrices[detail.id].base_price.toString())),
-                                discount_price: detailPrices[detail.id]?.discount_price != null ?
-                                    String(parseFloat(detailPrices[detail.id].discount_price.toString())) : null
-                            };
-
-                            console.log(`Updating price for detail ${detail.id} with:`, priceData);
-
-                            // Gọi API cập nhật giá
-                            const priceResponse = await fetch(`http://localhost:3000/api/v1/prices/${detail.id}`, {
-                                method: 'PATCH',
-                                headers: {
-                                    'Authorization': `Bearer ${token}`,
-                                    'Content-Type': 'application/json'
-                                },
-                                body: JSON.stringify(priceData)
-                            });
-
-                            if (!priceResponse.ok) {
-                                const priceErrorText = await priceResponse.text();
-                                console.error(`Price update failed for detail ID ${detail.id} (${priceResponse.status}): ${priceErrorText}`);
-                                showToast(`Giá của chi tiết ID ${detail.id} không được cập nhật: ${priceResponse.statusText}`, 'error');
-                            } else {
-                                const updatedPrice = await priceResponse.json();
-                                console.log(`Price updated successfully for detail ${detail.id}:`, updatedPrice);
-                            }
-                        } catch (priceError) {
-                            console.error(`Error updating price for detail ${detail.id}:`, priceError);
-                            showToast(`Lỗi khi cập nhật giá cho chi tiết ID ${detail.id}: ${priceError instanceof Error ? priceError.message : 'Lỗi không xác định'}`, 'error');
-                        }
-                    }
-                } catch (detailError) {
-                    console.error(`Error processing detail ${detail.id}:`, detailError);
-                    showToast(`Lỗi khi xử lý chi tiết ID ${detail.id}: ${detailError instanceof Error ? detailError.message : 'Lỗi không xác định'}`, 'error');
+                    return priceRes.ok;
+                } catch (err) {
+                    console.error(`Error updating price for detail ${detailId}:`, err);
+                    return false;
                 }
-            }
+            });
 
-            // Bước 3: Tải lên hình ảnh cho sản phẩm chính nếu có
+            // Chờ tất cả các cập nhật chi tiết và giá hoàn thành (không quan tâm đến kết quả)
+            await Promise.allSettled([...detailUpdatePromises, ...priceUpdatePromises]);
+
+            
+            // 5. Tải lên hình ảnh cho sản phẩm chính nếu có
             if (productImages.length > 0) {
                 await uploadProductImages();
             }
 
-            // Bước 4: Tải lên hình ảnh cho các chi tiết sản phẩm nếu có
-            // (giữ nguyên phương thức hiện tại)
-            const variantImagePromises = Object.entries(variantImageUploads).map(async ([detailId, files]) => {
+            // 6. Tải lên hình ảnh cho các chi tiết sản phẩm hiện có
+            for (const [detailId, files] of Object.entries(variantImageUploads)) {
                 if (files.length > 0) {
-                    return uploadDetailImages(parseInt(detailId), files);
+                    await uploadDetailImages(parseInt(detailId), files);
                 }
-                return true;
-            });
-
-            // Chờ tất cả các hình ảnh chi tiết được tải lên
-            await Promise.all(variantImagePromises);
+            }
 
             showToast('Cập nhật sản phẩm thành công', 'success');
 
@@ -982,7 +1019,7 @@ export default function EditProduct() {
             // Chuyển hướng sau khi hoàn thành
             setTimeout(() => {
                 router.push(`/seller/products/${productId}`);
-            }, 1500);
+            }, 2000);
 
         } catch (err) {
             console.error("Error updating product:", err);
@@ -1184,7 +1221,7 @@ export default function EditProduct() {
 
                                     <div>
                                         <label htmlFor="category_id" className="block text-sm font-medium text-gray-700 mb-1">
-                                            Danh mục 
+                                            Danh mục
                                         </label>
                                         <div className="relative">
                                             <button

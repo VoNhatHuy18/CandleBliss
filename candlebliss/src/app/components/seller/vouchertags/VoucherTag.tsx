@@ -37,7 +37,7 @@ const VoucherTag: React.FC<VoucherTagProps> = ({ id, code, discount, expiryDate,
                </div>
 
                <div className='font-medium mb-1.5'>
-                  Giảm <span className='text-red-500 font-bold'>{discount}</span> cho khách hàng mới
+                  Giảm <span className='text-red-500 font-bold'>{discount}</span> 
                </div>
 
                <div className='text-sm text-gray-600 mb-1.5'>HSD: {expiryDate}</div>
