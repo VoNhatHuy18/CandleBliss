@@ -117,7 +117,7 @@ export default function MenuSideBar() {
                </div>
                <div className='px-4 py-2'>
                   <Link
-                     href='/finances'
+                     href='/seller/finance'
                      className='flex items-center p-2 text-gray-600 hover:bg-gray-100 rounded'
                   >
                      <CreditCard size={18} className='mr-2' />
