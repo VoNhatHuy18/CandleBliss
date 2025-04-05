@@ -139,18 +139,21 @@ export default function CartPage() {
 
             if (!existsInApi) {
                try {
-                  // Sử dụng endpoint POST /api/cart/{cartId}/add-item để thêm sản phẩm
-                  const addResponse = await fetch(`http://localhost:3000/api/cart/${apiCart.id}/add-item`, {
-                     method: 'POST',
-                     headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
-                     },
-                     body: JSON.stringify({
-                        productDetailId: item.detailId,
-                        quantity: item.quantity
-                     })
-                  });
+                  // Sửa endpoint để phù hợp với API của bạn
+                  // POST /api/cart/{cartId}/add-item/{productDetailId}
+                  const addResponse = await fetch(
+                     `http://localhost:3000/api/cart/${apiCart.id}/add-item/${item.detailId}`,
+                     {
+                        method: 'POST',
+                        headers: {
+                           'Content-Type': 'application/json',
+                           'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
+                        },
+                        body: JSON.stringify({
+                           quantity: item.quantity
+                        })
+                     }
+                  );
 
                   if (!addResponse.ok) {
                      const errorText = await addResponse.text();
