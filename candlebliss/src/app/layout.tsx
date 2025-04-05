@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
 import { ProductFormProvider } from './context/ProductFormContext';
+import Script from 'next/script';
 
 const geistSans = Geist({
    variable: '--font-geist-sans',
@@ -24,9 +25,15 @@ export default function RootLayout({
    children: React.ReactNode;
 }>) {
    return (
-      <html lang='en'>
+      <html lang='en' suppressHydrationWarning>
          <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
             <ProductFormProvider>{children}</ProductFormProvider>
+            <Script id="suppress-scroll-warning" strategy="afterInteractive">
+               {`
+               // Disable Next.js auto-scroll warnings for fixed elements
+               window.__NEXT_SCROLL_RESTORATION = false;
+               `}
+            </Script>
          </body>
       </html>
    );

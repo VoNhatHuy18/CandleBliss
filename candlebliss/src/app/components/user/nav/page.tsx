@@ -12,6 +12,7 @@ import { jwtDecode } from 'jwt-decode';
 interface DecodedToken {
    name: string;
    exp: number;
+   id?: number;
    [key: string]: any;
 }
 
@@ -21,6 +22,7 @@ export default function NavBar() {
    const [isLoggedIn, setIsLoggedIn] = useState(false);
    const [userName, setUserName] = useState<string | null>(null);
    const [showUserMenu, setShowUserMenu] = useState(false);
+   const [userId, setUserId] = useState<number | null>(null);
    const router = useRouter();
    const pathname = usePathname();
 
@@ -57,6 +59,12 @@ export default function NavBar() {
             // Valid token
             setIsLoggedIn(true);
             setUserName(decoded.name || 'User');
+
+            // Lấy userId từ token nếu có
+            if (decoded.id) {
+               setUserId(decoded.id);
+               localStorage.setItem('userId', decoded.id.toString());
+            }
          } catch (error) {
             console.error('Invalid token:', error);
             handleLogout();
@@ -64,6 +72,7 @@ export default function NavBar() {
       } else {
          setIsLoggedIn(false);
          setUserName(null);
+         setUserId(null);
 
          // If on protected routes, redirect to login
          if (pathname === '/user/profile' || pathname.startsWith('/user/orders')) {
@@ -96,14 +105,62 @@ export default function NavBar() {
       localStorage.removeItem('userToken');
       localStorage.removeItem('token');
       localStorage.removeItem('refreshToken');
+      localStorage.removeItem('userId');
 
       // Update state
       setIsLoggedIn(false);
       setUserName(null);
+      setUserId(null);
       setShowUserMenu(false);
 
       // Redirect to home
       router.push('/user/home');
+   };
+
+   // Hàm xử lý khi nhấp vào biểu tượng giỏ hàng
+   const handleCartClick = async (e: React.MouseEvent) => {
+      e.preventDefault();
+
+      // Nếu người dùng đã đăng nhập, kiểm tra/tạo giỏ hàng
+      if (isLoggedIn && userId) {
+         try {
+            // Kiểm tra xem người dùng đã có giỏ hàng chưa
+            const response = await fetch(`http://localhost:3000/api/cart/user/${userId}`);
+
+            // Nếu không tìm thấy giỏ hàng, tạo mới
+            if (!response.ok) {
+               console.log('Creating new cart for user:', userId);
+
+               // Sử dụng endpoint POST /api/cart để tạo giỏ hàng mới
+               const createCartResponse = await fetch('http://localhost:3000/api/cart', {
+                  method: 'POST',
+                  headers: {
+                     'Content-Type': 'application/json',
+                     'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
+                  },
+                  body: JSON.stringify({ userId })
+               });
+
+               if (createCartResponse.ok) {
+                  console.log('New cart created successfully');
+               } else {
+                  console.error('Failed to create cart:', await createCartResponse.text());
+               }
+            } else {
+               console.log('User cart found');
+            }
+
+            // Chuyển hướng đến trang giỏ hàng
+            router.push('/user/cart');
+         } catch (error) {
+            console.error('Error handling cart:', error);
+            // Vẫn chuyển hướng đến trang giỏ hàng ngay cả khi có lỗi
+            router.push('/user/cart');
+         }
+      } else {
+         // Nếu người dùng chưa đăng nhập, chuyển hướng đến trang đăng nhập
+         router.push('/user/signin?redirect=/user/cart');
+      }
    };
 
    return (
@@ -132,9 +189,9 @@ export default function NavBar() {
                >
                   <MagnifyingGlassIcon className='size-5' />
                </button>
-               <Link href='/user/cart' className='text-[#553C26]'>
+               <button onClick={handleCartClick} className='text-[#553C26]'>
                   <ShoppingBagIcon className='size-5' />
-               </Link>
+               </button>
                <button onClick={toggleMobileMenu} className='text-[#553C26]'>
                   {mobileMenuOpen ? (
                      <XMarkIcon className='size-6' />
@@ -159,21 +216,21 @@ export default function NavBar() {
                   </Link>
                   <div className='absolute hidden group-hover:block bg-[#F1EEE9] shadow-lg rounded-lg w-36 font-semibold z-50'>
                      <Link
-                        href='/products/candles'
+                        href='/user/products/candles'
                         className='block px-4 py-2 text-[#553C26] hover:bg-[#E2DED8]'
                      >
                         Nến Thơm
                      </Link>
                      <hr className='border-[#553C26]' />
                      <Link
-                        href='/products/holders'
+                        href='/user/products/scents'
                         className='block px-4 py-2 text-[#553C26] hover:bg-[#E2DED8]'
                      >
                         Tinh Dầu
                      </Link>
                      <hr className='border-[#553C26]' />
                      <Link
-                        href='/products/scents'
+                        href='/user/products/accessories'
                         className='block px-4 py-2 text-[#553C26] hover:bg-[#E2DED8]'
                      >
                         Phụ Kiện Nến
@@ -210,9 +267,9 @@ export default function NavBar() {
                      <MagnifyingGlassIcon className='size-5' />
                   </button>
                </div>
-               <Link href='/user/cart' className='text-[#553C26]'>
+               <button onClick={handleCartClick} className='text-[#553C26]'>
                   <ShoppingBagIcon className='size-5' />
-               </Link>
+               </button>
 
                {/* User Account Menu */}
                <div className='relative'>
@@ -226,8 +283,6 @@ export default function NavBar() {
                   {/* User Menu Dropdown */}
                   {isLoggedIn && showUserMenu && (
                      <div className='absolute top-full right-0 mt-1 bg-[#F1EEE9] rounded-md shadow-lg w-48 py-2 z-50'>
-
-
                         <Link href='/user/profile'>
                            <div className='block px-4 py-2 text-[#553C26] hover:bg-[#E2DED8]'>
                               Hồ sơ cá nhân
@@ -275,7 +330,7 @@ export default function NavBar() {
                         </span>
                      </Link>
                      <div className='ml-4 mt-2 space-y-2'>
-                        <Link href='/products/candles' onClick={toggleMobileMenu}>
+                        <Link href='/user/products/candles' onClick={toggleMobileMenu}>
                            <span className='block text-[#553C26] hover:text-[#FF9900]'>
                               Nến Thơm
                            </span>
