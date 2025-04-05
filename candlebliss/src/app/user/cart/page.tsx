@@ -1,456 +1,697 @@
 'use client';
 
-import React, { useState } from 'react';
-import Footer from '@/app/components/user/footer/page';
-import ViewedCarousel from '@/app/components/user/viewedcarousel/page';
-import Header from '@/app/components/user/nav/page';
+import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import {
-   TrashIcon,
-   PencilIcon,
-   PlusIcon,
-   MinusIcon,
-   ArrowLeftIcon,
-   ShoppingBagIcon,
-   HeartIcon,
-   ChevronDownIcon,
-   MapPinIcon,
-} from '@heroicons/react/24/outline';
+import { useRouter } from 'next/navigation';
+import Header from '@/app/components/user/nav/page';
+import Footer from '@/app/components/user/footer/page';
 
-export default function ShoppingCart() {
-   // Sample product data
-   const [cartItems, setCartItems] = useState([
-      {
-         id: 1,
-         name: 'GIỎ TRUYỀN THÔNG 01 - COMBO 9KG',
-         price: 120000,
-         quantity: 1,
-         image: '/images/image.png',
-         type: 'Mùi hương: Hương sen đào',
-         options: [
-            { name: 'Kích thước', value: 'Lớn' },
-            { name: 'Màu sắc', value: 'Trắng ngà' },
-         ],
-      },
-      {
-         id: 2,
-         name: 'GIỎ TRUYỀN THÔNG 01 - COMBO 9KG',
-         price: 120000,
-         quantity: 2,
-         image: '/images/image.png',
-         type: 'Mùi hương: Hương sen đào',
-         options: [
-            { name: 'Kích thước', value: 'Trung bình' },
-            { name: 'Màu sắc', value: 'Hồng nhạt' },
-         ],
-      },
-   ]);
+// Interfaces
+interface CartItem {
+   id: number;
+   detailId: number;
+   name: string;
+   price: number;
+   quantity: number;
+   image: string;
+   type: string;
+   options: { name: string; value: string }[];
+   productDetailId?: number;
+   totalPrice?: number;
+}
 
-   const [voucher, setVoucher] = useState('');
-   const [voucherError, setVoucherError] = useState('');
-   const [voucherSuccess, setVoucherSuccess] = useState('');
-   const [selectedAddress, setSelectedAddress] = useState<number | null>(null);
-   const [showAddressList, setShowAddressList] = useState(false);
-   const [showAddressModal, setShowAddressModal] = useState(false);
-   const addresses = [
-      {
-         id: 1,
-         name: 'Nguyen Van A',
-         phone: '0123456789',
-         address: '123 Street',
-         district: 'District 1',
-         city: 'Ho Chi Minh City',
-         isDefault: true,
-      },
-      {
-         id: 2,
-         name: 'Nguyen Van B',
-         phone: '0987654321',
-         address: '456 Street',
-         district: 'District 2',
-         city: 'Ho Chi Minh City',
-         isDefault: false,
-      },
-   ];
+interface ApiCartItem {
+   id: number;
+   productDetailId: number;
+   quantity: number;
+   totalPrice: number;
+   cartId: number;
+}
 
-   // Handle quantity change
-   const updateQuantity = (id: number, newQuantity: number) => {
-      if (newQuantity < 1) newQuantity = 1;
-      if (newQuantity > 10) newQuantity = 10;
+interface Cart {
+   id: number;
+   userId: number;
+   status: string;
+   totalQuantity: string;
+   totalPrice: string;
+   cartItems: ApiCartItem[];
+}
 
-      setCartItems(
-         cartItems.map((item) => (item.id === id ? { ...item, quantity: newQuantity } : item)),
-      );
+// Format price helper function
+const formatPrice = (price: number): string => {
+   return new Intl.NumberFormat('vi-VN', {
+      style: 'currency',
+      currency: 'VND',
+      minimumFractionDigits: 0
+   }).format(price);
+};
+
+export default function CartPage() {
+   const router = useRouter();
+   const [cartItems, setCartItems] = useState<CartItem[]>([]);
+   const [loading, setLoading] = useState(true);
+   const [error, setError] = useState<string | null>(null);
+   const [totalQuantity, setTotalQuantity] = useState(0);
+   const [totalPrice, setTotalPrice] = useState(0);
+   const [userId, setUserId] = useState<number | null>(null);
+   const [apiCart, setApiCart] = useState<Cart | null>(null);
+   const [syncing, setSyncing] = useState(false);
+   const [syncMessage, setSyncMessage] = useState('');
+   const [productDetails, setProductDetails] = useState<Record<number, any>>({});
+
+   // Load user data and cart on mount
+   useEffect(() => {
+      const loadCart = async () => {
+         try {
+            setLoading(true);
+
+            // Check if user is logged in by looking for userId in localStorage
+            const storedUserId = localStorage.getItem('userId');
+            if (storedUserId) {
+               setUserId(parseInt(storedUserId));
+            }
+
+            // Get cart from localStorage
+            const localCart = JSON.parse(localStorage.getItem('cart') || '[]');
+            setCartItems(localCart);
+
+            // Calculate totals
+            calculateTotals(localCart);
+
+            setLoading(false);
+         } catch (err) {
+            console.error('Error loading cart:', err);
+            setError('Không thể tải giỏ hàng. Vui lòng thử lại sau.');
+            setLoading(false);
+         }
+      };
+
+      loadCart();
+   }, []);
+
+   // Fetch product details for all cart items
+   useEffect(() => {
+      const fetchProductDetails = async () => {
+         if (cartItems.length === 0) return;
+
+         const detailIds = cartItems.map(item => item.detailId);
+         const uniqueDetailIds = [...new Set(detailIds)];
+
+         const detailsMap: Record<number, any> = {};
+
+         for (const detailId of uniqueDetailIds) {
+            try {
+               // Fetch product detail info
+               const response = await fetch(`http://localhost:3000/api/product-details/${detailId}`);
+               if (response.ok) {
+                  const detail = await response.json();
+                  detailsMap[detailId] = detail;
+               }
+            } catch (err) {
+               console.error(`Error fetching details for product detail ${detailId}:`, err);
+            }
+         }
+
+         setProductDetails(detailsMap);
+      };
+
+      fetchProductDetails();
+   }, [cartItems]);
+
+   // If user is logged in, fetch API cart and sync with local
+   useEffect(() => {
+      if (userId) {
+         syncCartWithApi();
+      }
+   }, [userId, cartItems.length]);
+
+   // Helper function to merge local cart with API cart
+   const mergeCartsWithApi = async (apiCart: Cart, localItems: CartItem[]) => {
+      try {
+         setSyncMessage('Đang đồng bộ sản phẩm...');
+
+         for (const item of localItems) {
+            // Check if item already exists in API cart
+            const existsInApi = apiCart.cartItems.some(
+               apiItem => apiItem.productDetailId === item.detailId
+            );
+
+            if (!existsInApi) {
+               try {
+                  // Sửa endpoint để phù hợp với API của bạn
+                  // POST /api/cart/{cartId}/add-item/{productDetailId}
+                  const addResponse = await fetch(
+                     `http://localhost:3000/api/cart/${apiCart.id}/add-item/${item.detailId}`,
+                     {
+                        method: 'POST',
+                        headers: {
+                           'Content-Type': 'application/json',
+                           'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
+                        },
+                        body: JSON.stringify({
+                           quantity: item.quantity
+                        })
+                     }
+                  );
+
+                  if (!addResponse.ok) {
+                     const errorText = await addResponse.text();
+                     console.error('Error adding item to cart:', errorText);
+                  }
+               } catch (fetchError) {
+                  console.error('Network error adding item:', fetchError);
+               }
+            }
+         }
+
+         // Refresh API cart data using GET /api/cart/{cartId}
+         try {
+            const updatedCartResponse = await fetch(`http://localhost:3000/api/cart/${apiCart.id}`);
+            if (updatedCartResponse.ok) {
+               // Thêm kiểm tra phản hồi trước khi phân tích JSON
+               const responseText = await updatedCartResponse.text();
+
+               // Chỉ phân tích JSON nếu phản hồi không rỗng
+               if (responseText && responseText.trim()) {
+                  try {
+                     const updatedCart = JSON.parse(responseText);
+                     setApiCart(updatedCart);
+                  } catch (jsonError) {
+                     console.error('Error parsing updated cart response:', jsonError, 'Response was:', responseText);
+                  }
+               } else {
+                  console.log('Empty response when fetching updated cart');
+               }
+            }
+         } catch (fetchError) {
+            console.error('Network error refreshing cart:', fetchError);
+         }
+
+         setSyncMessage('Đồng bộ hoàn tất!');
+         setTimeout(() => setSyncMessage(''), 2000);
+      } catch (err) {
+         console.error('Error merging carts:', err);
+         setSyncMessage('Lỗi khi đồng bộ. Xin thử lại sau.');
+      }
    };
 
-   // Handle item removal
-   const removeItem = (id: number) => {
-      setCartItems(cartItems.filter((item) => item.id !== id));
+   // Sync cart with API
+   const syncCartWithApi = async () => {
+      if (!userId) return;
+
+      try {
+         setSyncing(true);
+         setSyncMessage('Đang đồng bộ giỏ hàng...');
+
+         // Fetch user's cart from API
+         let response;
+         try {
+            response = await fetch(`http://localhost:3000/api/cart/user/${userId}`);
+         } catch (fetchError) {
+            console.error('Network error fetching cart:', fetchError);
+            setSyncMessage('Lỗi kết nối với máy chủ');
+            setSyncing(false);
+            return;
+         }
+
+         // Handle cart creation regardless of whether one already exists
+         if (!response.ok) {
+            // If no cart exists or any other error, try creating a new cart
+            try {
+               console.log('Creating new cart for user:', userId);
+               const createCartResponse = await fetch('http://localhost:3000/api/cart', {
+                  method: 'POST',
+                  headers: {
+                     'Content-Type': 'application/json',
+                     'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
+                  },
+                  body: JSON.stringify({ userId })
+               });
+
+               if (createCartResponse.ok) {
+                  // Get response as text first
+                  const responseText = await createCartResponse.text();
+
+                  // Only try to parse if there's actual content
+                  if (responseText && responseText.trim()) {
+                     try {
+                        const newCart = JSON.parse(responseText);
+                        console.log('New cart created:', newCart);
+                        setApiCart(newCart);
+
+                        // Add local items to the new cart if any
+                        if (cartItems.length > 0) {
+                           await mergeCartsWithApi(newCart, cartItems);
+                        } else {
+                           setSyncMessage('Giỏ hàng mới đã được tạo');
+                           setTimeout(() => setSyncMessage(''), 2000);
+                        }
+                     } catch (jsonError) {
+                        console.error('Error parsing create cart response:', jsonError);
+                        setSyncMessage('Giỏ hàng đã được tạo (định dạng phản hồi không hợp lệ)');
+                        // Nếu JSON không hợp lệ, vẫn thử tải lại giỏ hàng
+                        fetchUserCart(userId);
+                     }
+                  } else {
+                     console.log('Empty response from create cart API');
+                     setSyncMessage('Giỏ hàng đã được tạo thành công');
+                     // Nếu phản hồi rỗng, vẫn thử tải lại giỏ hàng
+                     fetchUserCart(userId);
+                  }
+               } else {
+                  const errorText = await createCartResponse.text();
+                  console.error('Error creating cart:', errorText);
+                  setSyncMessage('Không thể tạo giỏ hàng mới');
+               }
+            } catch (createError) {
+               console.error('Error creating new cart:', createError);
+               setSyncMessage('Lỗi khi tạo giỏ hàng mới');
+            }
+         } else {
+            // Cart exists, process normally
+            try {
+               // Get response as text first
+               const responseText = await response.text();
+
+               // Only try to parse if there's actual content
+               if (responseText && responseText.trim()) {
+                  try {
+                     const userCart = JSON.parse(responseText);
+                     console.log('Existing cart found:', userCart);
+                     setApiCart(userCart);
+
+                     // If we have a remote cart and local items, we should merge them
+                     if (userCart && cartItems.length > 0) {
+                        await mergeCartsWithApi(userCart, cartItems);
+                     }
+                  } catch (jsonError) {
+                     console.error('Error parsing API response:', jsonError, 'Response was:', responseText);
+                     setSyncMessage('Lỗi định dạng phản hồi từ máy chủ');
+                  }
+               } else {
+                  console.log('Empty response from get cart API');
+                  setSyncMessage('Giỏ hàng trống hoặc không có dữ liệu');
+               }
+            } catch (textError) {
+               console.error('Error reading response text:', textError);
+               setSyncMessage('Lỗi đọc phản hồi từ máy chủ');
+            }
+         }
+
+         setSyncing(false);
+         setSyncMessage('');
+      } catch (err) {
+         console.error('Error syncing with API cart:', err);
+         setSyncing(false);
+         setSyncMessage('Đồng bộ thất bại. Xin thử lại sau.');
+      }
    };
 
-   // Apply voucher
-   const applyVoucher = () => {
-      if (!voucher) {
-         setVoucherError('Vui lòng nhập mã giảm giá');
+   // Fetch user cart
+   const fetchUserCart = async (userId: number) => {
+      try {
+         const response = await fetch(`http://localhost:3000/api/cart/user/${userId}`);
+
+         if (response.ok) {
+            const responseText = await response.text();
+            if (responseText && responseText.trim()) {
+               try {
+                  const userCart = JSON.parse(responseText);
+                  setApiCart(userCart);
+                  return userCart;
+               } catch (jsonError) {
+                  console.error('Error parsing user cart:', jsonError);
+                  return null;
+               }
+            }
+         }
+         return null;
+      } catch (error) {
+         console.error('Error fetching user cart:', error);
+         return null;
+      }
+   };
+
+   // Calculate totals
+   const calculateTotals = (items: CartItem[]) => {
+      const quantity = items.reduce((sum, item) => sum + item.quantity, 0);
+      const price = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+
+      setTotalQuantity(quantity);
+      setTotalPrice(price);
+   };
+
+   // Update quantity
+   const updateQuantity = (index: number, newQuantity: number) => {
+      if (newQuantity < 1) return;
+
+      const updatedItems = [...cartItems];
+      updatedItems[index].quantity = newQuantity;
+      setCartItems(updatedItems);
+
+      // Update localStorage
+      localStorage.setItem('cart', JSON.stringify(updatedItems));
+
+      // Recalculate totals
+      calculateTotals(updatedItems);
+
+      // If logged in, update API cart
+      updateApiCartItem(updatedItems[index]);
+   };
+
+   // Update API cart item
+   const updateApiCartItem = async (item: CartItem) => {
+      if (!userId || !apiCart) return;
+
+      try {
+         const apiItem = apiCart.cartItems.find(i => i.productDetailId === item.detailId);
+
+         if (apiItem) {
+            await fetch(`http://localhost:3000/api/cart/${apiCart.id}/items/${apiItem.id}`, {
+               method: 'PUT',
+               headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
+               },
+               body: JSON.stringify({
+                  quantity: item.quantity
+               })
+            });
+         }
+      } catch (err) {
+         console.error('Error updating API cart item:', err);
+      }
+   };
+
+   // Remove item
+   const removeItem = async (index: number) => {
+      const itemToRemove = cartItems[index];
+      const updatedItems = cartItems.filter((_, i) => i !== index);
+
+      setCartItems(updatedItems);
+      localStorage.setItem('cart', JSON.stringify(updatedItems));
+      calculateTotals(updatedItems);
+
+      // If logged in, remove from API cart
+      if (userId && apiCart) {
+         try {
+            const apiItem = apiCart.cartItems.find(i => i.productDetailId === itemToRemove.detailId);
+
+            if (apiItem) {
+               await fetch(`http://localhost:3000/api/cart/${apiCart.id}/items/${apiItem.id}`, {
+                  method: 'DELETE',
+                  headers: {
+                     'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
+                  }
+               });
+            }
+         } catch (err) {
+            console.error('Error removing item from API cart:', err);
+         }
+      }
+   };
+
+   // Handle checkout
+   const handleCheckout = async () => {
+      if (cartItems.length === 0) {
+         alert('Giỏ hàng của bạn đang trống!');
          return;
       }
 
-      // Example validation - in real app, this would check against valid codes
-      if (voucher === 'SALE10') {
-         setVoucherSuccess('Áp dụng mã giảm giá thành công: Giảm 10%');
-         setVoucherError('');
+      // Check for both userId and token
+      const token = localStorage.getItem('token');
+      const storedUserId = localStorage.getItem('userId');
+
+      console.log("Checkout initiated", { token: !!token, userId: storedUserId });
+
+      if (!storedUserId || !token) {
+         // Redirect to login page with return URL
+         router.push('/user/signin?redirect=/user/cart');
+         return;
+      }
+
+      // If no API cart but user is logged in, create one
+      if (!apiCart && storedUserId) {
+         try {
+            setSyncMessage('Đang chuẩn bị đơn hàng...');
+
+            // Create a new cart
+            const createResponse = await fetch('http://localhost:3000/api/cart', {
+               method: 'POST',
+               headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${token}`
+               },
+               body: JSON.stringify({ userId: parseInt(storedUserId) })
+            });
+
+            if (createResponse.ok) {
+               // Check for response content
+               const responseText = await createResponse.text();
+               let newCart;
+
+               if (responseText && responseText.trim()) {
+                  try {
+                     newCart = JSON.parse(responseText);
+                  } catch (e) {
+                     console.error('Invalid JSON in create cart response');
+                  }
+               }
+
+               // If we couldn't parse the response, try fetching the cart instead
+               if (!newCart) {
+                  newCart = await fetchUserCart(parseInt(storedUserId));
+               }
+
+               if (newCart) {
+                  // If we have local items, add them to the new cart
+                  if (cartItems.length > 0 && newCart) {
+                     await mergeCartsWithApi(newCart, cartItems);
+                  }
+
+                  // Proceed to checkout
+                  router.push('/user/checkout');
+                  return;
+               }
+            }
+
+            // If we get here, something went wrong
+            setSyncMessage('');
+            alert('Không thể tạo giỏ hàng. Vui lòng thử lại sau.');
+         } catch (error) {
+            console.error('Error in checkout flow:', error);
+            setSyncMessage('');
+            alert('Đã xảy ra lỗi. Vui lòng thử lại sau.');
+         }
       } else {
-         setVoucherError('Mã giảm giá không hợp lệ hoặc đã hết hạn');
-         setVoucherSuccess('');
+         // We already have an API cart, proceed normally
+         router.push('/user/checkout');
       }
    };
 
-   // Calculate subtotal
-   const subtotal = cartItems.reduce((total, item) => total + item.price * item.quantity, 0);
-
-   // Discount (if voucher is applied)
-   const discount = voucherSuccess ? subtotal * 0.1 : 0;
-
-   // Final total
-   const totalPrice = subtotal - discount;
-
-   // Calculate number of items
-   const itemCount = cartItems.reduce((count, item) => count + item.quantity, 0);
+   if (loading) {
+      return (
+         <div className='bg-[#F1EEE9] min-h-screen'>
+            <Header />
+            <div className='container mx-auto px-4 py-12 flex justify-center items-center'>
+               <div className='animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900'></div>
+            </div>
+            <Footer />
+         </div>
+      );
+   }
 
    return (
-      <div className='bg-gray-50 min-h-screen flex flex-col'>
-         {/* Header */}
+      <div className='bg-[#F1EEE9] min-h-screen'>
          <Header />
 
-         {/* Main Content */}
-         <div className='flex-grow'>
-            {/* Breadcrumb */}
-            <div className='container mx-auto px-4 py-4 text-sm'>
-               <div className='flex items-center space-x-2'>
-                  <Link href='/user/home' className='text-gray-500 hover:text-amber-600 transition-colors'>
-                     Trang chủ
-                  </Link>
-                  <span className='text-gray-400'>/</span>
-                  <span className='text-gray-700 font-medium'>Giỏ hàng</span>
+         <div className='container mx-auto px-4 py-8'>
+            <h1 className='text-3xl font-medium mb-6'>Giỏ hàng của bạn</h1>
+
+            {/* Sync message */}
+            {syncMessage && (
+               <div className="mb-4 p-3 bg-blue-50 text-blue-700 rounded-md">
+                  {syncMessage}
                </div>
-            </div>
+            )}
 
-            <div className='container mx-auto px-4 py-6 max-w-7xl'>
-               <div className='flex items-center justify-between mb-8'>
-                  <h1 className='text-2xl md:text-3xl font-semibold text-gray-800'>
-                     Giỏ Hàng Của Tôi
-                  </h1>
-                  <span className='text-sm text-gray-500 bg-amber-50 px-3 py-1 rounded-full border border-amber-100'>
-                     {itemCount} sản phẩm
-                  </span>
+            {cartItems.length === 0 ? (
+               <div className='bg-white rounded-lg shadow p-8 text-center'>
+                  <div className='flex flex-col items-center justify-center'>
+                     <div className='text-gray-500 mb-4'>
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-24 w-24 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                           <path strokeLinecap="round" strokeLinejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+                        </svg>
+                     </div>
+                     <h2 className='text-xl font-medium mb-2'>Giỏ hàng của bạn đang trống</h2>
+                     <p className='text-gray-500 mb-6'>Hãy thêm sản phẩm vào giỏ hàng để tiếp tục mua sắm</p>
+                     <Link href='/user/products' className='px-6 py-2 bg-orange-700 text-white rounded-md hover:bg-orange-800 transition'>
+                        Khám phá sản phẩm
+                     </Link>
+                  </div>
                </div>
+            ) : (
+               <div className='flex flex-col lg:flex-row gap-6'>
+                  {/* Cart Items */}
+                  <div className='lg:w-3/4'>
+                     <div className='bg-white rounded-lg shadow overflow-hidden'>
+                        {/* Header */}
+                        <div className='p-4 border-b border-gray-200 hidden md:grid md:grid-cols-12 text-gray-500 font-medium'>
+                           <div className='md:col-span-6'>Sản phẩm</div>
+                           <div className='md:col-span-2 text-center'>Đơn giá</div>
+                           <div className='md:col-span-2 text-center'>Số lượng</div>
+                           <div className='md:col-span-2 text-center'>Thành tiền</div>
+                        </div>
 
-               {cartItems.length > 0 ? (
-                  <div className='flex flex-col lg:flex-row gap-8'>
-                     {/* Cart Items */}
-                     <div className='w-full lg:w-2/3'>
-                        <div className='bg-white rounded-lg shadow-sm overflow-hidden'>
-                           {/* Cart Header */}
-                           <div className='bg-gray-50 px-6 py-4 border-b text-sm font-medium text-gray-700 hidden md:grid md:grid-cols-12'>
-                              <div className='col-span-6'>Sản phẩm</div>
-                              <div className='col-span-2 text-center'>Đơn giá</div>
-                              <div className='col-span-2 text-center'>Số lượng</div>
-                              <div className='col-span-2 text-right'>Tổng tiền</div>
-                           </div>
-
-                           {/* Cart Items */}
-                           {cartItems.map((item) => (
-                              <div
-                                 key={item.id}
-                                 className='px-6 py-6 border-b last:border-0 grid grid-cols-1 md:grid-cols-12 gap-4 items-center'
-                              >
-                                 {/* Product Info - Mobile & Desktop */}
-                                 <div className='col-span-1 md:col-span-6'>
-                                    <div className='flex gap-4'>
-                                       <div className='w-24 h-24 flex-shrink-0 bg-gray-50 rounded-md overflow-hidden border'>
+                        {/* Items */}
+                        <div className='divide-y divide-gray-100'>
+                           {cartItems.map((item, index) => (
+                              <div key={`${item.id}-${item.detailId}`} className='p-4 hover:bg-gray-50'>
+                                 <div className='md:grid md:grid-cols-12 gap-4'>
+                                    {/* Product info */}
+                                    <div className='md:col-span-6 flex mb-4 md:mb-0'>
+                                       <div className='relative w-20 h-20 bg-gray-100 rounded'>
                                           <Image
-                                             src={item.image}
+                                             src={item.image || '/images/placeholder.jpg'}
                                              alt={item.name}
-                                             width={96}
-                                             height={96}
-                                             className='w-full h-full object-cover'
+                                             layout='fill'
+                                             objectFit='contain'
+                                             className='p-2'
                                           />
                                        </div>
-                                       <div className='flex-grow'>
-                                          <h3 className='font-medium text-gray-800 mb-1 hover:text-amber-600 transition-colors'>
-                                             <Link href={`/product/${item.id}`}>{item.name}</Link>
-                                          </h3>
-                                          <p className='text-sm text-gray-500 mb-2'>{item.type}</p>
+                                       <div className='ml-4 flex-1'>
+                                          <Link href={`/user/products/${item.id}`} className='text-gray-800 font-medium hover:text-orange-700'>
+                                             {item.name}
+                                          </Link>
+                                          <div className='text-sm text-gray-500 mt-1'>
+                                             {/* Extract size from options */}
+                                             {item.options && item.options.find(opt => opt.name === "Kích thước") && (
+                                                <div className='flex items-center'>
+                                                   <span className='text-gray-500'>Kích thước:</span>
+                                                   <span className='text-gray-700 ml-1'>
+                                                      {item.options.find(opt => opt.name === "Kích thước")?.value}
+                                                   </span>
+                                                </div>
+                                             )}
 
-                                          {item.options && item.options.length > 0 && (
-                                             <div className='space-y-1 mb-2'>
-                                                {item.options.map((option, idx) => (
-                                                   <div key={idx} className='text-xs text-gray-500'>
-                                                      <span className='inline-block w-20'>
-                                                         {option.name}:
-                                                      </span>
-                                                      <span className='font-medium text-gray-700'>
-                                                         {option.value}
+                                             {/* Extract fragrance/value from options */}
+                                             {item.options && item.options.find(opt => opt.name === "Giá trị" || opt.name === "Mùi hương") && (
+                                                <div className='flex items-center'>
+                                                   <span className='text-gray-500'>Mùi hương:</span>
+                                                   <span className='text-gray-700 ml-1'>
+                                                      {item.options.find(opt => opt.name === "Giá trị" || opt.name === "Mùi hương")?.value}
+                                                   </span>
+                                                </div>
+                                             )}
+
+                                             {/* Show type without "Loại:" prefix if no specific options found */}
+                                             {item.type && !item.options?.some(opt =>
+                                                opt.name === "Giá trị" || opt.name === "Mùi hương"
+                                             ) && (
+                                                   <div className='flex items-center'>
+                                                      <span className='text-gray-500'>Mùi hương:</span>
+                                                      <span className='text-gray-700 ml-1'>
+                                                         {item.type.replace("Loại: ", "")}
                                                       </span>
                                                    </div>
-                                                ))}
-                                             </div>
-                                          )}
+                                                )}
+                                          </div>
                                        </div>
                                     </div>
-                                 </div>
 
-                                 {/* Price - Desktop */}
-                                 <div className='hidden md:block md:col-span-2 text-center'>
-                                    <div className='text-amber-600 font-medium'>
-                                       {item.price.toLocaleString()}₫
+                                    {/* Price */}
+                                    <div className='md:col-span-2 flex items-center justify-between md:justify-center mb-2 md:mb-0'>
+                                       <span className='md:hidden text-gray-500'>Đơn giá:</span>
+                                       <span className='font-medium'>{formatPrice(item.price)}</span>
+                                    </div>
+
+                                    {/* Quantity */}
+                                    <div className='md:col-span-2 flex items-center justify-between md:justify-center mb-2 md:mb-0'>
+                                       <div className='flex border border-gray-300 rounded'>
+                                          <button
+                                             className='px-2 py-1 text-gray-600 hover:bg-gray-100'
+                                             onClick={() => updateQuantity(index, item.quantity - 1)}
+                                             disabled={item.quantity <= 1}
+                                          >
+                                             -
+                                          </button>
+                                          <input
+                                             type='text'
+                                             className='w-10 text-center border-x border-gray-300'
+                                             value={item.quantity}
+                                             readOnly
+                                          />
+                                          <button
+                                             className='px-2 py-1 text-gray-600 hover:bg-gray-100'
+                                             onClick={() => updateQuantity(index, item.quantity + 1)}
+                                          >
+                                             +
+                                          </button>
+                                       </div>
+                                    </div>
+
+                                    {/* Subtotal */}
+                                    <div className='md:col-span-2 flex items-center justify-between md:justify-center'>
+                                       <span className='md:hidden text-gray-500'>Thành tiền:</span>
+                                       <span className='text-red-600 font-medium'>{formatPrice(item.price * item.quantity)}</span>
                                     </div>
                                  </div>
 
-                                 {/* Quantity - All screens */}
-                                 <div className='col-span-1 md:col-span-2 flex justify-center'>
-                                    <div className='flex items-center border rounded-lg overflow-hidden'>
-                                       <button
-                                          onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                                          className='px-1 py-2 text-gray-600 hover:bg-gray-100 transition-colors'
-                                          aria-label='Giảm số lượng'
-                                       >
-                                          <MinusIcon className='h-3 w-3' />
-                                       </button>
-                                       <input
-                                          value={item.quantity}
-                                          onChange={(e) =>
-                                             updateQuantity(item.id, parseInt(e.target.value) || 1)
-                                          }
-                                          className='w-12 text-center border-x py-1 text-sm focus:outline-none'
-                                          min='1'
-                                          max=''
-                                       />
-                                       <button
-                                          onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                                          className='px-1 py-2 text-gray-600 hover:bg-gray-100 transition-colors'
-                                          aria-label='Tăng số lượng'
-                                       >
-                                          <PlusIcon className='h-3 w-3' />
-                                       </button>
-                                    </div>
-                                 </div>
-
-                                 {/* Total - Desktop */}
-                                 <div className='hidden md:flex md:col-span-2 justify-end items-center gap-3'>
-                                    <div className='text-gray-800 font-medium'>
-                                       {(item.price * item.quantity).toLocaleString()}₫
-                                    </div>
+                                 {/* Actions */}
+                                 <div className='flex justify-end mt-3'>
+                                    <button
+                                       className='text-gray-500 hover:text-red-600 text-sm flex items-center'
+                                       onClick={() => removeItem(index)}
+                                    >
+                                       <svg className='w-4 h-4 mr-1' fill='none' stroke='currentColor' viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'>
+                                          <path strokeLinecap='round' strokeLinejoin='round' strokeWidth='2' d='M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16'></path>
+                                       </svg>
+                                       Xóa
+                                    </button>
                                  </div>
                               </div>
                            ))}
                         </div>
-
-                        {/* Continue Shopping Button */}
-                        <div className='mt-6'>
-                           <Link
-                              href='/user/product'
-                              className='inline-flex items-center gap-2 text-amber-600 hover:text-amber-800 transition-colors'
-                           >
-                              <ArrowLeftIcon className='h-4 w-4' />
-                              <span>Tiếp tục mua sắm</span>
-                           </Link>
-                        </div>
-                     </div>
-                     {/* Order Summary */}
-                     <div className='w-full lg:w-1/3'>
-                        <div className='bg-white rounded-lg shadow-sm p-6 sticky top-6'>
-                           <h2 className='text-lg font-semibold mb-5 pb-4 border-b'>
-                              Thông Tin Đơn Hàng
-                           </h2>
-
-                           {/* Voucher Code Input */}
-                           <div className='mb-6'>
-                              <label className='block text-sm font-medium text-gray-700 mb-2'>
-                                 Mã giảm giá
-                              </label>
-                              <div className='flex'>
-                                 <input
-                                    type='text'
-                                    value={voucher}
-                                    onChange={(e) => setVoucher(e.target.value)}
-                                    placeholder='Nhập mã giảm giá'
-                                    className='flex-grow rounded-l-lg border-r-0 border border-gray-300 focus:ring-2 focus:ring-amber-200 focus:border-amber-400 px-4 py-2 text-sm focus:outline-none'
-                                 />
-                                 <button
-                                    onClick={applyVoucher}
-                                    className='bg-amber-600 hover:bg-amber-700 text-white px-4 rounded-r-lg transition-colors'
-                                 >
-                                    Áp dụng
-                                 </button>
-                              </div>
-                              {voucherError && (
-                                 <p className='text-red-500 text-xs mt-1'>{voucherError}</p>
-                              )}
-                              {voucherSuccess && (
-                                 <p className='text-green-600 text-xs mt-1'>{voucherSuccess}</p>
-                              )}
-                           </div>
-
-                           {/* Order Calculations */}
-                           <div className='space-y-3 text-sm'>
-                              <div className='flex justify-between'>
-                                 <span className='text-gray-600'>Tạm tính:</span>
-                                 <span>{subtotal.toLocaleString()}₫</span>
-                              </div>
-
-                              {discount > 0 && (
-                                 <div className='flex justify-between text-green-600'>
-                                    <span>Giảm giá:</span>
-                                    <span>-{discount.toLocaleString()}₫</span>
-                                 </div>
-                              )}
-
-                              <div className='text-gray-500'>
-                                 <div className='flex justify-between'>
-                                    <span>Phí vận chuyển:</span>
-                                    <span>Tính khi thanh toán</span>
-                                 </div>
-                              </div>
-
-                              <div className='pt-3 mt-3 border-t border-dashed'>
-                                 <div className='flex justify-between items-center'>
-                                    <span className='font-medium'>Tổng cộng:</span>
-                                    <span className='text-xl font-bold text-amber-700'>
-                                       {totalPrice.toLocaleString()}₫
-                                    </span>
-                                 </div>
-                                 <div className='text-xs text-gray-500 text-right mt-1'>
-                                    (Đã bao gồm thuế VAT)
-                                 </div>
-                              </div>
-                           </div>
-
-                           {/* Action Buttons */}
-                           <div className='mt-6 space-y-3'>
-                              <Link href='/user/checkout'>
-                              <button className='w-full bg-amber-800 hover:bg-amber-900 text-white font-medium py-3 rounded-lg transition-colors flex items-center justify-center gap-2'>
-                                 <ShoppingBagIcon className='h-5 w-5' />
-                                 Thanh Toán Ngay
-                              </button>
-                              </Link>
-                           </div>
-
-                           {/* Benefits */}
-                           <div className='mt-6 pt-6 border-t'>
-                              <div className='grid grid-cols-2 gap-4'>
-                                 <div className='flex items-center gap-2'>
-                                    <div className='h-8 w-8 rounded-full bg-amber-100 flex items-center justify-center text-amber-600'>
-                                       <svg
-                                          xmlns='http://www.w3.org/2000/svg'
-                                          className='h-4 w-4'
-                                          fill='none'
-                                          viewBox='0 0 24 24'
-                                          stroke='currentColor'
-                                       >
-                                          <path
-                                             strokeLinecap='round'
-                                             strokeLinejoin='round'
-                                             strokeWidth={2}
-                                             d='M5 13l4 4L19 7'
-                                          />
-                                       </svg>
-                                    </div>
-                                    <span className='text-xs'>Giao hàng toàn quốc</span>
-                                 </div>
-                                 <div className='flex items-center gap-2'>
-                                    <div className='h-8 w-8 rounded-full bg-amber-100 flex items-center justify-center text-amber-600'>
-                                       <svg
-                                          xmlns='http://www.w3.org/2000/svg'
-                                          className='h-4 w-4'
-                                          fill='none'
-                                          viewBox='0 0 24 24'
-                                          stroke='currentColor'
-                                       >
-                                          <path
-                                             strokeLinecap='round'
-                                             strokeLinejoin='round'
-                                             strokeWidth={2}
-                                             d='M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z'
-                                          />
-                                       </svg>
-                                    </div>
-                                    <span className='text-xs'>Bảo mật thanh toán</span>
-                                 </div>
-                                 <div className='flex items-center gap-2'>
-                                    <div className='h-8 w-8 rounded-full bg-amber-100 flex items-center justify-center text-amber-600'>
-                                       <svg
-                                          xmlns='http://www.w3.org/2000/svg'
-                                          className='h-4 w-4'
-                                          fill='none'
-                                          viewBox='0 0 24 24'
-                                          stroke='currentColor'
-                                       >
-                                          <path
-                                             strokeLinecap='round'
-                                             strokeLinejoin='round'
-                                             strokeWidth={2}
-                                             d='M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4'
-                                          />
-                                       </svg>
-                                    </div>
-                                    <span className='text-xs'>Đổi trả dễ dàng</span>
-                                 </div>
-                                 <div className='flex items-center gap-2'>
-                                    <div className='h-8 w-8 rounded-full bg-amber-100 flex items-center justify-center text-amber-600'>
-                                       <svg
-                                          xmlns='http://www.w3.org/2000/svg'
-                                          className='h-4 w-4'
-                                          fill='none'
-                                          viewBox='0 0 24 24'
-                                          stroke='currentColor'
-                                       >
-                                          <path
-                                             strokeLinecap='round'
-                                             strokeLinejoin='round'
-                                             strokeWidth={2}
-                                             d='M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z'
-                                          />
-                                       </svg>
-                                    </div>
-                                    <span className='text-xs'>Hỗ trợ 24/7</span>
-                                 </div>
-                              </div>
-                           </div>
-                        </div>
                      </div>
                   </div>
-               ) : (
-                  // Empty cart state
-                  <div className='bg-white rounded-lg shadow-sm p-8 text-center'>
-                     <div className='flex justify-center mb-4'>
-                        <div className='h-24 w-24 rounded-full bg-amber-100 flex items-center justify-center'>
-                           <ShoppingBagIcon className='h-12 w-12 text-amber-600' />
+
+                  {/* Order Summary */}
+                  <div className='lg:w-1/4'>
+                     <div className='bg-white rounded-lg shadow p-5'>
+                        <h2 className='text-lg font-medium mb-4'>Thông tin đơn hàng</h2>
+
+                        <div className='space-y-3 mb-4'>
+                           <div className='flex justify-between'>
+                              <span className='text-gray-600'>Tạm tính ({totalQuantity} sản phẩm)</span>
+                              <span>{formatPrice(totalPrice)}</span>
+                           </div>
+
                         </div>
-                     </div>
-                     <h2 className='text-2xl font-medium text-gray-800 mb-3'>
-                        Giỏ hàng của bạn đang trống
-                     </h2>
-                     <p className='text-gray-500 mb-6'>
-                        Thêm sản phẩm vào giỏ hàng để tiến hành mua sắm
-                     </p>
-                     <Link href='/user/product'>
-                        <button className='bg-amber-600 hover:bg-amber-700 text-white px-6 py-3 rounded-lg transition-colors'>
-                           Tiếp Tục Mua Sắm
+
+                        <div className='border-t border-gray-200 pt-3 mb-5'>
+                           <div className='flex justify-between items-center'>
+                              <span className='font-medium'>Tổng cộng</span>
+                              <span className='text-xl font-medium text-red-600'>{formatPrice(totalPrice)}</span>
+                           </div>
+                        </div>
+
+                        <button
+                           className='w-full py-3 bg-orange-700 text-white rounded hover:bg-orange-800 transition'
+                           onClick={handleCheckout}
+                        >
+                           Tiến hành đặt hàng
                         </button>
-                     </Link>
-                  </div>
-               )}
 
-               {/* Recently Viewed Products */}
-               <div className='mt-16'>
-                  <ViewedCarousel />
+                        <Link href='/user/products' className='block text-center mt-4 text-orange-700 hover:underline'>
+                           Tiếp tục mua sắm
+                        </Link>
+                     </div>
+                  </div>
                </div>
-            </div>
+            )}
          </div>
 
-         {/* Footer */}
          <Footer />
       </div>
    );

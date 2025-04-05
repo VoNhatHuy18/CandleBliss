@@ -33,15 +33,22 @@ interface Price {
    product_detail: ProductDetail;
 }
 
+interface Category {
+   id: number;
+   name: string;
+   description: string;
+}
+
 interface Product {
    id: number;
    name: string;
    description: string;
    video: string;
    images: ProductImage | ProductImage[];
+   category_id?: number;
+   categories?: Category[];
 }
 
-// Cập nhật interface
 interface ProductCardProps {
    title: string;
    description: string;
@@ -62,7 +69,7 @@ interface ProductCardProps {
 }
 
 const ProductCard = ({
-   id, // Thêm id vào props
+   id,
    title,
    description,
    price,
@@ -72,7 +79,7 @@ const ProductCard = ({
    variants,
    onViewDetail,
    onAddToCart,
-}: ProductCardProps & { id: number }) => { // Mở rộng interface để bao gồm id
+}: ProductCardProps & { id: number }) => {
    const renderStars = () => {
       const stars = [];
       const fullStars = Math.floor(rating);
@@ -111,10 +118,9 @@ const ProductCard = ({
                className='h-full w-full object-cover transition-all duration-300 group-hover:blur-sm'
             />
             <div className='absolute inset-0 flex flex-col items-center justify-center gap-4 opacity-0 group-hover:opacity-100 transition-opacity duration-300'>
-               {/* Cập nhật Link để sử dụng id thay vì title */}
                <Link href={`/user/products/${id}`}>
                   <button
-                     onClick={() => onViewDetail && onViewDetail(id)} // Cập nhật để truyền id
+                     onClick={() => onViewDetail && onViewDetail(id)}
                      className='bg-white/90 hover:bg-white text-gray-800 px-4 py-2 rounded-full flex items-center gap-2 transition-colors duration-200 border border-black'
                   >
                      <Eye className='w-4 h-4' />
@@ -122,7 +128,7 @@ const ProductCard = ({
                   </button>
                </Link>
                <button
-                  onClick={() => onAddToCart && onAddToCart(id, variants?.[0]?.detailId)} // Cập nhật để truyền id và detailId
+                  onClick={() => onAddToCart && onAddToCart(id, variants?.[0]?.detailId)}
                   className='bg-white/90 hover:bg-white text-gray-800 px-4 py-2 rounded-full flex items-center gap-2 transition-colors duration-200 border border-black'
                >
                   <ShoppingCart className='w-4 h-4' />
@@ -130,7 +136,6 @@ const ProductCard = ({
                </button>
             </div>
          </div>
-         {/* Phần còn lại giữ nguyên */}
          <div className='mt-3'>
             <h3 className='text-sm font-medium text-gray-700 mb-1'>{title}</h3>
             <p className='text-xs text-gray-500 line-clamp-2 mb-1'>{description}</p>
@@ -147,13 +152,12 @@ const ProductCard = ({
                   <p className='text-sm font-medium text-red-600'>{formatPrice(price)}đ</p>
                )}
             </div>
-
          </div>
       </div>
    );
 };
 
-export default function ProductPage() {
+export default function ScentsPage() {
    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
    const [products, setProducts] = useState<
       Array<{
@@ -176,40 +180,176 @@ export default function ProductPage() {
    >([]);
    const [loading, setLoading] = useState(true);
    const [error, setError] = useState<string | null>(null);
+   const [categoryName, setCategoryName] = useState<string>('Tinh dầu');
+   const [categoryId, setCategoryId] = useState<number | null>(null);
+
+   useEffect(() => {
+      const fetchCategories = async () => {
+         try {
+            const response = await fetch('http://localhost:3000/api/categories');
+            
+            let categoriesData;
+            
+            if (response.status === 302) {
+               // Handle 302 redirect - extract data from the response if possible
+               const responseText = await response.text();
+               
+               if (responseText.includes('[') && responseText.includes(']')) {
+                  const jsonStart = responseText.indexOf('[');
+                  const jsonEnd = responseText.lastIndexOf(']') + 1;
+                  const jsonString = responseText.substring(jsonStart, jsonEnd);
+                  
+                  try {
+                     categoriesData = JSON.parse(jsonString);
+                     console.log('Extracted categories from 302 response text:', categoriesData);
+                  } catch (error) {
+                     console.error('Failed to parse categories from 302 response:', error);
+                     throw new Error('Không thể xử lý dữ liệu danh mục từ máy chủ');
+                  }
+               }
+            } else if (!response.ok) {
+               const errorText = await response.text();
+               
+               if (errorText.includes('[') && errorText.includes(']')) {
+                  const jsonStart = errorText.indexOf('[');
+                  const jsonEnd = errorText.lastIndexOf(']') + 1;
+                  const jsonString = errorText.substring(jsonStart, jsonEnd);
+                  
+                  try {
+                     categoriesData = JSON.parse(jsonString);
+                  } catch (error) {
+                     console.error('Failed to parse categories from error response:', error);
+                     throw new Error(`Không thể tải danh mục sản phẩm: ${errorText}`);
+                  }
+               } else {
+                  throw new Error(`Không thể tải danh mục sản phẩm: ${response.status}`);
+               }
+            } else {
+               categoriesData = await response.json();
+            }
+            
+            if (Array.isArray(categoriesData)) {
+               console.log('All categories:', categoriesData.map(c => c.name).join(', '));
+               
+               // First, try to find an exact match for accessories
+               // Using popular variations of "Phụ Kiện Nến" in Vietnamese
+               const accessoriesKeywords = [
+                  'Tinh dầu', 
+                  
+               ];
+               
+               let accessoriesCategory = null;
+               
+               // Look for exact matches first
+               for (const keyword of accessoriesKeywords) {
+                  accessoriesCategory = categoriesData.find(cat => 
+                     cat.name && cat.name.trim().toLowerCase() === keyword
+                  );
+                  if (accessoriesCategory) break;
+               }
+               
+               // If no exact match, look for categories containing these keywords
+               if (!accessoriesCategory) {
+                  for (const keyword of accessoriesKeywords) {
+                     accessoriesCategory = categoriesData.find(cat => 
+                        cat.name && cat.name.toLowerCase().includes(keyword)
+                     );
+                     if (accessoriesCategory) break;
+                  }
+               }
+               
+               if (accessoriesCategory) {
+                  console.log('Found accessories category:', accessoriesCategory.name, 'with ID:', accessoriesCategory.id);
+                  setCategoryId(accessoriesCategory.id);
+                  setCategoryName(accessoriesCategory.name);
+               } else {
+                  console.log('No accessories category found, using default name');
+                  // Keep the default name
+               }
+            }
+         } catch (error) {
+            console.error('Error fetching categories:', error);
+            // Continue with default category name
+         }
+      };
+      
+      fetchCategories();
+   }, []);
 
    useEffect(() => {
       const fetchProducts = async () => {
          try {
+            // Fetch all products first
             const productsResponse = await fetch('http://localhost:3000/api/products');
             if (!productsResponse.ok) {
                throw new Error('Failed to fetch products');
             }
             const productsData: Product[] = await productsResponse.json();
 
+            // Normalize product data
             const normalizedProducts = productsData.map((product) => ({
                ...product,
                images: Array.isArray(product.images) ? product.images : [product.images],
             }));
 
-            console.log('Normalized Products data:', normalizedProducts);
+            // Filter products specifically for accessories category
+            let filteredProducts = normalizedProducts;
+            
+            if (categoryId) {
+               // Filter by exact category ID match (primary filtering)
+               filteredProducts = normalizedProducts.filter(product => 
+                  product.category_id === categoryId ||
+                  product.categories?.some(cat => cat.id === categoryId)
+               );
+            } else {
+               // Fallback filtering by name if no category ID is found
+               const accessoriesKeywords = [
+                  'phụ kiện', 
+                  'accessories', 
+                  'đế nến', 
+                  'giá đỡ', 
+                  'holder', 
+                  'stand', 
+                  'đèn nến',
+                  'dụng cụ'
+               ];
+               
+               filteredProducts = normalizedProducts.filter(product => {
+                  // Check if product name or description contains keywords related to accessories
+                  const nameMatches = product.name && 
+                     accessoriesKeywords.some(keyword => 
+                        product.name.toLowerCase().includes(keyword.toLowerCase())
+                     );
+                  
+                  // Check if product description contains keywords related to accessories
+                  const descMatches = product.description && 
+                     accessoriesKeywords.some(keyword => 
+                        product.description.toLowerCase().includes(keyword.toLowerCase())
+                     );
+                  
+                  // Check if product belongs to a category with accessories-related name
+                  const categoryMatches = product.categories?.some(cat => 
+                     cat.name && accessoriesKeywords.some(keyword => 
+                        cat.name.toLowerCase().includes(keyword.toLowerCase())
+                     )
+                  );
+                  
+                  return nameMatches || descMatches || categoryMatches;
+               });
+            }
 
-            normalizedProducts.forEach((product, index) => {
-               console.log(`Product ${index}: ${product.name}`);
-               console.log(`  - Has images:`, product.images.length > 0);
-               if (product.images && product.images.length > 0) {
-                  console.log(`  - First image path:`, product.images[0].path);
-               }
-            });
+            console.log(`Found ${filteredProducts.length} accessories products in category ${categoryName}`);
 
             try {
                const pricesResponse = await fetch('http://localhost:3000/api/v1/prices', {
                   headers: {
-                     Authorization: 'Bearer ' + localStorage.getItem('token'),
+                     Authorization: 'Bearer ' + (localStorage.getItem('token') || ''),
                   },
                });
+               
                if (!pricesResponse.ok) {
                   console.warn('Could not fetch prices, using default values');
-                  const mappedProducts = normalizedProducts.map((product) => {
+                  const mappedProducts = filteredProducts.map((product) => {
                      const imageUrl =
                         product.images && product.images.length > 0 ? product.images[0].path : null;
 
@@ -223,36 +363,26 @@ export default function ProductPage() {
                      };
                   });
                   setProducts(mappedProducts);
+                  setLoading(false);
                   return;
                }
 
                const pricesData: Price[] = await pricesResponse.json();
 
-               console.log("Price data structure:", pricesData.length > 0 ? pricesData[0] : "No prices");
-
-               const mappedProducts = normalizedProducts.map((product) => {
-                  console.log(`Mapping product ${product.id}: ${product.name}`);
-
+               const mappedProducts = filteredProducts.map((product) => {
                   const imageUrl =
                      product.images && product.images.length > 0 ? product.images[0].path : null;
-                  console.log(`  - Image path:`, imageUrl);
-
 
                   const productPrices = pricesData.filter((price) => {
                      if (!price.product_detail) return false;
-
-
                      return price.product_detail && price.product_detail.id;
                   });
-
-                  console.log(`  - Found ${productPrices.length} prices for product`);
 
                   let basePrice = '0';
                   let discountPrice: string | undefined = undefined;
 
                   if (productPrices.length > 0) {
                      productPrices.sort((a, b) => Number(a.base_price) - Number(b.base_price));
-
                      basePrice = productPrices[0].base_price.toString();
 
                      const discountPrices = productPrices
@@ -262,12 +392,7 @@ export default function ProductPage() {
                      if (discountPrices.length > 0) {
                         discountPrice = discountPrices[0].discount_price.toString();
                      }
-
-                     console.log(`  - Selected base price: ${basePrice}`);
-                     console.log(`  - Selected discount price: ${discountPrice || 'None'}`);
                   }
-
-                  console.log(`  - Final imageUrl:`, imageUrl || '/images/placeholder.jpg');
 
                   const variants = productPrices.map(price => {
                      const detail = price.product_detail;
@@ -296,7 +421,7 @@ export default function ProductPage() {
                setProducts(mappedProducts);
             } catch (priceErr) {
                console.warn('Error fetching prices:', priceErr);
-               const mappedProducts = normalizedProducts.map((product) => ({
+               const mappedProducts = filteredProducts.map((product) => ({
                   id: product.id,
                   title: product.name,
                   description: product.description,
@@ -315,27 +440,26 @@ export default function ProductPage() {
       };
 
       fetchProducts();
-   }, []);
+   }, [categoryId, categoryName]);
 
    const handleViewDetail = (productId: number) => {
       console.log('View detail clicked for product ID:', productId);
-      // Bạn có thể thêm logic bổ sung ở đây
    };
 
    const handleAddToCart = (productId: number, detailId?: number) => {
       console.log('Add to cart clicked for product ID:', productId, 'Detail ID:', detailId);
 
-      // Tìm sản phẩm trong danh sách
+      // Find the product in the list
       const product = products.find(p => p.id === productId);
       if (!product) return;
 
-      // Tìm biến thể (variant) đầu tiên hoặc sử dụng detailId đã chọn
+      // Find either the specified variant or use the first one
       const variant = detailId
          ? product.variants?.find(v => v.detailId === detailId)
          : product.variants?.[0];
 
       if (!variant) {
-         // Nếu không có biến thể, sử dụng thông tin sản phẩm chính
+         // If no variant exists, use main product info
          const cartItem = {
             productId: product.id,
             name: product.title,
@@ -344,14 +468,14 @@ export default function ProductPage() {
             imageUrl: product.imageUrl
          };
 
-         // Thêm vào localStorage hoặc xử lý theo logic giỏ hàng của bạn
+         // Add to localStorage or your cart logic
          const cartItems = JSON.parse(localStorage.getItem('cart') || '[]');
          cartItems.push(cartItem);
          localStorage.setItem('cart', JSON.stringify(cartItems));
 
          alert('Đã thêm sản phẩm vào giỏ hàng!');
       } else {
-         // Nếu có biến thể
+         // If variant exists
          const cartItem = {
             productId: product.id,
             name: product.title,
@@ -363,7 +487,7 @@ export default function ProductPage() {
             imageUrl: product.imageUrl
          };
 
-         // Thêm vào localStorage hoặc xử lý theo logic giỏ hàng của bạn
+         // Add to localStorage or your cart logic
          const cartItems = JSON.parse(localStorage.getItem('cart') || '[]');
          cartItems.push(cartItem);
          localStorage.setItem('cart', JSON.stringify(cartItems));
@@ -377,9 +501,7 @@ export default function ProductPage() {
          <NavBar />
          <div className='px-4 lg:px-0 py-8'>
             <p className='text-center text-[#555659] text-lg font-mont'>S Ả N P H Ẩ M</p>
-            <p className='text-center font-mont font-semibold text-xl lg:text-3xl pb-4'>TẤT CẢ SẢN PHẨM</p>
-
-
+            <p className='text-center font-mont font-semibold text-xl lg:text-3xl pb-4'>{categoryName}</p>
          </div>
 
          {/* Mobile menu button */}
@@ -391,7 +513,6 @@ export default function ProductPage() {
          </button>
 
          <div className='flex flex-col lg:flex-row max-w-7xl mx-auto'>
-           
 
             {/* Main content */}
             <div className='flex-1 px-4 lg:px-8'>
@@ -409,7 +530,8 @@ export default function ProductPage() {
 
                {!loading && !error && products.length === 0 && (
                   <div className='text-center py-10'>
-                     <p className='text-gray-500'>Không tìm thấy sản phẩm nào</p>
+                     <p className='text-gray-500 mb-2'>Không tìm thấy phụ kiện nến nào trong danh mục này</p>
+                     <p className='text-sm text-gray-400'>Các sản phẩm mới sẽ sớm được cập nhật</p>
                   </div>
                )}
 

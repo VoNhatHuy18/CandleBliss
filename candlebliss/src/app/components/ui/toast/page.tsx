@@ -1,5 +1,6 @@
 'use client';
-import React, { useEffect, useState } from 'react';
+
+import { useState, useEffect } from 'react';
 
 type ToastProps = {
    show: boolean;
@@ -16,7 +17,7 @@ const Toast: React.FC<ToastProps> = ({
    type,
    onClose,
    duration = 3000,
-   position = 'top-right', // Mặc định hiển thị ở góc trên bên phải
+   position = 'top-right',
 }) => {
    const [animation, setAnimation] = useState<'fadeIn' | 'fadeOut' | ''>('');
 
@@ -27,12 +28,7 @@ const Toast: React.FC<ToastProps> = ({
          // Auto-hide after duration
          const timer = setTimeout(() => {
             setAnimation('fadeOut');
-
-            // Wait for animation to complete before calling onClose
-            setTimeout(() => {
-               onClose();
-               setAnimation('');
-            }, 300);
+            setTimeout(onClose, 300); // Đợi animation kết thúc rồi đóng
          }, duration);
 
          return () => clearTimeout(timer);
@@ -49,150 +45,52 @@ const Toast: React.FC<ToastProps> = ({
       'bottom-left': 'bottom-4 left-4',
    };
 
-   // Xác định animation name dựa trên vị trí
-   const animationName = position.startsWith('top') ? 'toastTopAnimation' : 'toastBottomAnimation';
+   // Xác định màu nền dựa trên loại thông báo
+   const bgColorClass = {
+      success: 'bg-green-500',
+      error: 'bg-red-500',
+      info: 'bg-blue-500',
+   };
 
    return (
-      <>
-         <style jsx global>{`
-            @keyframes toastTopAnimation-in {
-               0% {
-                  opacity: 0;
-                  transform: translateY(-10px);
-               }
-               100% {
-                  opacity: 1;
-                  transform: translateY(0);
-               }
-            }
-            @keyframes toastTopAnimation-out {
-               0% {
-                  opacity: 1;
-                  transform: translateY(0);
-               }
-               100% {
-                  opacity: 0;
-                  transform: translateY(-10px);
-               }
-            }
+      <div
+         className={`fixed ${positionClasses[position]} z-50 p-4 rounded-lg shadow-lg text-white ${bgColorClass[type]} min-w-[300px] max-w-md flex items-center justify-between ${animation === 'fadeIn' ? 'animate-fadeIn' : 'animate-fadeOut'
+            }`}
+      >
+         <div className="flex-1">
+            {message}
+         </div>
+         <button onClick={onClose} className="ml-4 text-white hover:text-gray-200">
+            <svg
+               className="w-5 h-5"
+               fill="none"
+               stroke="currentColor"
+               viewBox="0 0 24 24"
+            >
+               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+         </button>
 
-            @keyframes toastBottomAnimation-in {
-               0% {
-                  opacity: 0;
-                  transform: translateY(10px);
-               }
-               100% {
-                  opacity: 1;
-                  transform: translateY(0);
-               }
+         <style jsx global>{`
+            @keyframes fadeIn {
+               from { opacity: 0; transform: translateY(-20px); }
+               to { opacity: 1; transform: translateY(0); }
             }
-            @keyframes toastBottomAnimation-out {
-               0% {
-                  opacity: 1;
-                  transform: translateY(0);
-               }
-               100% {
-                  opacity: 0;
-                  transform: translateY(10px);
-               }
+            
+            @keyframes fadeOut {
+               from { opacity: 1; transform: translateY(0); }
+               to { opacity: 0; transform: translateY(-20px); }
+            }
+            
+            .animate-fadeIn {
+               animation: fadeIn 0.3s ease-in-out forwards;
+            }
+            
+            .animate-fadeOut {
+               animation: fadeOut 0.3s ease-in-out forwards;
             }
          `}</style>
-
-         <div
-            className={`fixed ${
-               positionClasses[position]
-            } px-6 py-3 rounded-md shadow-lg flex items-center ${
-               type === 'success'
-                  ? 'bg-green-500 text-white'
-                  : type === 'error'
-                  ? 'bg-red-500 text-white'
-                  : 'bg-blue-500 text-white'
-            }`}
-            style={{
-               zIndex: 1000,
-               animation:
-                  animation === 'fadeIn'
-                     ? `${animationName}-in 0.3s ease-in-out forwards`
-                     : animation === 'fadeOut'
-                     ? `${animationName}-out 0.3s ease-in-out forwards`
-                     : 'none',
-            }}
-         >
-            {type === 'success' && (
-               <svg
-                  className='w-5 h-5 mr-2'
-                  fill='none'
-                  stroke='currentColor'
-                  viewBox='0 0 24 24'
-                  xmlns='http://www.w3.org/2000/svg'
-               >
-                  <path
-                     strokeLinecap='round'
-                     strokeLinejoin='round'
-                     strokeWidth='2'
-                     d='M5 13l4 4L19 7'
-                  ></path>
-               </svg>
-            )}
-            {type === 'error' && (
-               <svg
-                  className='w-5 h-5 mr-2'
-                  fill='none'
-                  stroke='currentColor'
-                  viewBox='0 0 24 24'
-                  xmlns='http://www.w3.org/2000/svg'
-               >
-                  <path
-                     strokeLinecap='round'
-                     strokeLinejoin='round'
-                     strokeWidth='2'
-                     d='M6 18L18 6M6 6l12 12'
-                  ></path>
-               </svg>
-            )}
-            {type === 'info' && (
-               <svg
-                  className='w-5 h-5 mr-2'
-                  fill='none'
-                  stroke='currentColor'
-                  viewBox='0 0 24 24'
-                  xmlns='http://www.w3.org/2000/svg'
-               >
-                  <path
-                     strokeLinecap='round'
-                     strokeLinejoin='round'
-                     strokeWidth='2'
-                     d='M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z'
-                  ></path>
-               </svg>
-            )}
-
-            <span>{message}</span>
-
-            <button
-               className='ml-4 focus:outline-none'
-               onClick={() => {
-                  setAnimation('fadeOut');
-                  setTimeout(onClose, 300);
-               }}
-            >
-               <svg
-                  className='w-4 h-4'
-                  fill='none'
-                  stroke='currentColor'
-                  viewBox='0 0 24 24'
-                  xmlns='http://www.w3.org/2000/svg'
-               >
-                  <path
-                     strokeLinecap='round'
-                     strokeLinejoin='round'
-                     strokeWidth='2'
-                     d='M6 18L18 6M6 6l12 12'
-                  ></path>
-               </svg>
-            </button>
-         </div>
-      </>
+      </div>
    );
 };
 

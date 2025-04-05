@@ -43,7 +43,13 @@ export default function HomePage() {
             <div className='flex items-center justify-center py-1 pb-5 px-4'>
                <div className='flex-grow'></div>
                <div>
-                  <Image src={'/images/logo2.png'} alt='Logo' height={20} width={20} />
+                  <Image
+                     src={'/images/logo2.png'}
+                     alt='Logo'
+                     height={20}
+                     width={20}
+                     style={{ height: 'auto', width: '20px' }}  // Add this style to maintain aspect ratio
+                  />
                </div>
                <div className='flex-grow border-t border-[#553C26] w-full lg:w-96'></div>
             </div>
@@ -64,7 +70,6 @@ export default function HomePage() {
                      height={380}
                      width={1700}
                      className='w-full h-auto object-cover'
-                     priority
                   />
                </div>
             </div>
@@ -72,18 +77,18 @@ export default function HomePage() {
             {/* About Section */}
             <div className='bg-[#A5978E] py-8 lg:py-16'>
                <div className='flex flex-col lg:flex-row justify-center items-center gap-7 px-4 lg:px-0 lg:w-3/4 mx-auto'>
-                 <div className='w-full lg:w-1/2'>
-                   <h1 className='text-xl lg:text-2xl font-mont font-semibold text-white pb-2'>
-                     Về Chúng tôi
-                   </h1>
-                   <p className='text-white font-mont text-base lg:text-lg'>
-                     Mỗi ngọn nến trong bộ sưu tập của chúng tôi là một kiệt tác của nghệ thuật
-                     và tính xác thực. Chúng tôi tự hào tạo ra những ngọn nến không chỉ đẹp về
-                     mặt thẩm mỹ mà còn có ý thức bảo vệ môi trường. Cam kết sử dụng vật liệu tự
-                     nhiên, bền vững của chúng tôi đảm bảo rằng mỗi ngọn nến bạn thắp đều là sự
-                     đón nhận nhẹ nhàng của bản chất thiên nhiên.
-                   </p>
-                 </div>
+                  <div className='w-full lg:w-1/2'>
+                     <h1 className='text-xl lg:text-2xl font-mont font-semibold text-white pb-2'>
+                        Về Chúng tôi
+                     </h1>
+                     <p className='text-white font-mont text-base lg:text-lg'>
+                        Mỗi ngọn nến trong bộ sưu tập của chúng tôi là một kiệt tác của nghệ thuật
+                        và tính xác thực. Chúng tôi tự hào tạo ra những ngọn nến không chỉ đẹp về
+                        mặt thẩm mỹ mà còn có ý thức bảo vệ môi trường. Cam kết sử dụng vật liệu tự
+                        nhiên, bền vững của chúng tôi đảm bảo rằng mỗi ngọn nến bạn thắp đều là sự
+                        đón nhận nhẹ nhàng của bản chất thiên nhiên.
+                     </p>
+                  </div>
                   <RotatingImages />
                </div>
             </div>
@@ -104,9 +109,8 @@ export default function HomePage() {
                      src={'/images/TextPage1.png'}
                      height={555}
                      width={1700}
-                     alt=''
+                     alt='Text page'
                      className='w-full h-auto object-cover'
-                     priority
                   />
                </div>
                <div className='max-w-[1920px] mx-auto'>
@@ -114,9 +118,8 @@ export default function HomePage() {
                      src={'/images/Banner.png'}
                      height={110}
                      width={2500}
-                     alt=''
+                     alt='Banner'
                      className='w-full h-auto object-cover'
-                     priority
                   />
                </div>
             </div>
@@ -162,9 +165,8 @@ export default function HomePage() {
                   src={'/images/image6.png'}
                   height={110}
                   width={2500}
-                  alt=''
+                  alt='Banner image'
                   className='w-full h-auto object-cover'
-                  priority
                />
             </div>
 

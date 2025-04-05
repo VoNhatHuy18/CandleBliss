@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import Head from 'next/head';
 import MenuSideBar from '@/app/components/seller/menusidebar/page';
 import Header from '@/app/components/seller/header/page';

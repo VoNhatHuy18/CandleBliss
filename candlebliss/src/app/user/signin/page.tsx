@@ -161,7 +161,45 @@ export default function SignInPage() {
 
             // Nếu API trả về thông tin người dùng, lưu lại
             if (data.user) {
-               AuthService.saveUserInfo(data.user);
+               // Đảm bảo lưu userId
+               const userInfo = {
+                  ...data.user,
+                  id: data.user.id // Đảm bảo userId được lưu
+               };
+               AuthService.saveUserInfo(userInfo);
+               
+               // Lưu userId vào localStorage để dễ dàng truy cập
+               localStorage.setItem('userId', data.user.id.toString());
+               
+               console.log("User authenticated successfully with ID:", data.user.id);
+            } else {
+               // Nếu API không trả về thông tin user, thực hiện request bổ sung để lấy thông tin
+               try {
+                  // Lấy thông tin user sau khi đăng nhập thành công
+                  const userResponse = await fetch('/api/v1/auth/me', {
+                     method: 'GET',
+                     headers: {
+                        'Authorization': `Bearer ${data.token}`,
+                        'Content-Type': 'application/json',
+                     }
+                  });
+                  
+                  if (userResponse.ok) {
+                     const userData = await userResponse.json();
+                     
+                     // Lưu thông tin user vào AuthService
+                     AuthService.saveUserInfo(userData);
+                     
+                     // Lưu userId vào localStorage để dễ dàng truy cập
+                     localStorage.setItem('userId', userData.id.toString());
+                     
+                     console.log("User information retrieved with ID:", userData.id);
+                  } else {
+                     console.warn("Failed to fetch additional user information");
+                  }
+               } catch (error) {
+                  console.error("Error fetching user details:", error);
+               }
             }
 
             setLoginSuccess(true);

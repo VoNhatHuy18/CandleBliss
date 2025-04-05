@@ -10,12 +10,23 @@ import { useProductForm } from '@/app/context/ProductFormContext';
 // Define the variant interface
 interface Variant {
    type: string;
-   value: string;
+   values: string;
    isExpanded?: boolean;
    size?: string;
    images?: string[];
    quantity?: number;
+   detailId?: number; // Thêm field này để lưu ID của product detail
 }
+
+// Add a LoadingOverlay component
+const LoadingOverlay = ({ message = "Đang xử lý..." }: { message?: string }) => (
+   <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white p-6 rounded-lg shadow-lg max-w-sm w-full text-center">
+         <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-amber-500 mb-4"></div>
+         <p className="text-gray-700">{message}</p>
+      </div>
+   </div>
+);
 
 export default function Step2() {
    const router = useRouter();
@@ -31,13 +42,15 @@ export default function Step2() {
    const [newVariantValue, setNewVariantValue] = useState<string>('');
    const [errors, setErrors] = useState<{ [key: string]: string }>({});
    const [isFormValid, setIsFormValid] = useState<boolean>(true);
+   const [isLoading, setIsLoading] = useState(false);
+   const [loadingMessage, setLoadingMessage] = useState("Đang xử lý...");
 
    // Validation rules
    const VALIDATION_RULES = {
       type: {
          required: true,
       },
-      value: {
+      values: {
          required: true,
       },
       size: {
@@ -104,7 +117,7 @@ export default function Step2() {
          return;
       }
       setErrors({});
-      setVariants([...variants, { type: '', value: '', isExpanded: false, images: [] }]);
+      setVariants([...variants, { type: '', values: '', isExpanded: false, images: [] }]);
    };
 
    // Function to remove a variant row
@@ -127,8 +140,8 @@ export default function Step2() {
       const updatedVariants = [...variants];
       if (field === 'type') {
          updatedVariants[index].type = value;
-      } else if (field === 'value') {
-         updatedVariants[index].value = value;
+      } else if (field === 'values') {
+         updatedVariants[index].values = value;
       } else if (field === 'size') {
          updatedVariants[index].size = value;
       } else if (field === 'quantity') {
@@ -152,7 +165,7 @@ export default function Step2() {
             ...variants,
             {
                type: newVariantType,
-               value: newVariantValue,
+               values: newVariantValue, // Changed from value to values
                isExpanded: true,
                size: '',
                images: [],
@@ -232,15 +245,18 @@ export default function Step2() {
    };
 
    // Handle next button click
-   const handleNext = () => {
+   const handleNext = async () => {
       // Validate all variants
       let hasErrors = false;
       const newErrors: { [key: string]: string } = {};
 
       variants.forEach((variant, index) => {
-         ['type', 'value', 'size', 'quantity'].forEach((field) => {
+         ['type', 'values', 'size', 'quantity'].forEach((field) => {
             const value = variant[field as keyof Variant];
-            const error = validateField(field, typeof value === 'string' || typeof value === 'number' ? value : '');
+            const error = validateField(
+               field,
+               typeof value === 'string' || typeof value === 'number' ? value : '',
+            );
             if (error) {
                newErrors[`${field}_${index}`] = error;
                hasErrors = true;
@@ -254,15 +270,111 @@ export default function Step2() {
          return;
       }
 
-      // Save current variants to context
-      updateFormData({ variants });
+      // Set loading state to true before starting the process
+      setIsLoading(true);
+      setLoadingMessage("Đang chuẩn bị xử lý dữ liệu sản phẩm...");
 
-      // Navigate to next step
-      router.push('/seller/products/createproduct/step3');
+      try {
+         // Lấy token và productId từ context
+         const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+         if (!token) {
+            alert('Bạn chưa đăng nhập hoặc phiên làm việc đã hết hạn');
+            router.push('/seller/signin');
+            return;
+         }
+
+         const productId = formData.productId;
+         if (!productId) {
+            alert('Không tìm thấy thông tin sản phẩm. Vui lòng quay lại bước 1.');
+            router.push('/seller/products/createproduct/step1');
+            return;
+         }
+
+         // Tạo một bản sao của variants để cập nhật detailId
+         const updatedVariants = [...variants];
+
+         // Lưu từng biến thể vào database
+         for (let i = 0; i < updatedVariants.length; i++) {
+            setLoadingMessage(`Đang xử lý phiên bản ${i + 1}/${updatedVariants.length}...`);
+            const variant = updatedVariants[i];
+
+            // Tạo FormData cho biến thể sản phẩm
+            const detailFormData = new FormData();
+            detailFormData.append('product_id', String(productId));
+            detailFormData.append('size', variant.size || '');
+            detailFormData.append('type', variant.type || '');
+            detailFormData.append('values', variant.values || '');
+            detailFormData.append('quantities', String(variant.quantity || 0));
+            detailFormData.append('isActive', 'true');
+
+            // Thêm hình ảnh cho biến thể nếu có
+            if (variant.images && variant.images.length > 0) {
+               setLoadingMessage(`Đang xử lý hình ảnh cho phiên bản ${i + 1}...`);
+               for (const imgUrl of variant.images) {
+                  if (imgUrl.startsWith('blob:')) {
+                     try {
+                        const imgResponse = await fetch(imgUrl);
+                        const imgBlob = await imgResponse.blob();
+                        const imgFile = new File([imgBlob], `variant-${Date.now()}.jpg`, {
+                           type: imgBlob.type,
+                        });
+                        detailFormData.append('images', imgFile);
+                     } catch (error) {
+                        console.error('Error processing variant image:', error);
+                     }
+                  }
+               }
+            }
+
+            // Gửi request tạo chi tiết sản phẩm
+            setLoadingMessage(`Đang lưu thông tin phiên bản ${i + 1}...`);
+            const detailResponse = await fetch('http://localhost:3000/api/product-details', {
+               method: 'POST',
+               headers: {
+                  Authorization: `Bearer ${token}`,
+               },
+               body: detailFormData,
+            });
+
+            if (!detailResponse.ok) {
+               const errorText = await detailResponse.text();
+               console.error('Product detail creation failed:', errorText);
+               alert(`Lỗi khi tạo chi tiết sản phẩm: ${errorText}`);
+               setIsLoading(false);
+               return;
+            }
+
+            // Lưu ID của biến thể vào đối tượng variant
+            const createdDetail = await detailResponse.json();
+            updatedVariants[i].detailId = createdDetail.id;
+         }
+
+         // Cập nhật variants trong state với các detailId mới
+         setVariants(updatedVariants);
+
+         // Cập nhật dữ liệu trong context với IDs của các biến thể
+         setLoadingMessage("Đang cập nhật dữ liệu...");
+         updateFormData({
+            ...formData,
+            variants: updatedVariants, // Sử dụng updatedVariants thay vì variants
+         });
+
+         // Chuyển đến bước tiếp theo
+         setLoadingMessage("Hoàn tất! Đang chuyển hướng...");
+         router.push('/seller/products/createproduct/step3');
+      } catch (error) {
+         console.error('Error creating product variants:', error);
+         alert(`Đã xảy ra lỗi: ${error instanceof Error ? error.message : 'Lỗi không xác định'}`);
+      } finally {
+         setIsLoading(false);
+      }
    };
 
    return (
       <div className='flex h-screen bg-gray-50'>
+         {/* Show the loading overlay when isLoading is true */}
+         {isLoading && <LoadingOverlay message={loadingMessage} />}
+
          {/* Sidebar */}
          <MenuSideBar />
 
@@ -435,7 +547,7 @@ export default function Step2() {
                                        onClick={() => toggleVariantExpanded(index)}
                                     >
                                        {index + 1}. {variant.type || 'Phiên bản mới'}
-                                       {variant.value && ` - ${variant.value}`}
+                                       {variant.values && ` - ${variant.values}`}
                                     </div>
                                     <div className='flex items-center'>
                                        <button
@@ -460,9 +572,8 @@ export default function Step2() {
                                        </button>
                                        <svg
                                           xmlns='http://www.w3.org/2000/svg'
-                                          className={`h-5 w-5 transform cursor-pointer ${
-                                             variant.isExpanded ? 'rotate-180' : ''
-                                          }`}
+                                          className={`h-5 w-5 transform cursor-pointer ${variant.isExpanded ? 'rotate-180' : ''
+                                             }`}
                                           fill='none'
                                           viewBox='0 0 24 24'
                                           stroke='currentColor'
@@ -498,11 +609,10 @@ export default function Step2() {
                                                       )
                                                    }
                                                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500 
-                                                   ${
-                                                      errors[`type_${index}`]
+                                                   ${errors[`type_${index}`]
                                                          ? 'border-red-500'
                                                          : 'border-gray-300'
-                                                   }`}
+                                                      }`}
                                                    placeholder='Nhập phân loại'
                                                 />
                                                 {errors[`type_${index}`] && (
@@ -517,25 +627,24 @@ export default function Step2() {
                                                 </label>
                                                 <input
                                                    type='text'
-                                                   value={variant.value || ''}
+                                                   value={variant.values || ''} // Changed from variant.value to variant.values
                                                    onChange={(e) =>
                                                       handleVariantChange(
                                                          index,
-                                                         'value',
+                                                         'values', // Changed from 'value' to 'values'
                                                          e.target.value,
                                                       )
                                                    }
                                                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500 
-                                                   ${
-                                                      errors[`value_${index}`]
+                                                   ${errors[`values_${index}`] // Changed from value_${index} to values_${index}
                                                          ? 'border-red-500'
                                                          : 'border-gray-300'
-                                                   }`}
+                                                      }`}
                                                    placeholder='Nhập giá trị'
                                                 />
-                                                {errors[`value_${index}`] && (
+                                                {errors[`values_${index}`] && ( // Changed from value_${index} to values_${index}
                                                    <p className='text-red-500 text-xs mt-1'>
-                                                      {errors[`value_${index}`]}
+                                                      {errors[`values_${index}`]} // Changed from value_${index} to values_${index}
                                                    </p>
                                                 )}
                                              </div>
@@ -557,11 +666,10 @@ export default function Step2() {
                                                       )
                                                    }
                                                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500 
-                                                   ${
-                                                      errors[`size_${index}`]
+                                                   ${errors[`size_${index}`]
                                                          ? 'border-red-500'
                                                          : 'border-gray-300'
-                                                   }`}
+                                                      }`}
                                                    placeholder='Nhập size hoặc màu sắc'
                                                 />
                                                 {errors[`size_${index}`] && (
@@ -586,11 +694,10 @@ export default function Step2() {
                                                    }
                                                    placeholder='0'
                                                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500 
-                                                   ${
-                                                      errors[`quantity_${index}`]
+                                                   ${errors[`quantity_${index}`]
                                                          ? 'border-red-500'
                                                          : 'border-gray-300'
-                                                   }`}
+                                                      }`}
                                                 />
                                                 {errors[`quantity_${index}`] && (
                                                    <p className='text-red-500 text-xs mt-1'>
@@ -613,9 +720,8 @@ export default function Step2() {
                                                       >
                                                          <Image
                                                             src={img}
-                                                            alt={`${variant.type} image ${
-                                                               imgIndex + 1
-                                                            }`}
+                                                            alt={`${variant.type} image ${imgIndex + 1
+                                                               }`}
                                                             width={64}
                                                             height={64}
                                                             className='object-cover'
