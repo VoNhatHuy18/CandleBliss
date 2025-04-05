@@ -479,6 +479,35 @@ export default function CheckoutPage() {
     }
   };
 
+  // Thêm hàm này vào phần các hàm tiện ích của bạn
+  const getUserNameAndPhone = async (userId: number) => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return { fullName: '', phone: '' };
+
+      const response = await fetch(`http://localhost:3000/api/v1/users/${userId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (response.ok) {
+        const user = await response.json();
+
+        // Tạo tên đầy đủ từ firstName và lastName
+        const fullName = `${user.firstName || ''} ${user.lastName || ''}`.trim();
+
+        // Lấy số điện thoại nếu có
+        const phone = user.phone?.toString() || '';
+
+        return { fullName, phone };
+      }
+
+      return { fullName: '', phone: '' };
+    } catch (error) {
+      console.error("Error fetching user info:", error);
+      return { fullName: '', phone: '' };
+    }
+  };
+
   // Cập nhật hàm findAddressesByUserId để sử dụng localStorage để lưu trữ các ID địa chỉ
   const findAddressesByUserId = async (userId: number) => {
     try {
@@ -1132,6 +1161,43 @@ export default function CheckoutPage() {
     }
   };
 
+  // Cập nhật hàm xử lý khi nhấn nút "Thêm địa chỉ mới"
+  const handleAddNewAddress = async () => {
+    try {
+      // Trước khi hiển thị form, lấy thông tin người dùng để điền sẵn
+      if (userId) {
+        const { fullName, phone } = await getUserNameAndPhone(userId);
+
+        setNewAddress({
+          fullName: fullName,
+          phone: phone,
+          province: '',
+          district: '',
+          ward: '',
+          streetAddress: '',
+          isDefault: addresses.length === 0
+        });
+      }
+
+      setShowAddAddressForm(true);
+    } catch (error) {
+      console.error("Error preparing new address form:", error);
+
+      // Nếu có lỗi, vẫn hiển thị form với thông tin trống
+      setNewAddress({
+        fullName: '',
+        phone: '',
+        province: '',
+        district: '',
+        ward: '',
+        streetAddress: '',
+        isDefault: addresses.length === 0
+      });
+
+      setShowAddAddressForm(true);
+    }
+  };
+
   if (loading) {
     return (
       <div className='bg-[#F1EEE9] min-h-screen'>
@@ -1264,18 +1330,7 @@ export default function CheckoutPage() {
 
                       {/* Nút thêm địa chỉ mới */}
                       <button
-                        onClick={() => {
-                          setNewAddress({
-                            fullName: userInfo?.firstName + ' ' + userInfo?.lastName || '',
-                            phone: userInfo?.phone?.toString() || '',
-                            province: '',
-                            district: '',
-                            ward: '',
-                            streetAddress: '',
-                            isDefault: addresses.length === 0
-                          });
-                          setShowAddAddressForm(true);
-                        }}
+                        onClick={handleAddNewAddress}
                         className='mt-4 flex items-center justify-center w-full border border-dashed border-gray-300 rounded-lg p-3 hover:border-orange-300 hover:bg-orange-50/30 transition-all duration-200'
                       >
                         <svg className='w-5 h-5 text-orange-600 mr-2' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
