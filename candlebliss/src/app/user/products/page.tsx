@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Star, StarHalf, Eye, Menu, X, ShoppingCart } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import NavBar from '@/app/components/user/nav/page';
 import MenuSidebar from '@/app/components/user/menusidebar/page';
 import Footer from '@/app/components/user/footer/page';
@@ -41,7 +42,6 @@ interface Product {
    images: ProductImage | ProductImage[];
 }
 
-// Cập nhật interface
 interface ProductCardProps {
    title: string;
    description: string;
@@ -62,7 +62,7 @@ interface ProductCardProps {
 }
 
 const ProductCard = ({
-   id, // Thêm id vào props
+   id,
    title,
    description,
    price,
@@ -72,7 +72,7 @@ const ProductCard = ({
    variants,
    onViewDetail,
    onAddToCart,
-}: ProductCardProps & { id: number }) => { // Mở rộng interface để bao gồm id
+}: ProductCardProps & { id: number }) => {
    const renderStars = () => {
       const stars = [];
       const fullStars = Math.floor(rating);
@@ -111,10 +111,9 @@ const ProductCard = ({
                className='h-full w-full object-cover transition-all duration-300 group-hover:blur-sm'
             />
             <div className='absolute inset-0 flex flex-col items-center justify-center gap-4 opacity-0 group-hover:opacity-100 transition-opacity duration-300'>
-               {/* Cập nhật Link để sử dụng id thay vì title */}
                <Link href={`/user/products/${id}`}>
                   <button
-                     onClick={() => onViewDetail && onViewDetail(id)} // Cập nhật để truyền id
+                     onClick={() => onViewDetail && onViewDetail(id)}
                      className='bg-white/90 hover:bg-white text-gray-800 px-4 py-2 rounded-full flex items-center gap-2 transition-colors duration-200 border border-black'
                   >
                      <Eye className='w-4 h-4' />
@@ -122,7 +121,7 @@ const ProductCard = ({
                   </button>
                </Link>
                <button
-                  onClick={() => onAddToCart && onAddToCart(id, variants?.[0]?.detailId)} // Cập nhật để truyền id và detailId
+                  onClick={() => onAddToCart && onAddToCart(id, variants?.[0]?.detailId)}
                   className='bg-white/90 hover:bg-white text-gray-800 px-4 py-2 rounded-full flex items-center gap-2 transition-colors duration-200 border border-black'
                >
                   <ShoppingCart className='w-4 h-4' />
@@ -130,7 +129,6 @@ const ProductCard = ({
                </button>
             </div>
          </div>
-         {/* Phần còn lại giữ nguyên */}
          <div className='mt-3'>
             <h3 className='text-sm font-medium text-gray-700 mb-1'>{title}</h3>
             <p className='text-xs text-gray-500 line-clamp-2 mb-1'>{description}</p>
@@ -147,7 +145,6 @@ const ProductCard = ({
                   <p className='text-sm font-medium text-red-600'>{formatPrice(price)}đ</p>
                )}
             </div>
-
          </div>
       </div>
    );
@@ -174,8 +171,30 @@ export default function ProductPage() {
          }>;
       }>
    >([]);
+   const [filteredProducts, setFilteredProducts] = useState<
+      Array<{
+         id: number;
+         title: string;
+         description: string;
+         price: string;
+         discountPrice?: string;
+         rating: number;
+         imageUrl: string;
+         variants?: Array<{
+            detailId: number;
+            size: string;
+            type: string;
+            basePrice: string;
+            discountPrice?: string;
+            inStock: boolean;
+         }>;
+      }>
+   >([]);
    const [loading, setLoading] = useState(true);
    const [error, setError] = useState<string | null>(null);
+
+   const searchParams = useSearchParams();
+   const searchQuery = searchParams.get('search') || '';
 
    useEffect(() => {
       const fetchProducts = async () => {
@@ -223,6 +242,7 @@ export default function ProductPage() {
                      };
                   });
                   setProducts(mappedProducts);
+                  setFilteredProducts(mappedProducts);
                   return;
                }
 
@@ -294,6 +314,7 @@ export default function ProductPage() {
                });
 
                setProducts(mappedProducts);
+               setFilteredProducts(mappedProducts);
             } catch (priceErr) {
                console.warn('Error fetching prices:', priceErr);
                const mappedProducts = normalizedProducts.map((product) => ({
@@ -305,6 +326,7 @@ export default function ProductPage() {
                   imageUrl: product.images?.[0]?.path || '/images/placeholder.jpg',
                }));
                setProducts(mappedProducts);
+               setFilteredProducts(mappedProducts);
             }
          } catch (err) {
             console.error('Error fetching products:', err);
@@ -317,25 +339,38 @@ export default function ProductPage() {
       fetchProducts();
    }, []);
 
+   useEffect(() => {
+      if (!searchQuery.trim()) {
+         setFilteredProducts(products);
+         return;
+      }
+
+      const filtered = products.filter(product => {
+         const searchLower = searchQuery.toLowerCase();
+         return (
+            product.title.toLowerCase().includes(searchLower) ||
+            (product.description && product.description.toLowerCase().includes(searchLower))
+         );
+      });
+
+      setFilteredProducts(filtered);
+   }, [searchQuery, products]);
+
    const handleViewDetail = (productId: number) => {
       console.log('View detail clicked for product ID:', productId);
-      // Bạn có thể thêm logic bổ sung ở đây
    };
 
    const handleAddToCart = (productId: number, detailId?: number) => {
       console.log('Add to cart clicked for product ID:', productId, 'Detail ID:', detailId);
 
-      // Tìm sản phẩm trong danh sách
       const product = products.find(p => p.id === productId);
       if (!product) return;
 
-      // Tìm biến thể (variant) đầu tiên hoặc sử dụng detailId đã chọn
       const variant = detailId
          ? product.variants?.find(v => v.detailId === detailId)
          : product.variants?.[0];
 
       if (!variant) {
-         // Nếu không có biến thể, sử dụng thông tin sản phẩm chính
          const cartItem = {
             productId: product.id,
             name: product.title,
@@ -344,14 +379,12 @@ export default function ProductPage() {
             imageUrl: product.imageUrl
          };
 
-         // Thêm vào localStorage hoặc xử lý theo logic giỏ hàng của bạn
          const cartItems = JSON.parse(localStorage.getItem('cart') || '[]');
          cartItems.push(cartItem);
          localStorage.setItem('cart', JSON.stringify(cartItems));
 
          alert('Đã thêm sản phẩm vào giỏ hàng!');
       } else {
-         // Nếu có biến thể
          const cartItem = {
             productId: product.id,
             name: product.title,
@@ -363,7 +396,6 @@ export default function ProductPage() {
             imageUrl: product.imageUrl
          };
 
-         // Thêm vào localStorage hoặc xử lý theo logic giỏ hàng của bạn
          const cartItems = JSON.parse(localStorage.getItem('cart') || '[]');
          cartItems.push(cartItem);
          localStorage.setItem('cart', JSON.stringify(cartItems));
@@ -377,12 +409,17 @@ export default function ProductPage() {
          <NavBar />
          <div className='px-4 lg:px-0 py-8'>
             <p className='text-center text-[#555659] text-lg font-mont'>S Ả N P H Ẩ M</p>
-            <p className='text-center font-mont font-semibold text-xl lg:text-3xl pb-4'>TẤT CẢ SẢN PHẨM</p>
-
-
+            {searchQuery ? (
+               <p className='text-center font-mont font-semibold text-xl lg:text-3xl pb-4'>
+                  KẾT QUẢ TÌM KIẾM: "{searchQuery}"
+               </p>
+            ) : (
+               <p className='text-center font-mont font-semibold text-xl lg:text-3xl pb-4'>
+                  TẤT CẢ SẢN PHẨM
+               </p>
+            )}
          </div>
 
-         {/* Mobile menu button */}
          <button
             className='lg:hidden fixed top-20 left-4 z-50 bg-white p-2 rounded-full shadow-md'
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
@@ -391,9 +428,6 @@ export default function ProductPage() {
          </button>
 
          <div className='flex flex-col lg:flex-row max-w-7xl mx-auto'>
-           
-
-            {/* Main content */}
             <div className='flex-1 px-4 lg:px-8'>
                {loading && (
                   <div className='flex justify-center items-center h-64'>
@@ -407,14 +441,25 @@ export default function ProductPage() {
                   </div>
                )}
 
-               {!loading && !error && products.length === 0 && (
+               {!loading && !error && filteredProducts.length === 0 && (
                   <div className='text-center py-10'>
-                     <p className='text-gray-500'>Không tìm thấy sản phẩm nào</p>
+                     {searchQuery ? (
+                        <div>
+                           <p className='text-gray-600 mb-4'>Không tìm thấy sản phẩm phù hợp với "{searchQuery}"</p>
+                           <Link href='/user/products'>
+                              <button className='px-6 py-2 bg-amber-100 hover:bg-amber-200 text-[#553C26] rounded-md transition-colors'>
+                                 Xem tất cả sản phẩm
+                              </button>
+                           </Link>
+                        </div>
+                     ) : (
+                        <p className='text-gray-500'>Không có sản phẩm nào</p>
+                     )}
                   </div>
                )}
 
                <div className='grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4'>
-                  {products.map((product) => (
+                  {filteredProducts.map((product) => (
                      <ProductCard
                         key={product.id}
                         id={product.id}
@@ -431,7 +476,7 @@ export default function ProductPage() {
                   ))}
                </div>
 
-               {!loading && !error && products.length > 0 && (
+               {!loading && !error && filteredProducts.length > 0 && !searchQuery && (
                   <div className='flex justify-center items-center gap-2 mt-8 pb-8'>
                      <button className='px-3 py-1 bg-gray-200 rounded-md text-gray-700 font-medium'>
                         1

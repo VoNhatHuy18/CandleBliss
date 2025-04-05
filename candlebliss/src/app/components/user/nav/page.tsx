@@ -23,6 +23,7 @@ export default function NavBar() {
    const [userName, setUserName] = useState<string | null>(null);
    const [showUserMenu, setShowUserMenu] = useState(false);
    const [userId, setUserId] = useState<number | null>(null);
+   const [searchQuery, setSearchQuery] = useState('');
    const router = useRouter();
    const pathname = usePathname();
 
@@ -34,33 +35,26 @@ export default function NavBar() {
       setShowUserMenu(!showUserMenu);
    };
 
-   // Kiểm tra trạng thái đăng nhập mỗi khi component được render
    useEffect(() => {
       checkAuthStatus();
    }, [pathname]);
 
    const checkAuthStatus = () => {
-      // Check for JWT token in localStorage
       const token = localStorage.getItem('token');
 
       if (token) {
          try {
-            // Decode the token to get user information
             const decoded = jwtDecode<DecodedToken>(token);
 
-            // Check if token is expired
             const currentTime = Date.now() / 1000;
             if (decoded.exp && decoded.exp < currentTime) {
-               // Token expired, remove and logout
                handleLogout();
                return;
             }
 
-            // Valid token
             setIsLoggedIn(true);
             setUserName(decoded.name || 'User');
 
-            // Lấy userId từ token nếu có
             if (decoded.id) {
                setUserId(decoded.id);
                localStorage.setItem('userId', decoded.id.toString());
@@ -74,7 +68,6 @@ export default function NavBar() {
          setUserName(null);
          setUserId(null);
 
-         // If on protected routes, redirect to login
          if (pathname === '/user/profile' || pathname.startsWith('/user/orders')) {
             router.push('/user/signin');
          }
@@ -85,53 +78,42 @@ export default function NavBar() {
       e.preventDefault();
 
       if (isLoggedIn) {
-         // On desktop, toggle dropdown
          if (window.innerWidth >= 1024) {
             toggleUserMenu();
          } else {
-            // On mobile, go directly to profile
             router.push('/user/profile');
             setMobileMenuOpen(false);
          }
       } else {
-         // If not logged in, go to sign in page
          router.push('/user/signin');
          setMobileMenuOpen(false);
       }
    };
 
    const handleLogout = () => {
-      // Remove all authentication tokens
       localStorage.removeItem('userToken');
       localStorage.removeItem('token');
       localStorage.removeItem('refreshToken');
       localStorage.removeItem('userId');
 
-      // Update state
       setIsLoggedIn(false);
       setUserName(null);
       setUserId(null);
       setShowUserMenu(false);
 
-      // Redirect to home
       router.push('/user/home');
    };
 
-   // Hàm xử lý khi nhấp vào biểu tượng giỏ hàng
    const handleCartClick = async (e: React.MouseEvent) => {
       e.preventDefault();
 
-      // Nếu người dùng đã đăng nhập, kiểm tra/tạo giỏ hàng
       if (isLoggedIn && userId) {
          try {
-            // Kiểm tra xem người dùng đã có giỏ hàng chưa
             const response = await fetch(`http://localhost:3000/api/cart/user/${userId}`);
 
-            // Nếu không tìm thấy giỏ hàng, tạo mới
             if (!response.ok) {
                console.log('Creating new cart for user:', userId);
 
-               // Sử dụng endpoint POST /api/cart để tạo giỏ hàng mới
                const createCartResponse = await fetch('http://localhost:3000/api/cart', {
                   method: 'POST',
                   headers: {
@@ -150,22 +132,34 @@ export default function NavBar() {
                console.log('User cart found');
             }
 
-            // Chuyển hướng đến trang giỏ hàng
             router.push('/user/cart');
          } catch (error) {
             console.error('Error handling cart:', error);
-            // Vẫn chuyển hướng đến trang giỏ hàng ngay cả khi có lỗi
             router.push('/user/cart');
          }
       } else {
-         // Nếu người dùng chưa đăng nhập, chuyển hướng đến trang đăng nhập
          router.push('/user/signin?redirect=/user/cart');
+      }
+   };
+
+   const handleSearch = (e: React.FormEvent) => {
+      e.preventDefault();
+
+      if (searchQuery.trim()) {
+         router.push(`/user/products?search=${encodeURIComponent(searchQuery.trim())}`);
+
+         if (window.innerWidth < 1024) {
+            setShowSearchInput(false);
+         }
+
+         if (mobileMenuOpen) {
+            setMobileMenuOpen(false);
+         }
       }
    };
 
    return (
       <>
-         {/* Menu */}
          <div className='bg-[#F1EEE9] flex justify-between items-center px-4 sm:px-6 md:px-12 lg:px-20 xl:px-60 py-2'>
             <div className='flex items-center'>
                <Link href='/user/home'>
@@ -181,7 +175,6 @@ export default function NavBar() {
                </Link>
             </div>
 
-            {/* Mobile menu button */}
             <div className='flex items-center space-x-4 md:space-x-6 lg:hidden'>
                <button
                   onClick={() => setShowSearchInput(!showSearchInput)}
@@ -201,7 +194,6 @@ export default function NavBar() {
                </button>
             </div>
 
-            {/* Desktop Navigation */}
             <nav className='hidden lg:flex space-x-5 xl:space-x-10 text-[#553C26] items-center'>
                <Link href='/user/home'>
                   <button className='text-base xl:text-lg hover:text-[#FF9900] focus:font-semibold focus:text-[#FF9900] font-mont hover:font-semibold'>
@@ -254,24 +246,32 @@ export default function NavBar() {
                </Link>
                <div className='relative items-center flex'>
                   {showSearchInput && (
-                     <input
-                        type='text'
-                        className='p-2 border border-[#553C26] rounded-lg'
-                        placeholder='Tìm kiếm...'
-                     />
+                     <form onSubmit={handleSearch} className='flex items-center'>
+                        <input
+                           type='text'
+                           className='p-2 border border-[#553C26] rounded-lg'
+                           placeholder='Nhấn Enter để tìm kiếm...'
+                           value={searchQuery}
+                           onChange={(e) => setSearchQuery(e.target.value)}
+                        />
+                        <button type='submit' className='ml-2 text-[#553C26]'>
+                           <MagnifyingGlassIcon className='size-5' />
+                        </button>
+                     </form>
                   )}
-                  <button
-                     onClick={() => setShowSearchInput(!showSearchInput)}
-                     className='ml-2 text-[#553C26]'
-                  >
-                     <MagnifyingGlassIcon className='size-5' />
-                  </button>
+                  {!showSearchInput && (
+                     <button
+                        onClick={() => setShowSearchInput(true)}
+                        className='ml-2 text-[#553C26]'
+                     >
+                        <MagnifyingGlassIcon className='size-5' />
+                     </button>
+                  )}
                </div>
                <button onClick={handleCartClick} className='text-[#553C26]'>
                   <ShoppingBagIcon className='size-5' />
                </button>
 
-               {/* User Account Menu */}
                <div className='relative'>
                   <button
                      onClick={handleUserIconClick}
@@ -280,7 +280,6 @@ export default function NavBar() {
                      <UserIcon className='size-5' />
                   </button>
 
-                  {/* User Menu Dropdown */}
                   {isLoggedIn && showUserMenu && (
                      <div className='absolute top-full right-0 mt-1 bg-[#F1EEE9] rounded-md shadow-lg w-48 py-2 z-50'>
                         <Link href='/user/profile'>
@@ -297,7 +296,6 @@ export default function NavBar() {
                      </div>
                   )}
 
-                  {/* Show small indicator when logged in */}
                   {isLoggedIn && !showUserMenu && (
                      <div className='absolute bottom-0 right-0 w-2 h-2 bg-green-500 rounded-full'></div>
                   )}
@@ -305,17 +303,21 @@ export default function NavBar() {
             </nav>
          </div>
 
-         {/* Mobile Menu */}
          {mobileMenuOpen && (
             <div className='lg:hidden bg-[#F1EEE9] py-4 px-4 sm:px-6 md:px-12 shadow-md'>
                {showSearchInput && (
-                  <div className='mb-4'>
+                  <form onSubmit={handleSearch} className='mb-4 flex items-center'>
                      <input
                         type='text'
                         className='w-full p-2 border border-[#553C26] rounded-lg'
                         placeholder='Tìm kiếm...'
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
                      />
-                  </div>
+                     <button type='submit' className='ml-2 p-2 bg-amber-100 rounded-lg text-[#553C26]'>
+                        <MagnifyingGlassIcon className='size-5' />
+                     </button>
+                  </form>
                )}
                <nav className='flex flex-col space-y-4'>
                   <Link href='/user/home' onClick={toggleMobileMenu}>
@@ -363,7 +365,6 @@ export default function NavBar() {
                      </span>
                   </Link>
 
-                  {/* User Account Section - Mobile */}
                   <div className='pt-3 mt-2 border-t border-amber-200'>
                      {!isLoggedIn ? (
                         <>

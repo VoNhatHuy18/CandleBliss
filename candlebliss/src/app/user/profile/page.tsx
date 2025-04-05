@@ -452,63 +452,121 @@ const AddressesContent = () => {
       }
    };
 
-   // Find addresses by user ID - similar to checkout page approach
+   // Find addresses by user ID - optimized approach from checkout page
    const findAddressesByUserId = async (userId: number) => {
       try {
+         setIsLoading(true);
+
          const token = localStorage.getItem('token');
          if (!token) return [];
 
-         // Create an array with possible IDs
-         const addressIds = Array.from({ length: 20 }, (_, i) => i + 1);
+         // Get list of known address IDs from localStorage
+         const userAddressIdsString = localStorage.getItem(`user_${userId}_addressIds`);
+         const userAddressIds = userAddressIdsString ? JSON.parse(userAddressIdsString) : [];
 
-         // Get all addresses and check ownership
-         const addressPromises = addressIds.map(id =>
+         console.log(`Found ${userAddressIds.length} saved address IDs for user ${userId}`);
+
+         // If no addresses in localStorage, try to find addresses from API
+         if (userAddressIds.length === 0) {
+            console.log('No saved address IDs found, trying to retrieve addresses from API');
+            // Try to find addresses in a small ID range (1-20)
+            const addressPromises = [];
+            const maxAddressIdToTry = 20; // Limit number of addresses to check initially
+
+            for (let id = 1; id <= maxAddressIdToTry; id++) {
+               addressPromises.push(
+                  fetch(`/api/v1/address/${id}`, {
+                     headers: { 'Authorization': `Bearer ${token}` }
+                  })
+                     .then(response => {
+                        if (response.ok) {
+                           return response.json();
+                        }
+                        return null;
+                     })
+                     .catch(() => null)
+               );
+            }
+
+            const results = await Promise.all(addressPromises);
+            const foundAddressIds = [];
+
+            // Filter and find addresses belonging to userId
+            for (const data of results) {
+               if (data && (data.userId === userId || data.user?.id === userId)) {
+                  foundAddressIds.push(data.id);
+               }
+            }
+
+            // Save ID list to localStorage for future use
+            if (foundAddressIds.length > 0) {
+               localStorage.setItem(`user_${userId}_addressIds`, JSON.stringify(foundAddressIds));
+               console.log(`Found and saved ${foundAddressIds.length} address IDs`);
+               // Update the ID list
+               userAddressIds.push(...foundAddressIds);
+            }
+         }
+
+         // Get details of each address with known ID
+         const addressPromises = userAddressIds.map((id: any) =>
             fetch(`/api/v1/address/${id}`, {
                headers: { 'Authorization': `Bearer ${token}` }
             })
-               .then(res => res.ok ? res.json() : null)
-               .then(data => {
-                  if (!data) return null;
-
-                  // Check if address belongs to current user
-                  const addressUserId = data.user?.id || data.userId;
-
-                  if (addressUserId === userId) {
-                     // Get recipient info
-                     const receiverName = data.fullName ||
-                        (data.user ?
-                           `${data.user.firstName || ''} ${data.user.lastName || ''}`.trim() :
-                           (userInfo ?
-                              `${userInfo.firstName || ''} ${userInfo.lastName || ''}`.trim() : ''))
-
-                     // Get phone number
-                     const receiverPhone = data.phone ||
-                        (data.user?.phone?.toString() ||
-                           userInfo?.phone?.toString() || '')
-
-                     return {
-                        id: data.id,
-                        fullName: receiverName,
-                        phone: receiverPhone,
-                        province: data.province || '',
-                        district: data.district || '',
-                        ward: data.ward || '',
-                        streetAddress: data.street || '',
-                        isDefault: data.isDefault || false,
-                        userId: userId
-                     };
+               .then(response => {
+                  if (response.ok) {
+                     return response.json();
                   }
                   return null;
                })
                .catch(() => null)
          );
 
-         const results = await Promise.all(addressPromises);
-         return results.filter(addr => addr !== null) as Address[];
+         const addressesData = await Promise.all(addressPromises);
+
+         // Filter out addresses that still exist and belong to userId
+         const validAddresses = addressesData
+            .filter(data => data && (data.userId === userId || data.user?.id === userId))
+            .map(data => {
+               // Get recipient name
+               const receiverName = data.fullName ||
+                  (data.user ?
+                     `${data.user.firstName || ''} ${data.user.lastName || ''}`.trim() :
+                     (userInfo ?
+                        `${userInfo.firstName || ''} ${userInfo.lastName || ''}`.trim() : ''))
+
+               // Get phone number
+               const receiverPhone = data.phone ||
+                  (data.user?.phone?.toString() ||
+                     userInfo?.phone?.toString() || '')
+
+               return {
+                  id: data.id,
+                  fullName: receiverName,
+                  phone: receiverPhone,
+                  province: data.province || '',
+                  district: data.district || '',
+                  ward: data.ward || '',
+                  streetAddress: data.street || '',
+                  isDefault: data.isDefault || false,
+                  userId: userId
+               };
+            });
+
+         // Update valid address IDs in localStorage
+         // (in case some addresses were deleted or are no longer valid)
+         if (validAddresses.length !== userAddressIds.length) {
+            const validIds = validAddresses.map(addr => addr.id);
+            localStorage.setItem(`user_${userId}_addressIds`, JSON.stringify(validIds));
+            console.log(`Updated valid address IDs: ${validIds.length} addresses`);
+         }
+
+         return validAddresses;
 
       } catch (error) {
-         console.error("Error searching addresses:", error);
+         console.error("Error fetching user addresses:", error);
          return [];
+      } finally {
+         setIsLoading(false);
       }
    };
 

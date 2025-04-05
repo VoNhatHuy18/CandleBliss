@@ -232,7 +232,7 @@ export default function CheckoutPage() {
     }
   };
 
-  // Cập nhật hàm handleDeleteAddress để xóa ID địa chỉ khỏi localStorage
+  // Cập nhật hàm handleDeleteAddress để xóa địa chỉ khỏi cả hai dạng lưu trữ
   const handleDeleteAddress = async (addressId: number) => {
     if (window.confirm('Bạn có chắc chắn muốn xóa địa chỉ này không?')) {
       try {
@@ -243,15 +243,26 @@ export default function CheckoutPage() {
           // Xóa địa chỉ khỏi danh sách
           setAddresses(prev => prev.filter(addr => addr.id !== addressId));
 
-          // Xóa ID địa chỉ khỏi localStorage
+          // Xóa ID địa chỉ khỏi cả hai dạng lưu trữ trong localStorage
           if (userId) {
-            const storageKey = `user_${userId}_addressIds`;
-            const existingIdsStr = localStorage.getItem(storageKey);
+            // 1. Cập nhật danh sách ID
+            const idsStorageKey = `user_${userId}_addressIds`;
+            const existingIdsStr = localStorage.getItem(idsStorageKey);
             if (existingIdsStr) {
               const existingIds = JSON.parse(existingIdsStr);
               const updatedIds = existingIds.filter((id: number) => id !== addressId);
-              localStorage.setItem(storageKey, JSON.stringify(updatedIds));
-              console.log(`Removed address ID ${addressId} from localStorage`);
+              localStorage.setItem(idsStorageKey, JSON.stringify(updatedIds));
+              console.log(`Removed address ID ${addressId} from IDs list in localStorage`);
+            }
+
+            // 2. Cập nhật danh sách địa chỉ đầy đủ
+            const addressStorageKey = `user_${userId}_addresses`;
+            const existingAddressesStr = localStorage.getItem(addressStorageKey);
+            if (existingAddressesStr) {
+              const existingAddresses = JSON.parse(existingAddressesStr);
+              const updatedAddresses = existingAddresses.filter((addr: any) => addr.id !== addressId);
+              localStorage.setItem(addressStorageKey, JSON.stringify(updatedAddresses));
+              console.log(`Removed address ID ${addressId} from full address list in localStorage`);
             }
           }
 
@@ -508,7 +519,7 @@ export default function CheckoutPage() {
     }
   };
 
-  // Cập nhật hàm findAddressesByUserId để sử dụng localStorage để lưu trữ các ID địa chỉ
+  // Cập nhật hàm findAddressesByUserId để sử dụng thông tin đầy đủ từ localStorage
   const findAddressesByUserId = async (userId: number) => {
     try {
       setLoading(true);
@@ -516,11 +527,47 @@ export default function CheckoutPage() {
       const token = localStorage.getItem('token');
       if (!token) return [];
 
+      // Thử lấy địa chỉ đầy đủ từ localStorage trước
+      const addressStorageKey = `user_${userId}_addresses`;
+      const storedAddressesStr = localStorage.getItem(addressStorageKey);
+
+      if (storedAddressesStr) {
+        const storedAddresses = JSON.parse(storedAddressesStr);
+        console.log(`Found ${storedAddresses.length} complete addresses in localStorage`);
+
+        if (storedAddresses.length > 0) {
+          // Kiểm tra nhanh một địa chỉ đầu tiên để xác nhận vẫn còn tồn tại trên server
+          try {
+            const firstAddress = storedAddresses[0];
+            const checkResponse = await fetch(`http://localhost:3000/api/v1/address/${firstAddress.id}`, {
+              headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            // Nếu địa chỉ đầu tiên vẫn tồn tại, giả định các địa chỉ khác cũng vậy
+            if (checkResponse.ok) {
+              console.log("Verified addresses from localStorage are valid");
+              // Sử dụng thông tin đầy đủ từ localStorage
+              return storedAddresses;
+            } else {
+              console.log("Addresses in localStorage may be outdated, fetching from server");
+            }
+          } catch (e) {
+            console.log("Error checking address validity:", e);
+          }
+        }
+      }
+
+      // Nếu không có trong localStorage hoặc dữ liệu không còn hợp lệ, tiếp tục với logic hiện tại
+      console.log("Using ID-based approach to fetch addresses");
+
       // Lấy danh sách các ID địa chỉ đã biết từ localStorage
       const userAddressIdsString = localStorage.getItem(`user_${userId}_addressIds`);
       const userAddressIds = userAddressIdsString ? JSON.parse(userAddressIdsString) : [];
 
       console.log(`Found ${userAddressIds.length} saved address IDs for user ${userId}`);
+
+      // Còn lại là logic hiện tại để tìm và lấy địa chỉ
+      // ...
 
       // Nếu không có địa chỉ nào trong localStorage, thử tìm kiếm các địa chỉ từ API
       if (userAddressIds.length === 0) {
@@ -594,8 +641,13 @@ export default function CheckoutPage() {
           userId: userId
         }));
 
-      // Cập nhật lại danh sách ID địa chỉ hợp lệ trong localStorage 
-      // (trường hợp một số địa chỉ đã bị xóa hoặc không còn hợp lệ)
+      // Lưu đầy đủ thông tin địa chỉ vào localStorage
+      if (validAddresses.length > 0) {
+        localStorage.setItem(addressStorageKey, JSON.stringify(validAddresses));
+        console.log(`Saved ${validAddresses.length} complete addresses to localStorage`);
+      }
+
+      // Cập nhật lại danh sách ID địa chỉ hợp lệ trong localStorage
       if (validAddresses.length !== userAddressIds.length) {
         const validIds = validAddresses.map(addr => addr.id);
         localStorage.setItem(`user_${userId}_addressIds`, JSON.stringify(validIds));
@@ -839,7 +891,7 @@ export default function CheckoutPage() {
     }
   };
 
-  // Cập nhật hàm updateAddress để lưu ID địa chỉ mới vào localStorage
+  // Cập nhật hàm updateAddress để lưu thông tin đầy đủ về địa chỉ vào localStorage
   const updateAddress = async (addressData: any) => {
     try {
       const token = localStorage.getItem('token');
@@ -869,19 +921,53 @@ export default function CheckoutPage() {
       if (response.ok) {
         const savedAddress = await response.json();
 
-        // Lưu hoặc cập nhật ID địa chỉ vào localStorage
-        if (!isUpdate) {
-          // Nếu là địa chỉ mới, thêm ID vào danh sách địa chỉ đã biết
-          const userIdStr = addressData.userId.toString();
-          const storageKey = `user_${userIdStr}_addressIds`;
-          const existingIdsStr = localStorage.getItem(storageKey);
-          const existingIds = existingIdsStr ? JSON.parse(existingIdsStr) : [];
+        // Lưu hoặc cập nhật địa chỉ vào localStorage
+        const userIdStr = addressData.userId.toString();
+        const addressStorageKey = `user_${userIdStr}_addresses`;
 
-          if (!existingIds.includes(savedAddress.id)) {
-            existingIds.push(savedAddress.id);
-            localStorage.setItem(storageKey, JSON.stringify(existingIds));
-            console.log(`Added new address ID ${savedAddress.id} to localStorage`);
+        // Lấy danh sách địa chỉ hiện có từ localStorage
+        const existingAddressesStr = localStorage.getItem(addressStorageKey);
+        const existingAddresses = existingAddressesStr ? JSON.parse(existingAddressesStr) : [];
+
+        // Tạo đối tượng địa chỉ đầy đủ để lưu vào localStorage
+        const fullAddressData = {
+          id: savedAddress.id,
+          fullName: addressData.fullName,
+          phone: addressData.phone,
+          province: addressData.province,
+          district: addressData.district,
+          ward: addressData.ward,
+          streetAddress: addressData.street,
+          isDefault: addressData.isDefault,
+          userId: addressData.userId
+        };
+
+        if (isUpdate) {
+          // Nếu là cập nhật, thay thế địa chỉ cũ trong mảng
+          const addressIndex = existingAddresses.findIndex((addr: any) => addr.id === savedAddress.id);
+          if (addressIndex >= 0) {
+            existingAddresses[addressIndex] = fullAddressData;
+          } else {
+            // Trường hợp không tìm thấy trong mảng (hiếm gặp), thêm mới
+            existingAddresses.push(fullAddressData);
           }
+        } else {
+          // Nếu là địa chỉ mới, thêm vào mảng
+          existingAddresses.push(fullAddressData);
+        }
+
+        // Lưu danh sách địa chỉ đầy đủ vào localStorage
+        localStorage.setItem(addressStorageKey, JSON.stringify(existingAddresses));
+        console.log(`Saved full address data for ID: ${savedAddress.id} to localStorage`);
+
+        // Vẫn duy trì danh sách IDs để tương thích ngược
+        const idsStorageKey = `user_${userIdStr}_addressIds`;
+        const existingIdsStr = localStorage.getItem(idsStorageKey);
+        const existingIds = existingIdsStr ? JSON.parse(existingIdsStr) : [];
+
+        if (!isUpdate && !existingIds.includes(savedAddress.id)) {
+          existingIds.push(savedAddress.id);
+          localStorage.setItem(idsStorageKey, JSON.stringify(existingIds));
         }
 
         return savedAddress;
