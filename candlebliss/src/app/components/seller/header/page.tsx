@@ -4,14 +4,66 @@ import React from 'react';
 import Image from 'next/image';
 import { useState, useEffect } from 'react';
 import { Calendar, Search, Bell } from 'lucide-react';
+import { FaSpinner } from 'react-icons/fa';
 
 export default function Header() {
    const [showDropdown, setShowDropdown] = useState(false);
    const [currentDateTime, setCurrentDateTime] = useState(new Date());
    const [isMounted, setIsMounted] = useState(false);
+   const [userData, setUserData] = useState<any>(null);
+   const [avatarUrl, setAvatarUrl] = useState<string>("/images/logo.png");
+   const [isLoading, setIsLoading] = useState(true);
 
    useEffect(() => {
       setIsMounted(true);
+
+      // Load user data and avatar
+      const loadUserData = async () => {
+         try {
+            setIsLoading(true);
+
+            // Get user data from localStorage
+            const storedUser = localStorage.getItem('user');
+            if (storedUser) {
+               const parsedUser = JSON.parse(storedUser);
+               setUserData(parsedUser);
+
+               // If user has photo with base64 data, use it directly
+               if (parsedUser.photo && parsedUser.photo.data) {
+                  setAvatarUrl(parsedUser.photo.data);
+               }
+            } else {
+               // Fetch from API if not in localStorage
+               const token = localStorage.getItem('token');
+               if (token) {
+                  const response = await fetch('/api/v1/auth/me', {
+                     headers: {
+                        'Authorization': `Bearer ${token}`,
+                     }
+                  });
+
+                  if (response.ok) {
+                     const user = await response.json();
+                     setUserData(user);
+
+                     // Update avatar if available
+                     if (user.photo && user.photo.data) {
+                        setAvatarUrl(user.photo.data);
+                     }
+
+                     // Save to localStorage for future use
+                     localStorage.setItem('user', JSON.stringify(user));
+                  }
+               }
+            }
+         } catch (error) {
+            console.error("Error loading user data:", error);
+         } finally {
+            setIsLoading(false);
+         }
+      };
+
+      loadUserData();
 
       const timer = setInterval(() => {
          setCurrentDateTime(new Date());
@@ -25,18 +77,8 @@ export default function Header() {
    const formatDate = () => {
       const days = ['Chủ Nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy'];
       const months = [
-         'Tháng 1',
-         'Tháng 2',
-         'Tháng 3',
-         'Tháng 4',
-         'Tháng 5',
-         'Tháng 6',
-         'Tháng 7',
-         'Tháng 8',
-         'Tháng 9',
-         'Tháng 10',
-         'Tháng 11',
-         'Tháng 12',
+         'Tháng 1', 'Tháng 2', 'Tháng 3', 'Tháng 4', 'Tháng 5', 'Tháng 6',
+         'Tháng 7', 'Tháng 8', 'Tháng 9', 'Tháng 10', 'Tháng 11', 'Tháng 12',
       ];
 
       const day = days[currentDateTime.getDay()];
@@ -91,22 +133,32 @@ export default function Header() {
                      </span>
                   </div>
 
-                  {/* User dropdown */}
+                  {/* User dropdown with avatar */}
                   <div className='relative'>
                      <button
                         className='flex items-center bg-white rounded-lg p-1 shadow-sm'
                         onClick={() => setShowDropdown(!showDropdown)}
                      >
-                        <Image
-                              src="/images/logo.png"
-                              alt="Avatar"
-                              width={40}
-                              height={40}
-                              className="rounded-full"
-                           />
+                        <div className='relative w-10 h-10'>
+                           {isLoading ? (
+                              <div className="w-10 h-10 rounded-full flex items-center justify-center bg-gray-100">
+                                 <FaSpinner className="animate-spin text-amber-600" size={16} />
+                              </div>
+                           ) : (
+                              <Image
+                                 src={avatarUrl}
+                                 alt="Avatar"
+                                 width={40}
+                                 height={40}
+                                 className="rounded-full object-cover"
+                                 onError={() => setAvatarUrl("/images/logo.png")}
+                              />
+                           )}
+                        </div>
                         <div className='ml-2 mr-1'>
-                           
-                           <div className='text-sm font-medium text-gray-700'>Thảo Vy</div>
+                           <div className='text-sm font-medium text-gray-700'>
+                              {userData ? `${userData.firstName} ${userData.lastName}` : 'User'}
+                           </div>
                            <div className='text-xs text-gray-500'>
                               {isMounted ? formatTime() : ''}
                            </div>
@@ -117,16 +169,37 @@ export default function Header() {
                         <div className='absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-10'>
                            <div className='py-1'>
                               <a
-                                 href='#'
+                                 href='/user/profile'
                                  className='block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100'
                               >
-                                 Profile
+                                 Trang cá nhân
                               </a>
                               <a
                                  href='#'
                                  className='block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100'
                               >
-                                 Settings
+                                 Cài đặt
+                              </a>
+                              <a
+                                 href='/'
+                                 target="_blank"
+                                 rel="noopener noreferrer"
+                                 className='block px-4 py-2 text-sm text-emerald-600 hover:bg-gray-100'
+                              >
+                                 Xem cửa hàng
+                              </a>
+                              <hr className="my-1" />
+                              <a
+                                 href='#'
+                                 onClick={(e) => {
+                                    e.preventDefault();
+                                    localStorage.removeItem('token');
+                                    localStorage.removeItem('user');
+                                    window.location.href = '/seller/signin';
+                                 }}
+                                 className='block px-4 py-2 text-sm text-red-600 hover:bg-gray-100'
+                              >
+                                 Đăng xuất
                               </a>
                            </div>
                         </div>

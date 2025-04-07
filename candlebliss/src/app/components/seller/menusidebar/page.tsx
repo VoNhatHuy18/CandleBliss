@@ -15,6 +15,7 @@ import {
    Users,
    ChevronDown,
    ChevronUp,
+   Globe, // Import Globe icon for store/client navigation
 } from 'lucide-react';
 
 export default function MenuSideBar() {
@@ -47,6 +48,19 @@ export default function MenuSideBar() {
                </div>
             </div>
             <nav className='mt-4 flex-grow overflow-y-auto'>
+               {/* Visit Store Button - Added at the top */}
+               <div className='px-4 py-2 mb-2'>
+                  <Link
+                     href='/'
+                     className='flex items-center p-2 text-emerald-600 hover:bg-emerald-50 rounded border border-emerald-200 transition-colors'
+                     target="_blank"
+                     rel="noopener noreferrer"
+                  >
+                     <Globe size={18} className='mr-2' />
+                     <span>Xem Cửa Hàng</span>
+                  </Link>
+               </div>
+               
                <div className='px-4 py-2 '>
                   <Link
                      href='/seller/dashboard'

@@ -12,7 +12,8 @@ import {
    FaHeart,
    FaChevronRight,
    FaSpinner,
-   FaExclamationTriangle
+   FaExclamationTriangle,
+   FaUserCog
 } from "react-icons/fa";
 
 import Header from "@/app/components/user/nav/page";
@@ -272,8 +273,11 @@ const ProfileContent: React.FC = () => {
                </div>
                <h3 className="text-xl font-semibold">{fullName}</h3>
                <p className="text-gray-500">Thành viên từ {formatDate(user.createdAt)}</p>
-               <div className="mt-2 px-3 py-1 bg-amber-100 text-amber-800 rounded-full text-sm">
-                  {user.role.name}
+               <div className="mt-2 flex gap-2">
+                  <div className="px-3 py-1 bg-amber-100 text-amber-800 rounded-full text-sm">
+                     {user.role.name}
+                  </div>
+
                </div>
             </div>
 
@@ -1740,17 +1744,26 @@ interface MenuProfileProps {
    onTabChange: (tab: string) => void;
 }
 
+// Update the MenuProfile component to include admin dashboard button
 const MenuProfile: React.FC<MenuProfileProps> = ({ selectedTab, onTabChange }) => {
    const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
    const router = useRouter();
    const [userData, setUserData] = useState<User | null>(null);
+   const [isAdmin, setIsAdmin] = useState(false);
 
    useEffect(() => {
-      // Get the current user's name to display in the menu header
+      // Get the current user's name and role to display in the menu header
       const getUserInfo = async () => {
          try {
             const user = await fetchUserProfile();
             setUserData(user);
+
+            // Check if user has admin role
+            const isAdminUser = user.role && (
+               user.role.name.toLowerCase() === 'admin' ||
+               user.role.name.toLowerCase().includes('admin')
+            );
+            setIsAdmin(isAdminUser);
          } catch (error) {
             console.error("Failed to fetch user info for menu", error);
          }
@@ -1794,6 +1807,13 @@ const MenuProfile: React.FC<MenuProfileProps> = ({ selectedTab, onTabChange }) =
          tab: "support",
          badge: 1,
       },
+      // Add Admin Dashboard button when user is admin
+      ...(isAdmin ? [{
+         label: "Quản trị viên",
+         icon: FaUserCog,  // Add FaUserCog to imports
+         tab: "admin-dashboard",
+         isHighlighted: true,
+      }] : []),
       {
          label: "Đăng xuất",
          icon: FaSignOutAlt,
@@ -1805,6 +1825,11 @@ const MenuProfile: React.FC<MenuProfileProps> = ({ selectedTab, onTabChange }) =
    const handleTabSelect = (tab: string) => {
       if (tab === "logout") {
          setShowLogoutConfirm(true);
+         return;
+      }
+
+      if (tab === "admin-dashboard") {
+         router.push("/seller/dashboard");
          return;
       }
 
@@ -1861,18 +1886,22 @@ const MenuProfile: React.FC<MenuProfileProps> = ({ selectedTab, onTabChange }) =
                         <button
                            className={`flex items-center w-full py-3.5 px-5 transition duration-150 ${item.isDanger
                               ? "text-red-600 hover:bg-red-50 hover:text-red-700"
-                              : selectedTab === item.tab
-                                 ? "font-medium text-amber-700"
-                                 : "text-gray-700 hover:bg-amber-50"
+                              : item.isHighlighted
+                                 ? "font-medium text-purple-700 bg-purple-50 hover:bg-purple-100"
+                                 : selectedTab === item.tab
+                                    ? "font-medium text-amber-700"
+                                    : "text-gray-700 hover:bg-amber-50"
                               }`}
                            onClick={() => handleTabSelect(item.tab)}
                         >
                            <item.icon
                               className={`mr-3 ${item.isDanger
                                  ? "text-red-500"
-                                 : selectedTab === item.tab
-                                    ? "text-amber-600"
-                                    : "text-gray-500"
+                                 : item.isHighlighted
+                                    ? "text-purple-600"
+                                    : selectedTab === item.tab
+                                       ? "text-amber-600"
+                                       : "text-gray-500"
                                  }`}
                            />
                            <span>{item.label}</span>
