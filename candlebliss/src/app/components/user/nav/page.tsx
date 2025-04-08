@@ -283,8 +283,13 @@ export default function NavBar() {
                   {isLoggedIn && showUserMenu && (
                      <div className='absolute top-full right-0 mt-1 bg-[#F1EEE9] rounded-md shadow-lg w-48 py-2 z-50'>
                         <Link href='/user/profile'>
-                           <div className='block px-4 py-2 text-[#553C26] hover:bg-[#E2DED8]'>
+                           <div className='block px-4 py-2 text-[#553C26] hover:bg-[#E2DED8] border-b border-amber-200'>
                               Hồ sơ cá nhân
+                           </div>
+                        </Link>
+                        <Link href='/user/profile/resetpassword'>
+                           <div className='block px-4 py-2 text-[#553C26] hover:bg-[#E2DED8]'>
+                              Thay đổi mật khâu
                            </div>
                         </Link>
                         <button

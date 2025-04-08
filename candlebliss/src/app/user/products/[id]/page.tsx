@@ -8,7 +8,6 @@ import Header from '@/app/components/user/nav/page';
 import Footer from '@/app/components/user/footer/page';
 import ViewedCarousel from '@/app/components/user/viewedcarousel/page';
 
-// Interfaces
 interface ProductImage {
    id: string;
    path: string;
@@ -44,7 +43,6 @@ interface Product {
    details?: ProductDetail[];
 }
 
-// Format price helper function
 const formatPrice = (price: number): string => {
    return new Intl.NumberFormat('vi-VN', {
       style: 'currency',
@@ -53,7 +51,6 @@ const formatPrice = (price: number): string => {
    }).format(price);
 };
 
-// Calculate discount percentage
 const calculateDiscountPercentage = (basePrice: number, discountPrice: number) => {
    if (!discountPrice || basePrice <= 0) return 0;
    return Math.round(((basePrice - discountPrice) / basePrice) * 100);
@@ -64,7 +61,6 @@ export default function ProductDetailPage() {
    const router = useRouter();
    const productId = params.id;
 
-   // States
    const [quantity, setQuantity] = useState(1);
    const [activeTab, setActiveTab] = useState(0);
    const [activeThumbnail, setActiveThumbnail] = useState(0);
@@ -78,23 +74,19 @@ export default function ProductDetailPage() {
    const [selectedDetailId, setSelectedDetailId] = useState<number | null>(null);
    const [showCartNotification, setShowCartNotification] = useState(false);
 
-   // Get selected detail object - MOVE THIS HERE before the useEffect that depends on it
    const selectedDetail = selectedDetailId
       ? productDetails.find(detail => detail.id === selectedDetailId)
       : null;
 
-   // Reset active thumbnail when selected detail changes
    useEffect(() => {
       setActiveThumbnail(0);
    }, [selectedDetailId]);
 
-   // Fetch product detail
    useEffect(() => {
       const fetchProductDetail = async () => {
          try {
             setLoading(true);
 
-            // Validate product ID
             if (!productId) {
                setError("ID sản phẩm không hợp lệ");
                setLoading(false);
@@ -103,9 +95,7 @@ export default function ProductDetailPage() {
 
             console.log("Đang lấy thông tin sản phẩm với ID:", productId);
 
-            // Fetch product info directly with ID
             try {
-               // Trường hợp: productId là ID số
                const productResponse = await fetch(`http://localhost:3000/api/products/${productId}`);
 
                if (!productResponse.ok) {
@@ -117,7 +107,6 @@ export default function ProductDetailPage() {
                const productData: Product = await productResponse.json();
                console.log("Dữ liệu sản phẩm:", productData);
 
-               // Xử lý dữ liệu sản phẩm
                processProductData(productData);
             } catch (fetchErr) {
                console.error('Lỗi khi lấy thông tin sản phẩm:', fetchErr);
@@ -134,20 +123,16 @@ export default function ProductDetailPage() {
       fetchProductDetail();
    }, [productId]);
 
-   // Hàm xử lý dữ liệu sản phẩm
    const processProductData = (productData: Product) => {
       try {
          console.log("Đang xử lý dữ liệu sản phẩm:", productData);
 
-         // Normalize product images
          const normalizedImages = Array.isArray(productData.images)
             ? productData.images
             : productData.images ? [productData.images] : [];
 
-         // Log thông tin ảnh
          console.log("Ảnh sản phẩm sau khi chuẩn hóa:", normalizedImages.length, "ảnh");
 
-         // Update product with normalized images
          const updatedProduct = {
             ...productData,
             images: normalizedImages
@@ -155,12 +140,10 @@ export default function ProductDetailPage() {
 
          setProduct(updatedProduct);
 
-         // Xử lý chi tiết sản phẩm
          if (productData.details && productData.details.length > 0) {
             console.log("Sản phẩm có", productData.details.length, "chi tiết");
             setProductDetails(productData.details);
 
-            // Set default selected detail
             const activeDetails = productData.details.filter(detail => detail.isActive);
             if (activeDetails.length > 0) {
                const firstActiveDetail = activeDetails[0];
@@ -170,11 +153,9 @@ export default function ProductDetailPage() {
                setSelectedType(firstActiveDetail.type);
             }
 
-            // Fetch prices for all details
             fetchDetailPrices(productData.details);
          } else {
             console.log("Sản phẩm không có chi tiết, tạo chi tiết mặc định");
-            // Xử lý trường hợp không có chi tiết
             const defaultDetail = {
                id: 0,
                size: 'Standard',
@@ -191,7 +172,6 @@ export default function ProductDetailPage() {
             setSelectedSize('Standard');
             setSelectedType('Default');
 
-            // Tạo giá mặc định
             setDetailPrices({
                0: {
                   base_price: 0,
@@ -208,7 +188,6 @@ export default function ProductDetailPage() {
       }
    };
 
-   // Xử lý khi không có ảnh trong product
    useEffect(() => {
       if (product && (!Array.isArray(product.images) || product.images.length === 0)) {
          setProduct(prev => {
@@ -225,10 +204,8 @@ export default function ProductDetailPage() {
       }
    }, [product]);
 
-   // Cải thiện xử lý khi không có chi tiết sản phẩm
    useEffect(() => {
       if (product && (!productDetails || productDetails.length === 0)) {
-         // Nếu không có chi tiết sản phẩm, tạo một chi tiết mặc định
          const defaultDetail = {
             id: 0,
             size: 'Standard',
@@ -245,7 +222,6 @@ export default function ProductDetailPage() {
          setSelectedSize('Standard');
          setSelectedType('Default');
 
-         // Tạo giá mặc định
          setDetailPrices({
             0: {
                base_price: 0,
@@ -255,17 +231,13 @@ export default function ProductDetailPage() {
       }
    }, [product, productDetails]);
 
-   // Fetch prices for product details
    const fetchDetailPrices = async (details: ProductDetail[]) => {
       try {
-         // Tạo map để lưu giá chi tiết sản phẩm
          const pricesMap: Record<number, { base_price: number, discount_price: number | null }> = {};
 
-         // Fetch giá cho từng chi tiết sản phẩm
          for (const detail of details) {
             if (detail && typeof detail.id === 'number') {
                try {
-                  // Sử dụng API endpoint mới để lấy giá theo detailId
                   const priceResponse = await fetch(`http://localhost:3000/api/v1/prices/product-detail/${detail.id}`, {
                      headers: {
                         Authorization: `Bearer ${localStorage.getItem('token') || ''}`
@@ -277,7 +249,6 @@ export default function ProductDetailPage() {
                      console.log(`Giá cho chi tiết ${detail.id}:`, priceData);
 
                      if (Array.isArray(priceData) && priceData.length > 0) {
-                        // Sắp xếp theo giá cơ bản (nếu có nhiều giá)
                         priceData.sort((a, b) => {
                            const aPrice = Number(a.base_price);
                            const bPrice = Number(b.base_price);
@@ -285,16 +256,13 @@ export default function ProductDetailPage() {
                            return aPrice - bPrice;
                         });
 
-                        // Lấy giá thấp nhất
                         const priceInfo = priceData[0];
 
-                        // Lưu thông tin giá
                         pricesMap[detail.id] = {
                            base_price: Number(priceInfo.base_price) || 0,
                            discount_price: priceInfo.discount_price ? Number(priceInfo.discount_price) : null
                         };
                      } else {
-                        // Không có giá, đặt giá mặc định
                         pricesMap[detail.id] = {
                            base_price: 0,
                            discount_price: null
@@ -325,10 +293,8 @@ export default function ProductDetailPage() {
       }
    };
 
-   // Update selected detail when size or type changes
    useEffect(() => {
       if (productDetails.length > 0) {
-         // Find detail matching selected size and type
          const matchingDetail = productDetails.find(
             detail => detail.size === selectedSize && detail.type === selectedType && detail.isActive
          );
@@ -336,7 +302,6 @@ export default function ProductDetailPage() {
          if (matchingDetail) {
             setSelectedDetailId(matchingDetail.id);
          } else {
-            // If no exact match, find closest match with same size
             const sameSize = productDetails.find(
                detail => detail.size === selectedSize && detail.isActive
             );
@@ -345,7 +310,6 @@ export default function ProductDetailPage() {
                setSelectedDetailId(sameSize.id);
                setSelectedType(sameSize.type);
             } else {
-               // Still no match, just pick the first active detail
                const firstActive = productDetails.find(detail => detail.isActive);
                if (firstActive) {
                   setSelectedDetailId(firstActive.id);
@@ -357,10 +321,8 @@ export default function ProductDetailPage() {
       }
    }, [selectedSize, selectedType, productDetails]);
 
-   // Update selected detail when size or values change - We now have access to selectedDetail
    useEffect(() => {
       if (productDetails.length > 0 && selectedDetail?.values) {
-         // Find detail matching selected size and value
          const matchingDetail = productDetails.find(
             detail => detail.size === selectedSize &&
                detail.values === selectedDetail.values &&
@@ -371,7 +333,6 @@ export default function ProductDetailPage() {
             setSelectedDetailId(matchingDetail.id);
             setSelectedType(matchingDetail.type);
          } else {
-            // If no exact match, find another detail with the same size
             const sameSize = productDetails.find(
                detail => detail.size === selectedSize && detail.isActive
             );
@@ -380,7 +341,6 @@ export default function ProductDetailPage() {
                setSelectedDetailId(sameSize.id);
                setSelectedType(sameSize.type);
             } else {
-               // Still no match, just pick the first active detail
                const firstActive = productDetails.find(detail => detail.isActive);
                if (firstActive) {
                   setSelectedDetailId(firstActive.id);
@@ -392,12 +352,10 @@ export default function ProductDetailPage() {
       }
    }, [selectedSize, productDetails, selectedDetail]);
 
-   // Get price info for selected detail
    const selectedPriceInfo = selectedDetailId && detailPrices[selectedDetailId]
       ? detailPrices[selectedDetailId]
       : { base_price: 0, discount_price: null };
 
-   // Get unique sizes and types for filtering
    const availableSizes = [...new Set(
       productDetails
          .filter(detail => detail.isActive)
@@ -410,23 +368,19 @@ export default function ProductDetailPage() {
          .map(detail => detail.type)
    )];
 
-   // Add these helper functions after the availableTypes calculation
 
-   // Get all unique values across all product details
    const allValues = [...new Set(
       productDetails
          .filter(detail => detail.isActive && detail.values)
          .map(detail => detail.values)
    )];
 
-   // Get values available for the selected size
    const availableValuesForSize = [...new Set(
       productDetails
          .filter(detail => detail.isActive && detail.size === selectedSize && detail.values)
          .map(detail => detail.values)
    )];
 
-   // Function to check if a value is available for the selected size
    const isValueAvailableForSize = (value: string) => {
       return productDetails.some(
          detail => detail.size === selectedSize &&
@@ -435,7 +389,6 @@ export default function ProductDetailPage() {
       );
    };
 
-   // Handle quantity changes
    const decreaseQuantity = () => {
       if (quantity > 1) {
          setQuantity(quantity - 1);
@@ -449,18 +402,15 @@ export default function ProductDetailPage() {
       }
    };
 
-   // Handle add to cart
    const handleAddToCart = () => {
       if (!product || !selectedDetail) return;
 
-      // Đảm bảo giá là number hợp lệ
       let price = selectedPriceInfo.discount_price || selectedPriceInfo.base_price;
       if (isNaN(price)) {
          price = 0;
          console.warn("Invalid price detected, using 0 as default");
       }
 
-      // Tạo đối tượng cartItem phù hợp với cấu trúc giỏ hàng
       const cartItem = {
          id: product.id,
          detailId: selectedDetail.id,
@@ -476,37 +426,30 @@ export default function ProductDetailPage() {
          options: [
             { name: 'Kích thước', value: selectedDetail.size },
             { name: 'Loại', value: selectedDetail.type },
-            // Add Values option if available
             ...(selectedDetail.values ? [{ name: 'Giá trị', value: selectedDetail.values }] : [])
          ]
       };
 
       console.log('Add to cart:', cartItem);
 
-      // Cập nhật localStorage
       const cartItems = JSON.parse(localStorage.getItem('cart') || '[]');
 
-      // Kiểm tra xem item đã tồn tại trong giỏ hàng chưa
       const existingItemIndex = cartItems.findIndex(
          (item: any) => item.id === cartItem.id && item.detailId === cartItem.detailId
       );
 
       if (existingItemIndex >= 0) {
-         // Nếu sản phẩm đã tồn tại, chỉ cập nhật số lượng
          cartItems[existingItemIndex].quantity += cartItem.quantity;
       } else {
-         // Thêm mới vào giỏ hàng
          cartItems.push(cartItem);
       }
 
       localStorage.setItem('cart', JSON.stringify(cartItems));
 
-      // Hiển thị thông báo
       setShowCartNotification(true);
       setTimeout(() => setShowCartNotification(false), 3000);
    };
 
-   // Handle buy now
    const handleBuyNow = () => {
       handleAddToCart();
       router.push('/user/cart');
@@ -572,13 +515,11 @@ export default function ProductDetailPage() {
                   <div className='relative bg-white mb-4 h-96 rounded-lg shadow-sm'>
                      <Image
                         src={(() => {
-                           // Create combined array similar to thumbnails
                            const combinedImages = [
                               ...(selectedDetail?.images || []),
                               ...(Array.isArray(product.images) ? product.images : [])
                            ];
 
-                           // Get the image at the active thumbnail index
                            return combinedImages[activeThumbnail]?.path || '/images/placeholder.jpg';
                         })()}
                         alt={product.name}
@@ -601,16 +542,14 @@ export default function ProductDetailPage() {
                   <div className='flex flex-wrap -mx-1 overflow-x-auto pb-2'>
                      {/* Map all images with their detail metadata */}
                      {productDetails.map((detail) =>
-                        // Only show images from active product details
                         detail.isActive && detail.images && detail.images.map((img, detailImgIndex) => (
                            <div
                               key={`detail-${detail.id}-${detailImgIndex}`}
                               className={`p-1 w-1/6 cursor-pointer ${selectedDetailId === detail.id && activeThumbnail === detailImgIndex
-                                    ? 'ring-2 ring-orange-500'
-                                    : ''
+                                 ? 'ring-2 ring-orange-500'
+                                 : ''
                                  }`}
                               onClick={() => {
-                                 // When clicking on a detail image, set both the detail and the image
                                  setSelectedDetailId(detail.id);
                                  setSelectedSize(detail.size);
                                  setSelectedType(detail.type);
@@ -639,11 +578,10 @@ export default function ProductDetailPage() {
                         <div
                            key={`product-${productImgIndex}`}
                            className={`p-1 w-1/6 cursor-pointer ${activeThumbnail === ((selectedDetail?.images?.length || 0) + productImgIndex)
-                                 ? 'ring-2 ring-orange-500'
-                                 : ''
+                              ? 'ring-2 ring-orange-500'
+                              : ''
                               }`}
                            onClick={() => {
-                              // When clicking on a product image, adjust the index to account for detail images
                               const detailImagesLength = selectedDetail?.images?.length || 0;
                               setActiveThumbnail(detailImagesLength + productImgIndex);
                            }}
@@ -733,7 +671,7 @@ export default function ProductDetailPage() {
                                        checked={selectedSize === size}
                                        onChange={() => {
                                           setSelectedSize(size);
-                                          setActiveThumbnail(0); // Reset thumbnail position when changing size
+                                          setActiveThumbnail(0);
                                        }}
                                     />
                                     <span>{size}</span>
@@ -769,7 +707,6 @@ export default function ProductDetailPage() {
                                           checked={isSelected}
                                           onChange={() => {
                                              if (isAvailable) {
-                                                // Find a detail with this size and value combination
                                                 const detailWithValue = productDetails.find(
                                                    detail => detail.size === selectedSize &&
                                                       detail.values === value &&
@@ -779,7 +716,7 @@ export default function ProductDetailPage() {
                                                 if (detailWithValue) {
                                                    setSelectedDetailId(detailWithValue.id);
                                                    setSelectedType(detailWithValue.type);
-                                                   setActiveThumbnail(0); // Reset thumbnail position when changing values
+                                                   setActiveThumbnail(0);
                                                 }
                                              }
                                           }}

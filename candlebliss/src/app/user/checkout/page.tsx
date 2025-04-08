@@ -390,10 +390,16 @@ export default function CheckoutPage() {
         return;
       }
 
-      setCartItems(localCart);
+      // Đảm bảo tất cả detailId là số
+      const validatedCart = localCart.map((item: { detailId: any; }) => ({
+        ...item,
+        detailId: Number(item.detailId)
+      }));
+
+      setCartItems(validatedCart);
 
       // Tính toán giá trị đơn hàng
-      const subtotal = localCart.reduce(
+      const subtotal = validatedCart.reduce(
         (sum: number, item: CartItem) => sum + item.price * item.quantity,
         0
       );
@@ -1180,7 +1186,7 @@ export default function CheckoutPage() {
     showToastMessage('Đã xóa mã giảm giá', 'info');
   };
 
-  // Cập nhật hàm handlePlaceOrder để gửi thông tin voucher
+  // Cập nhật hàm handlePlaceOrder với xử lý lỗi Redis tốt hơn
   const handlePlaceOrder = async () => {
     if (!selectedAddressId && !showAddAddressForm) {
       showToastMessage('Vui lòng chọn địa chỉ giao hàng', 'error');
@@ -1195,33 +1201,131 @@ export default function CheckoutPage() {
     try {
       setLoading(true);
 
-      // Tạo dữ liệu đơn hàng
-      const orderData = {
-        userId,
-        addressId: selectedAddressId,
-        items: cartItems.map(item => ({
-          productDetailId: item.detailId,
+      // Lấy thông tin địa chỉ đã chọn
+      const selectedAddress = addresses.find(addr => addr.id === selectedAddressId);
+      if (!selectedAddress) {
+        throw new Error('Không tìm thấy địa chỉ giao hàng');
+      }
+
+      // Format địa chỉ thành chuỗi theo định dạng mới
+      const formattedAddress = `${selectedAddress.streetAddress}, ${selectedAddress.ward}, ${selectedAddress.district}, ${selectedAddress.province}`;
+
+      // Chuyển đổi định dạng item theo yêu cầu API mới
+      const formattedItems = cartItems.map(item => {
+        // Đảm bảo product_detail_id là số
+        let productDetailId = Number(item.detailId);
+
+        // Kiểm tra nếu chuyển đổi không thành công (NaN)
+        if (isNaN(productDetailId)) {
+          console.error(`Invalid product_detail_id: ${item.detailId}`);
+          productDetailId = 0; // Đặt giá trị mặc định hoặc có thể throw error
+        }
+
+        return {
           quantity: item.quantity,
-          price: item.price
-        })),
-        shippingFee,
-        totalAmount: totalPrice, // totalPrice đã bao gồm cả phí ship và đã trừ discount
-        paymentMethod,
-        note: orderNote,
-        // Thêm thông tin voucher nếu có
-        voucherId: appliedVoucher?.id || null,
-        discountAmount: discount || 0
+          product_detail_id: productDetailId
+        };
+      });
+
+      // Tạo dữ liệu đơn hàng theo định dạng mới
+      const orderData = {
+        user_id: Number(userId),
+        address: formattedAddress,
+        voucher_code: appliedVoucher?.code || undefined,
+        item: formattedItems
       };
 
-      // Gọi API để tạo đơn hàng
-      const response = await fetch('http://localhost:3000/api/v1/orders', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
-        },
-        body: JSON.stringify(orderData)
-      });
+      // Thêm cơ chế retry - thử lại tối đa 5 lần với thời gian chờ tăng dần
+      let attempts = 0;
+      const maxAttempts = 5;
+      let response = null;
+      let lastError = null;
+      let redisErrorDetected = false;
+
+      while (attempts < maxAttempts && !redisErrorDetected) {
+        attempts++;
+        try {
+          // Tính thời gian chờ tăng dần: 1s, 2s, 4s, 8s, 16s
+          const waitTime = attempts > 1 ? Math.pow(2, attempts - 2) * 1000 : 0;
+
+          if (attempts > 1) {
+            // Thông báo cho người dùng biết đang thử lại
+            showToastMessage(`Đang thử kết nối lần ${attempts}/${maxAttempts}...`, 'info');
+
+            // Chờ theo thời gian tăng dần trước khi thử lại
+            await new Promise(resolve => setTimeout(resolve, waitTime));
+          }
+
+          // Gọi API để tạo đơn hàng
+          response = await fetch('http://localhost:3000/api/orders', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
+            },
+            body: JSON.stringify(orderData)
+          });
+
+          // Nếu thành công, thoát vòng lặp
+          if (response.ok) {
+            break;
+          }
+
+          // Xử lý lỗi từ API
+          const errorData = await response.json().catch(() => ({}));
+          lastError = errorData;
+
+          // Kiểm tra nếu có lỗi liên quan đến Redis
+          if (response.status === 400 &&
+            errorData.message === "Thao tác đang được xử lý, vui lòng thử lại sau") {
+            console.log(`Attempt ${attempts}: Redis connection or server busy error`);
+
+            // Nếu đã thử nhiều lần mà vẫn gặp lỗi Redis, đánh dấu để hiển thị thông báo đặc biệt
+            if (attempts >= 3) {
+              redisErrorDetected = true;
+            }
+          } else {
+            // Nếu là lỗi khác không phải Redis, thoát vòng lặp
+            break;
+          }
+        } catch (fetchError) {
+          console.error(`Fetch attempt ${attempts} failed:`, fetchError);
+          lastError = fetchError;
+
+          // Nếu là lỗi mạng, tiếp tục thử lại
+          if (attempts < maxAttempts) {
+            await new Promise(resolve => setTimeout(resolve, 2000));
+          }
+        }
+      }
+
+      // Xử lý sau khi đã hoàn thành tất cả các lần thử hoặc gặp lỗi Redis liên tục
+      if (redisErrorDetected) {
+        // Gợi ý giải pháp cho người dùng khi phát hiện lỗi Redis liên tục
+        showToastMessage(
+          'Hệ thống đang bảo trì. Vui lòng thử lại sau hoặc liên hệ hỗ trợ qua hotline 1900xxxx.',
+          'error'
+        );
+
+        // Lưu đơn hàng tạm thời vào localStorage để có thể thử lại sau
+        try {
+          const pendingOrders = JSON.parse(localStorage.getItem('pendingOrders') || '[]');
+          pendingOrders.push({
+            orderData,
+            timestamp: new Date().toISOString()
+          });
+          localStorage.setItem('pendingOrders', JSON.stringify(pendingOrders));
+          console.log('Saved pending order to localStorage');
+        } catch (e) {
+          console.error('Failed to save pending order:', e);
+        }
+
+        return;
+      }
+
+      if (!response) {
+        throw new Error('Không thể kết nối đến máy chủ.');
+      }
 
       if (response.ok) {
         const order = await response.json();
@@ -1234,14 +1338,53 @@ export default function CheckoutPage() {
 
         // Chuyển hướng đến trang chi tiết đơn hàng
         setTimeout(() => {
-          router.push(`/user/orders/${order.id}`);
+          router.push(`/user/orders/${order.id || ''}`);
         }, 2000);
       } else {
-        throw new Error('Không thể tạo đơn hàng');
+        const errorData = await response.json().catch(() => ({}));
+        console.error('API Error:', response.status, errorData);
+
+        // Xử lý các mã lỗi cụ thể từ API
+        if (response.status === 400) {
+          // Xử lý lỗi 400
+          if (errorData.message === "Thao tác đang được xử lý, vui lòng thử lại sau") {
+            throw new Error('Hệ thống đang bận. Vui lòng thử lại sau 5-10 phút');
+          } else {
+            throw new Error(errorData.message || 'Thông tin đơn hàng không hợp lệ');
+          }
+        } else if (response.status === 401) {
+          showToastMessage('Phiên đăng nhập hết hạn, vui lòng đăng nhập lại', 'error');
+          setTimeout(() => router.push('/user/signin'), 2000);
+          return;
+        } else if (response.status === 404) {
+          throw new Error('Một số sản phẩm trong giỏ hàng không còn tồn tại');
+        } else if (response.status === 409) {
+          throw new Error(errorData.message || 'Một số sản phẩm không còn đủ số lượng');
+        } else if (response.status === 422) {
+          // Xử lý lỗi validation
+          let errorMessage = 'Dữ liệu đơn hàng không hợp lệ: ';
+
+          if (errorData.errors?.item) {
+            // Kiểm tra lỗi chi tiết trong item
+            const itemErrors = Object.values(errorData.errors.item).map((err: any) => {
+              // Lấy thông báo lỗi từ các trường
+              const errorMessages = Object.values(err).join(', ');
+              return errorMessages;
+            }).join('; ');
+
+            errorMessage += itemErrors || 'ID sản phẩm không hợp lệ';
+          } else {
+            errorMessage += errorData.message || 'Vui lòng kiểm tra lại thông tin đơn hàng';
+          }
+
+          throw new Error(errorMessage);
+        } else {
+          throw new Error(errorData.message || 'Không thể tạo đơn hàng. Vui lòng thử lại sau');
+        }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error placing order:', error);
-      showToastMessage('Đặt hàng thất bại. Vui lòng thử lại', 'error');
+      showToastMessage(error.message || 'Đặt hàng thất bại. Vui lòng thử lại', 'error');
     } finally {
       setLoading(false);
     }
@@ -1719,17 +1862,45 @@ export default function CheckoutPage() {
 
                   {/* Hiển thị voucher đã áp dụng */}
                   {appliedVoucher && (
-                    <div className='mt-2 p-2 bg-green-50 border border-green-200 rounded-md'>
-                      <div className='flex items-center justify-between'>
-                        <div className='flex items-center'>
-                          <span className='bg-green-100 text-green-800 text-xs font-semibold px-2 py-1 rounded'>
-                            {appliedVoucher.code}
-                          </span>
-                          <span className='text-green-700 text-xs ml-2'>
-                            {appliedVoucher.percent_off ? `Giảm ${appliedVoucher.percent_off}%` : `Giảm ${formatPrice(Number(appliedVoucher.amount_off))}`}
-                          </span>
+                    <div className='mt-2 border border-green-200 rounded-md overflow-hidden'>
+                      <div className='bg-green-50 p-3 border-b border-green-200'>
+                        <div className='flex items-center justify-between'>
+                          <div className='flex items-center'>
+                            <span className='bg-green-600 text-white text-xs font-semibold px-2 py-1 rounded'>
+                              {appliedVoucher.code}
+                            </span>
+                            <span className='text-green-700 font-medium text-sm ml-2'>
+                              {appliedVoucher.percent_off && Number(appliedVoucher.percent_off) > 0
+                                ? `Giảm ${appliedVoucher.percent_off}%`
+                                : `Giảm ${formatPrice(Number(appliedVoucher.amount_off))}`}
+                            </span>
+                          </div>
+                          <span className='text-green-700 font-medium'>-{formatPrice(discount)}</span>
                         </div>
-                        <span className='text-green-700 font-medium'>-{formatPrice(discount)}</span>
+                      </div>
+
+                      <div className='bg-white p-3 text-xs space-y-1'>
+                        {/* Mô tả voucher */}
+                        {appliedVoucher.description && (
+                          <p className='text-gray-700'>{appliedVoucher.description}</p>
+                        )}
+
+                        {/* Giá trị đơn hàng tối thiểu */}
+                        <p className='text-gray-600'>
+                          Đơn hàng tối thiểu: {formatPrice(Number(appliedVoucher.min_order_value))}
+                        </p>
+
+                        {/* Giới hạn giảm giá tối đa nếu có */}
+                        {Number(appliedVoucher.max_voucher_amount) > 0 && (
+                          <p className='text-gray-600'>
+                            Giảm tối đa: {formatPrice(Number(appliedVoucher.max_voucher_amount))}
+                          </p>
+                        )}
+
+                        {/* Thời hạn sử dụng */}
+                        <p className='text-gray-600'>
+                          Hiệu lực đến: {new Date(appliedVoucher.end_date).toLocaleDateString('vi-VN')}
+                        </p>
                       </div>
                     </div>
                   )}
