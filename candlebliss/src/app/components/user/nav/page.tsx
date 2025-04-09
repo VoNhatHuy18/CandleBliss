@@ -6,7 +6,7 @@ import { useState, useEffect } from 'react';
 import { MagnifyingGlassIcon } from '@heroicons/react/20/solid';
 import { UserIcon, ShoppingBagIcon, Bars3Icon, XMarkIcon } from '@heroicons/react/24/outline';
 import Image from 'next/image';
-import { useRouter, usePathname } from 'next/navigation';
+import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { jwtDecode } from 'jwt-decode';
 
 interface DecodedToken {
@@ -14,6 +14,12 @@ interface DecodedToken {
    exp: number;
    id?: number;
    [key: string]: any;
+}
+
+interface CartItem {
+   id: number;
+   productDetailId: number;
+   quantity: number;
 }
 
 export default function NavBar() {
@@ -24,8 +30,13 @@ export default function NavBar() {
    const [showUserMenu, setShowUserMenu] = useState(false);
    const [userId, setUserId] = useState<number | null>(null);
    const [searchQuery, setSearchQuery] = useState('');
+   const [cartItemCount, setCartItemCount] = useState(0);
+   const [productDetailCounts, setProductDetailCounts] = useState<{ [key: number]: number }>({});
+   const [currentProductDetailId, setCurrentProductDetailId] = useState<number | null>(null);
+
    const router = useRouter();
    const pathname = usePathname();
+   const searchParams = useSearchParams();
 
    const toggleMobileMenu = () => {
       setMobileMenuOpen(!mobileMenuOpen);
@@ -38,6 +49,25 @@ export default function NavBar() {
    useEffect(() => {
       checkAuthStatus();
    }, [pathname]);
+
+   useEffect(() => {
+      if (isLoggedIn && userId) {
+         fetchCartItemCount();
+      } else {
+         setCartItemCount(0);
+         setProductDetailCounts({});
+      }
+   }, [isLoggedIn, userId, pathname]);
+
+   useEffect(() => {
+      const pdIdParam = searchParams.get('productDetailId');
+      if (pdIdParam) {
+         const pdId = parseInt(pdIdParam);
+         setCurrentProductDetailId(isNaN(pdId) ? null : pdId);
+      } else {
+         setCurrentProductDetailId(null);
+      }
+   }, [searchParams]);
 
    const checkAuthStatus = () => {
       const token = localStorage.getItem('token');
@@ -72,6 +102,45 @@ export default function NavBar() {
             router.push('/user/signin');
          }
       }
+   };
+
+   const fetchCartItemCount = async () => {
+      if (!userId) return;
+
+      try {
+         const response = await fetch(`http://localhost:3000/api/cart/user/${userId}`);
+
+         if (response.ok) {
+            const cartData = await response.json();
+            if (cartData && cartData.items) {
+               const count = cartData.items.reduce((total: number, item: any) => total + (item.quantity || 0), 0);
+               setCartItemCount(count);
+
+               const detailCounts: { [key: number]: number } = {};
+               cartData.items.forEach((item: any) => {
+                  if (item.productDetailId) {
+                     detailCounts[item.productDetailId] = item.quantity || 0;
+                  }
+               });
+               setProductDetailCounts(detailCounts);
+            } else {
+               setCartItemCount(0);
+               setProductDetailCounts({});
+            }
+         } else {
+            setCartItemCount(0);
+            setProductDetailCounts({});
+         }
+      } catch (error) {
+         console.error('Error fetching cart count:', error);
+         setCartItemCount(0);
+         setProductDetailCounts({});
+      }
+   };
+
+   const getProductDetailCount = (productDetailId: number | null): number => {
+      if (!productDetailId) return 0;
+      return productDetailCounts[productDetailId] || 0;
    };
 
    const handleUserIconClick = (e: React.MouseEvent) => {
@@ -182,8 +251,23 @@ export default function NavBar() {
                >
                   <MagnifyingGlassIcon className='size-5' />
                </button>
-               <button onClick={handleCartClick} className='text-[#553C26]'>
-                  <ShoppingBagIcon className='size-5' />
+               <button onClick={handleCartClick} className="text-[#553C26] relative">
+                  <ShoppingBagIcon className="size-5" />
+                  {isLoggedIn && (
+                     currentProductDetailId ? (
+                        getProductDetailCount(currentProductDetailId) > 0 && (
+                           <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                              {getProductDetailCount(currentProductDetailId)}
+                           </span>
+                        )
+                     ) : (
+                        cartItemCount > 0 && (
+                           <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                              {cartItemCount}
+                           </span>
+                        )
+                     )
+                  )}
                </button>
                <button onClick={toggleMobileMenu} className='text-[#553C26]'>
                   {mobileMenuOpen ? (
@@ -268,8 +352,23 @@ export default function NavBar() {
                      </button>
                   )}
                </div>
-               <button onClick={handleCartClick} className='text-[#553C26]'>
-                  <ShoppingBagIcon className='size-5' />
+               <button onClick={handleCartClick} className="text-[#553C26] relative">
+                  <ShoppingBagIcon className="size-5" />
+                  {isLoggedIn && (
+                     currentProductDetailId ? (
+                        getProductDetailCount(currentProductDetailId) > 0 && (
+                           <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                              {getProductDetailCount(currentProductDetailId)}
+                           </span>
+                        )
+                     ) : (
+                        cartItemCount > 0 && (
+                           <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                              {cartItemCount}
+                           </span>
+                        )
+                     )
+                  )}
                </button>
 
                <div className='relative'>

@@ -344,9 +344,16 @@ export default function CartPage() {
 
    // Update quantity
    const updateQuantity = (index: number, newQuantity: number) => {
-      if (newQuantity < 1) return;
+      if (newQuantity < 0) return;
 
       const updatedItems = [...cartItems];
+
+      if (newQuantity === 0) {
+         // If quantity becomes zero, remove from local cart
+         removeItem(index);
+         return;
+      }
+
       updatedItems[index].quantity = newQuantity;
       setCartItems(updatedItems);
 
@@ -356,7 +363,7 @@ export default function CartPage() {
       // Recalculate totals
       calculateTotals(updatedItems);
 
-      // If logged in, update API cart
+      // If logged in, update API cart item
       updateApiCartItem(updatedItems[index]);
    };
 
@@ -365,11 +372,11 @@ export default function CartPage() {
       if (!userId || !apiCart) return;
 
       try {
-         const apiItem = apiCart.cartItems.find(i => i.productDetailId === item.detailId);
-
-         if (apiItem) {
-            await fetch(`http://localhost:3000/api/cart/${apiCart.id}/items/${apiItem.id}`, {
-               method: 'PUT',
+         // Use the add-item endpoint with the updated quantity
+         await fetch(
+            `http://localhost:3000/api/cart/${apiCart.id}/add-item/${item.detailId}`,
+            {
+               method: 'POST',
                headers: {
                   'Content-Type': 'application/json',
                   'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
@@ -377,8 +384,8 @@ export default function CartPage() {
                body: JSON.stringify({
                   quantity: item.quantity
                })
-            });
-         }
+            }
+         );
       } catch (err) {
          console.error('Error updating API cart item:', err);
       }
@@ -393,19 +400,22 @@ export default function CartPage() {
       localStorage.setItem('cart', JSON.stringify(updatedItems));
       calculateTotals(updatedItems);
 
-      // If logged in, remove from API cart
+      // If logged in, remove from API cart by setting quantity to 0
       if (userId && apiCart) {
          try {
-            const apiItem = apiCart.cartItems.find(i => i.productDetailId === itemToRemove.detailId);
-
-            if (apiItem) {
-               await fetch(`http://localhost:3000/api/cart/${apiCart.id}/items/${apiItem.id}`, {
-                  method: 'DELETE',
+            await fetch(
+               `http://localhost:3000/api/cart/${apiCart.id}/add-item/${itemToRemove.detailId}`,
+               {
+                  method: 'POST',
                   headers: {
+                     'Content-Type': 'application/json',
                      'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
-                  }
-               });
-            }
+                  },
+                  body: JSON.stringify({
+                     quantity: 0  // Setting quantity to 0 will remove the item
+                  })
+               }
+            );
          } catch (err) {
             console.error('Error removing item from API cart:', err);
          }

@@ -6,7 +6,6 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import NavBar from '@/app/components/user/nav/page';
-import MenuSidebar from '@/app/components/user/menusidebar/page';
 import Footer from '@/app/components/user/footer/page';
 
 interface ProductImage {
@@ -71,7 +70,6 @@ const ProductCard = ({
    imageUrl,
    variants,
    onViewDetail,
-   onAddToCart,
 }: ProductCardProps & { id: number }) => {
    const renderStars = () => {
       const stars = [];
@@ -120,13 +118,7 @@ const ProductCard = ({
                      <span>Xem chi tiết</span>
                   </button>
                </Link>
-               <button
-                  onClick={() => onAddToCart && onAddToCart(id, variants?.[0]?.detailId)}
-                  className='bg-white/90 hover:bg-white text-gray-800 px-4 py-2 rounded-full flex items-center gap-2 transition-colors duration-200 border border-black'
-               >
-                  <ShoppingCart className='w-4 h-4' />
-                  <span>Thêm vào giỏ</span>
-               </button>
+
             </div>
          </div>
          <div className='mt-3'>
@@ -192,6 +184,17 @@ export default function ProductPage() {
    >([]);
    const [loading, setLoading] = useState(true);
    const [error, setError] = useState<string | null>(null);
+
+   const [currentPage, setCurrentPage] = useState(1);
+   const productsPerPage = 25;
+
+   const getPaginatedProducts = () => {
+      const startIndex = (currentPage - 1) * productsPerPage;
+      const endIndex = startIndex + productsPerPage;
+      return filteredProducts.slice(startIndex, endIndex);
+   };
+
+   const totalPages = Math.ceil(filteredProducts.length / productsPerPage);
 
    const searchParams = useSearchParams();
    const searchQuery = searchParams.get('search') || '';
@@ -360,50 +363,6 @@ export default function ProductPage() {
       console.log('View detail clicked for product ID:', productId);
    };
 
-   const handleAddToCart = (productId: number, detailId?: number) => {
-      console.log('Add to cart clicked for product ID:', productId, 'Detail ID:', detailId);
-
-      const product = products.find(p => p.id === productId);
-      if (!product) return;
-
-      const variant = detailId
-         ? product.variants?.find(v => v.detailId === detailId)
-         : product.variants?.[0];
-
-      if (!variant) {
-         const cartItem = {
-            productId: product.id,
-            name: product.title,
-            price: product.discountPrice || product.price,
-            quantity: 1,
-            imageUrl: product.imageUrl
-         };
-
-         const cartItems = JSON.parse(localStorage.getItem('cart') || '[]');
-         cartItems.push(cartItem);
-         localStorage.setItem('cart', JSON.stringify(cartItems));
-
-         alert('Đã thêm sản phẩm vào giỏ hàng!');
-      } else {
-         const cartItem = {
-            productId: product.id,
-            name: product.title,
-            detailId: variant.detailId,
-            size: variant.size,
-            type: variant.type,
-            price: variant.discountPrice || variant.basePrice,
-            quantity: 1,
-            imageUrl: product.imageUrl
-         };
-
-         const cartItems = JSON.parse(localStorage.getItem('cart') || '[]');
-         cartItems.push(cartItem);
-         localStorage.setItem('cart', JSON.stringify(cartItems));
-
-         alert('Đã thêm sản phẩm vào giỏ hàng!');
-      }
-   };
-
    return (
       <div className='bg-[#F1EEE9] min-h-screen'>
          <NavBar />
@@ -459,7 +418,7 @@ export default function ProductPage() {
                )}
 
                <div className='grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4'>
-                  {filteredProducts.map((product) => (
+                  {getPaginatedProducts().map((product) => (
                      <ProductCard
                         key={product.id}
                         id={product.id}
@@ -471,25 +430,24 @@ export default function ProductPage() {
                         imageUrl={product.imageUrl}
                         variants={product.variants}
                         onViewDetail={handleViewDetail}
-                        onAddToCart={handleAddToCart}
                      />
                   ))}
                </div>
 
-               {!loading && !error && filteredProducts.length > 0 && !searchQuery && (
+               {!loading && !error && filteredProducts.length > productsPerPage && !searchQuery && (
                   <div className='flex justify-center items-center gap-2 mt-8 pb-8'>
-                     <button className='px-3 py-1 bg-gray-200 rounded-md text-gray-700 font-medium'>
-                        1
-                     </button>
-                     <button className='px-3 py-1 hover:bg-gray-100 rounded-md text-gray-700'>
-                        2
-                     </button>
-                     <button className='px-3 py-1 hover:bg-gray-100 rounded-md text-gray-700'>
-                        3
-                     </button>
-                     <button className='px-3 py-1 hover:bg-gray-100 rounded-md text-gray-700'>
-                        4
-                     </button>
+                     {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                        <button
+                           key={page}
+                           className={`px-3 py-1 ${currentPage === page
+                                 ? 'bg-gray-200 font-medium'
+                                 : 'hover:bg-gray-100'
+                              } rounded-md text-gray-700`}
+                           onClick={() => setCurrentPage(page)}
+                        >
+                           {page}
+                        </button>
+                     ))}
                   </div>
                )}
             </div>
