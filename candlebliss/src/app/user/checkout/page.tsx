@@ -164,8 +164,6 @@ export default function CheckoutPage() {
     isDefault: false
   });
 
-  // Phương thức thanh toán
-  const [paymentMethod, setPaymentMethod] = useState<'COD' | 'BANKING'>('COD');
 
   // Ghi chú đơn hàng
   const [orderNote, setOrderNote] = useState('');
@@ -188,6 +186,8 @@ export default function CheckoutPage() {
   const [voucherCode, setVoucherCode] = useState('');
   const [voucherError, setVoucherError] = useState('');
   const [applyingVoucher, setApplyingVoucher] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<'COD' | 'BANKING' | 'MOMO'>('COD');
+  const [processingPayment, setProcessingPayment] = useState(false);
 
   // Thêm hàm hiện toast message 
   const showToastMessage = (message: string, type: 'success' | 'error' | 'info') => {
@@ -463,6 +463,38 @@ export default function CheckoutPage() {
     // Tính tổng tiền = subtotal + shippingFee - discount
     setTotalPrice(subTotal + shippingFee - discount);
   }, [subTotal, shippingFee, discount]);
+
+  // Add this useEffect to verify MOMO payment when user returns from payment page
+  useEffect(() => {
+    const checkMomoPayment = async () => {
+      // Check if there's a pending order ID in localStorage
+      const pendingOrderId = localStorage.getItem('pendingOrderId');
+
+      // Check if there are URL parameters indicating payment return
+      const urlParams = new URLSearchParams(window.location.search);
+      const paymentStatus = urlParams.get('status');
+
+      if (pendingOrderId && paymentStatus) {
+        try {
+          // TODO: Add API call to verify payment status with your backend if needed
+
+          // Clear the pending order ID
+          localStorage.removeItem('pendingOrderId');
+
+          if (paymentStatus === 'success') {
+            showToastMessage('Thanh toán thành công!', 'success');
+            router.push(`/user/order`);
+          } else {
+            showToastMessage('Thanh toán thất bại. Vui lòng thử lại hoặc chọn phương thức khác', 'error');
+          }
+        } catch (error) {
+          console.error('Error verifying MOMO payment:', error);
+        }
+      }
+    };
+
+    checkMomoPayment();
+  }, [router]);
 
   // Load thông tin người dùng
   const loadUserInfo = async (userId: number) => {
@@ -1186,7 +1218,42 @@ export default function CheckoutPage() {
     showToastMessage('Đã xóa mã giảm giá', 'info');
   };
 
-  // Cập nhật hàm handlePlaceOrder với xử lý lỗi Redis tốt hơn
+  // Update the handleMomoPayment function to include orderId in the URL
+  const handleMomoPayment = async (orderId: string) => {
+    try {
+      setProcessingPayment(true);
+
+      // Call API to create MOMO payment with orderId as query parameter
+      const momoResponse = await fetch(`http://68.183.226.198:3000/api/payments/create?orderId=${orderId}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
+        }
+      });
+
+      if (!momoResponse.ok) {
+        throw new Error('Không thể tạo thanh toán MoMo');
+      }
+
+      const momoData = await momoResponse.json();
+
+      if (momoData.resultCode === 0 && momoData.shortLink) {
+        // Save order reference in localStorage to verify after payment
+        localStorage.setItem('pendingOrderId', orderId);
+
+        // Redirect to MOMO payment page
+        window.location.href = momoData.shortLink;
+      } else {
+        throw new Error(momoData.message || 'Không thể tạo thanh toán MoMo');
+      }
+    } catch (error: any) {
+      console.error('Error creating MOMO payment:', error);
+      showToastMessage(error.message || 'Không thể tạo thanh toán MoMo', 'error');
+      setProcessingPayment(false);
+    }
+  };
+
+  // Update the handlePlaceOrder function
   const handlePlaceOrder = async () => {
     if (!selectedAddressId && !showAddAddressForm) {
       showToastMessage('Vui lòng chọn địa chỉ giao hàng', 'error');
@@ -1218,7 +1285,7 @@ export default function CheckoutPage() {
         // Kiểm tra nếu chuyển đổi không thành công (NaN)
         if (isNaN(productDetailId)) {
           console.error(`Invalid product_detail_id: ${item.detailId}`);
-          productDetailId = 0; // Đặt giá trị mặc định hoặc có thể throw error
+          productDetailId = 0;
         }
 
         return {
@@ -1232,14 +1299,16 @@ export default function CheckoutPage() {
         user_id: Number(userId),
         address: formattedAddress,
         voucher_code: appliedVoucher?.code || undefined,
-        item: formattedItems
+        item: formattedItems,
+        // Thêm phương thức thanh toán vào dữ liệu đơn hàng
+        payment_method: paymentMethod
       };
 
       console.log('Đang tạo đơn hàng mới:', newOrderData);
 
       // Gọi API để tạo đơn hàng mới
       const response = await fetch('http://68.183.226.198:3000/api/orders', {
-        method: 'POST', // Sử dụng POST để tạo mới
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
@@ -1259,19 +1328,24 @@ export default function CheckoutPage() {
         localStorage.setItem('cart', '[]');
         localStorage.removeItem('appliedVoucher');
 
-        showToastMessage('Đặt hàng thành công!', 'success');
+        if (paymentMethod === 'MOMO') {
+          // Nếu chọn thanh toán MOMO, chuyển hướng tới trang thanh toán
+          await handleMomoPayment(newOrder.id.toString());
+        } else {
+          // Nếu là các phương thức khác, hiển thị thông báo và chuyển hướng như cũ
+          showToastMessage('Đặt hàng thành công!', 'success');
 
-        // Chuyển hướng đến trang chi tiết đơn hàng
-        setTimeout(() => {
-          router.push(`/user/order`);
-        }, 2000);
+          // Chuyển hướng đến trang chi tiết đơn hàng
+          setTimeout(() => {
+            router.push(`/user/order`);
+          }, 2000);
+        }
       } else {
         const errorData = await response.json().catch(() => ({}));
         console.error('API Error:', response.status, errorData);
 
         // Xử lý các mã lỗi cụ thể từ API
         if (response.status === 400) {
-          // Xử lý lỗi 400
           throw new Error(errorData.message || 'Thông tin đơn hàng không hợp lệ');
         } else if (response.status === 401) {
           showToastMessage('Phiên đăng nhập hết hạn, vui lòng đăng nhập lại', 'error');
@@ -1286,9 +1360,7 @@ export default function CheckoutPage() {
           let errorMessage = 'Dữ liệu đơn hàng không hợp lệ: ';
 
           if (errorData.errors?.item) {
-            // Kiểm tra lỗi chi tiết trong item
             const itemErrors = Object.values(errorData.errors.item).map((err: any) => {
-              // Lấy thông báo lỗi từ các trường
               const errorMessages = Object.values(err).join(', ');
               return errorMessages;
             }).join('; ');
@@ -1307,7 +1379,10 @@ export default function CheckoutPage() {
       console.error('Error creating new order:', error);
       showToastMessage(error.message || 'Đặt hàng thất bại. Vui lòng thử lại', 'error');
     } finally {
-      setLoading(false);
+      // Only set loading to false if we're not processing MOMO payment
+      if (paymentMethod !== 'MOMO') {
+        setLoading(false);
+      }
     }
   };
 
@@ -1671,6 +1746,33 @@ export default function CheckoutPage() {
                   )}
                 </div>
 
+                {/* Add MOMO payment option */}
+                <div
+                  className={`border rounded-lg p-4 cursor-pointer ${paymentMethod === 'MOMO' ? 'border-orange-500 bg-orange-50' : 'border-gray-200'}`}
+                  onClick={() => setPaymentMethod('MOMO')}
+                >
+                  <div className='flex items-center'>
+                    <div className={`w-5 h-5 rounded-full border flex items-center justify-center mr-3 ${paymentMethod === 'MOMO' ? 'border-orange-500' : 'border-gray-400'}`}>
+                      {paymentMethod === 'MOMO' && (
+                        <div className='w-3 h-3 bg-orange-500 rounded-full'></div>
+                      )}
+                    </div>
+                    <div className='flex items-center'>
+                      <Image
+                        src="/images/momo-logo.png"
+                        alt="MoMo"
+                        width={24}
+                        height={24}
+                        className="mr-2"
+                      />
+                      <div>
+                        <p className='font-medium'>Thanh toán qua MoMo</p>
+                        <p className='text-sm text-gray-600 mt-1'>Thanh toán an toàn với ví điện tử MoMo</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
               </div>
 
               {/* Ghi chú đơn hàng */}
@@ -1845,19 +1947,19 @@ export default function CheckoutPage() {
 
               <button
                 onClick={handlePlaceOrder}
-                disabled={loading}
+                disabled={loading || processingPayment}
                 className='w-full py-3 bg-orange-600 text-white font-medium rounded-md hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-500 disabled:bg-gray-400 disabled:cursor-not-allowed flex justify-center items-center'
               >
-                {loading ? (
+                {loading || processingPayment ? (
                   <>
                     <svg className='animate-spin -ml-1 mr-2 h-5 w-5 text-white' xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24'>
                       <circle className='opacity-25' cx='12' cy='12' r='10' stroke='currentColor' strokeWidth='4'></circle>
                       <path className='opacity-75' fill='currentColor' d='M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z'></path>
                     </svg>
-                    Đang xử lý...
+                    {processingPayment ? 'Đang chuyển đến trang thanh toán...' : 'Đang xử lý...'}
                   </>
                 ) : (
-                  'Đặt hàng'
+                  paymentMethod === 'MOMO' ? 'Thanh toán với MoMo' : 'Đặt hàng'
                 )}
               </button>
 

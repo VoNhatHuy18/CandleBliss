@@ -51,9 +51,14 @@ const formatPrice = (price: number): string => {
    }).format(price);
 };
 
-const calculateDiscountPercentage = (basePrice: number, discountPrice: number) => {
-   if (!discountPrice || basePrice <= 0) return 0;
-   return Math.round(((basePrice - discountPrice) / basePrice) * 100);
+const calculateDiscountPercentage = (basePrice: number, discountPercentage: number | null) => {
+   if (!discountPercentage || discountPercentage <= 0) return 0;
+   return discountPercentage; // already a percentage value
+};
+
+const calculateDiscountedPrice = (basePrice: number, discountPercentage: number | null) => {
+   if (!discountPercentage || discountPercentage <= 0) return basePrice;
+   return basePrice - (basePrice * (discountPercentage / 100));
 };
 
 export default function ProductDetailPage() {
@@ -258,9 +263,10 @@ export default function ProductDetailPage() {
 
                         const priceInfo = priceData[0];
 
+                        // Store base price and the discount percentage
                         pricesMap[detail.id] = {
                            base_price: Number(priceInfo.base_price) || 0,
-                           discount_price: priceInfo.discount_price ? Number(priceInfo.discount_price) : null
+                           discount_price: priceInfo.discount_price // This is the percentage value
                         };
                      } else {
                         pricesMap[detail.id] = {
@@ -405,7 +411,12 @@ export default function ProductDetailPage() {
    const handleAddToCart = () => {
       if (!product || !selectedDetail) return;
 
-      let price = selectedPriceInfo.discount_price || selectedPriceInfo.base_price;
+      const basePrice = selectedPriceInfo.base_price || 0;
+      const discountPercentage = selectedPriceInfo.discount_price || null;
+      let price = discountPercentage ?
+         calculateDiscountedPrice(basePrice, discountPercentage) :
+         basePrice;
+
       if (isNaN(price)) {
          price = 0;
          console.warn("Invalid price detected, using 0 as default");
@@ -430,8 +441,7 @@ export default function ProductDetailPage() {
          ]
       };
 
-      console.log('Add to cart:', cartItem);
-
+      // ...rest of your cart logic
       const cartItems = JSON.parse(localStorage.getItem('cart') || '[]');
 
       const existingItemIndex = cartItems.findIndex(
@@ -626,19 +636,19 @@ export default function ProductDetailPage() {
                   <div className="mb-6 bg-gray-50 p-4 rounded">
                      {selectedPriceInfo && (
                         <div className="flex items-center">
-                           {selectedPriceInfo.discount_price ? (
+                           {selectedPriceInfo.discount_price && Number(selectedPriceInfo.discount_price) > 0 ? (
                               <>
                                  <span className="text-red-600 text-2xl font-medium">
-                                    {formatPrice(selectedPriceInfo.discount_price)}
+                                    {formatPrice(calculateDiscountedPrice(
+                                       selectedPriceInfo.base_price,
+                                       selectedPriceInfo.discount_price
+                                    ))}
                                  </span>
                                  <span className="ml-2 text-gray-500 line-through">
                                     {formatPrice(selectedPriceInfo.base_price)}
                                  </span>
                                  <div className="bg-red-600 text-white text-xs px-2 py-1 rounded ml-2">
-                                    Giảm {calculateDiscountPercentage(
-                                       selectedPriceInfo.base_price,
-                                       selectedPriceInfo.discount_price
-                                    )}%
+                                    Giảm {selectedPriceInfo.discount_price}%
                                  </div>
                               </>
                            ) : (

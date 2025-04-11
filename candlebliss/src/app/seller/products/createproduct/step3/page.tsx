@@ -79,10 +79,10 @@ export default function Step3() {
 
    // Calculate display price whenever basePrice or discountPrice changes
    useEffect(() => {
-      if (discountPrice && Number(discountPrice) > 0 && Number(discountPrice) <= 100) {
+      if (basePrice && discountPrice && Number(discountPrice) > 0 && Number(discountPrice) <= 100) {
          const discountAmount = (Number(basePrice) * Number(discountPrice)) / 100;
          const finalPrice = Number(basePrice) - discountAmount;
-         setCalculatedPrice(finalPrice.toString());
+         setCalculatedPrice(finalPrice.toFixed(0));
       } else {
          setCalculatedPrice(basePrice);
       }
@@ -158,19 +158,15 @@ export default function Step3() {
 
             // Tạo dữ liệu giá
             const basePriceValue = Number(basePrice) || 0;
-            const discountPercentage = Number(discountPrice) || 0;
-            let discountPriceValue = 0;
+            const discountPercentageValue = Number(discountPrice) || 0;
 
-            if (discountPercentage > 0 && discountPercentage <= 100) {
-               discountPriceValue = basePriceValue - (basePriceValue * discountPercentage / 100);
-            }
-
+            // THAY ĐỔI: Gửi giá trị phần trăm khuyến mãi thay vì giá sau khuyến mãi
             const priceData = {
                base_price: basePriceValue,
-               discount_price: discountPriceValue,
+               discount_price: discountPercentageValue, // Gửi giá trị phần trăm khuyến mãi
                start_date: formattedStartDate,
                end_date: formattedEndDate,
-               productId: variant.detailId, // Sử dụng detailId
+               productId: variant.detailId,
                isActive: isActive,
             };
 
@@ -570,9 +566,10 @@ export default function Step3() {
                               placeholder='Nhập giá gốc'
                               required
                            />
+                           <p className="text-xs text-gray-500 mt-1">Giá bán gốc của sản phẩm</p>
                         </div>
 
-                        {/* Giá khuyến mãi thành phần trăm khuyến mãi */}
+                        {/* Phần trăm khuyến mãi */}
                         <div className='mb-4'>
                            <label className='block text-sm font-medium mb-1'>
                               Phần trăm khuyến mãi (%)
@@ -591,54 +588,8 @@ export default function Step3() {
                               max="100"
                               placeholder='Nhập % khuyến mãi (nếu có)'
                            />
+                           <p className="text-xs text-gray-500 mt-1">% giảm giá so với giá gốc</p>
                         </div>
-                     </div>
-
-                     <div className='grid md:grid-cols-2 gap-4'>
-                        {/* Ngày áp dụng */}
-                        <div className='mb-4'>
-                           <label className='block text-sm font-medium mb-1'>
-                              Ngày áp dụng<span className='text-red-500'>*</span>
-                           </label>
-                           <input
-                              type='date'
-                              className='w-full p-2 border rounded-md'
-                              value={startDate}
-                              onChange={(e) => setStartDate(e.target.value)}
-                              required
-                           />
-                        </div>
-
-                        {/* Ngày kết thúc */}
-                        <div className='mb-4'>
-                           <label className='block text-sm font-medium mb-1'>
-                              Ngày kết thúc<span className='text-red-500'>*</span>
-                           </label>
-                           <input
-                              type='date'
-                              className='w-full p-2 border rounded-md'
-                              value={endDate}
-                              onChange={(e) => setEndDate(e.target.value)}
-                              required
-                           />
-                        </div>
-                     </div>
-
-                     {/* Khuyến mãi */}
-                     <div className='mb-4'>
-                        <label className='block text-sm font-medium mb-1'>
-                           Chương trình khuyến mãi
-                        </label>
-                        <select
-                           className='w-full p-2 border rounded-md'
-                           value={promotion}
-                           onChange={(e) => setPromotion(e.target.value)}
-                        >
-                           <option value=''>Không áp dụng</option>
-                           <option value='discount'>Giảm giá</option>
-                           <option value='combo'>Combo</option>
-                           <option value='gift'>Quà tặng kèm</option>
-                        </select>
                      </div>
 
                      {/* Giá sẽ hiển thị */}
@@ -647,11 +598,27 @@ export default function Step3() {
                            <span className='font-medium text-sm'>
                               Giá sẽ hiển thị cho khách hàng:
                            </span>
-                           <span className='font-bold text-lg text-blue-600'>
-                              {calculatedPrice
-                                 ? `${Number(calculatedPrice).toLocaleString('vi-VN')} VNĐ`
-                                 : '0 VNĐ'}
-                           </span>
+                           {discountPrice && Number(discountPrice) > 0 ? (
+                              <div className='font-medium text-right'>
+                                 <span className='font-bold text-lg text-blue-600'>
+                                    {calculatedPrice
+                                       ? `${Number(calculatedPrice).toLocaleString('vi-VN')} VNĐ`
+                                       : '0 VNĐ'}
+                                 </span>
+                                 <div className='flex items-center mt-1 justify-end'>
+                                    <span className='text-sm text-gray-500 line-through mr-2'>
+                                       {basePrice ? `${Number(basePrice).toLocaleString('vi-VN')} VNĐ` : '0 VNĐ'}
+                                    </span>
+                                    <span className='text-xs bg-red-100 text-red-600 px-1.5 py-0.5 rounded'>
+                                       -{discountPrice}%
+                                    </span>
+                                 </div>
+                              </div>
+                           ) : (
+                              <span className='font-bold text-lg text-blue-600'>
+                                 {basePrice ? `${Number(basePrice).toLocaleString('vi-VN')} VNĐ` : '0 VNĐ'}
+                              </span>
+                           )}
                         </div>
                      </div>
                   </div>

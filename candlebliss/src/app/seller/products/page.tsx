@@ -78,12 +78,19 @@ const formatPrice = (price: number): string => {
    }).format(price);
 };
 
-// Utility to calculate discount percentage
-const calculateDiscountPercent = (basePrice: number, discountPrice: number): number => {
-   if (!basePrice || !discountPrice || basePrice <= 0) return 0;
-   // Calculate the discount percentage
-   const discountPercent = Math.round((1 - discountPrice / basePrice) * 100);
-   return discountPercent > 0 ? discountPercent : 0;
+// Sửa hàm calculateDiscountPercent vì không cần tính phần trăm từ giá nữa
+const calculateDiscountPercent = (basePrice: number, discountPercentage: number | null): number => {
+   if (!basePrice || !discountPercentage || discountPercentage <= 0) return 0;
+   // Đã là phần trăm khuyến mãi, không cần tính toán
+   return discountPercentage;
+};
+
+// Thêm hàm tính giá sau khi đã giảm
+const calculateDiscountedPrice = (basePrice: number, discountPercentage: number | null): number => {
+   if (!basePrice || !discountPercentage || discountPercentage <= 0) return basePrice;
+   // Tính giá sau khuyến mãi từ phần trăm
+   const discountAmount = (basePrice * discountPercentage) / 100;
+   return basePrice - discountAmount;
 };
 
 // Loading Skeleton Component
@@ -157,7 +164,11 @@ const ProductTable = ({
    showToast: (message: string, type: 'success' | 'error' | 'info') => void
 }) => {
    const [expandedProduct, setExpandedProduct] = useState<number | null>(null);
-   const [detailPrices, setDetailPrices] = useState<Record<number, { base_price: number, discount_price: number | null }>>({});
+   const [detailPrices, setDetailPrices] = useState<Record<number, {
+      base_price: number,
+      discount_price: number | null,
+      end_date: string | null
+   }>>({});
    const [searchTerm, setSearchTerm] = useState<string>('');
    const [detailLoading, setDetailLoading] = useState<Record<number, boolean>>({});
    const [categoryNames, setCategoryNames] = useState<Record<number, string>>({});
@@ -181,6 +192,22 @@ const ProductTable = ({
          fetchProductDetailPrices(expandedProduct);
       }
    }, [expandedProduct]);
+
+   // Thêm hàm định dạng ngày
+   const formatDate = (dateString: string | null): string => {
+      if (!dateString) return '—';
+
+      try {
+         const date = new Date(dateString);
+         return new Intl.DateTimeFormat('vi-VN', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit'
+         }).format(date);
+      } catch (error) {
+         return dateString || '—';
+      }
+   };
 
    // Fetch price details for a specific product
    const fetchProductDetailPrices = async (productId: number) => {
@@ -211,24 +238,26 @@ const ProductTable = ({
                      return {
                         detailId: detail.id,
                         base_price: parseFloat(priceData[0].base_price),
-                        discount_price: priceData[0].discount_price ? parseFloat(priceData[0].discount_price) : null
+                        discount_price: priceData[0].discount_price ? parseFloat(priceData[0].discount_price) : null,
+                        end_date: priceData[0].end_date || null  // Thêm thông tin end_date
                      };
                   }
                }
-               return { detailId: detail.id, base_price: 0, discount_price: null };
+               return { detailId: detail.id, base_price: 0, discount_price: null, end_date: null };
             } catch (error) {
-               return { detailId: detail.id, base_price: 0, discount_price: null };
+               return { detailId: detail.id, base_price: 0, discount_price: null, end_date: null };
             }
          });
 
          const prices = await Promise.all(pricePromises);
 
          // Update state with fetched prices
-         const pricesObj: Record<number, { base_price: number, discount_price: number | null }> = {};
+         const pricesObj: Record<number, { base_price: number, discount_price: number | null, end_date: string | null }> = {};
          prices.forEach(price => {
             pricesObj[price.detailId] = {
                base_price: price.base_price,
-               discount_price: price.discount_price
+               discount_price: price.discount_price,
+               end_date: price.end_date
             };
          });
 
@@ -288,6 +317,19 @@ const ProductTable = ({
    const handleRefresh = useCallback(() => {
       fetchAllProductData();
    }, [fetchAllProductData]);
+
+   // Thêm hàm kiểm tra khuyến mãi hết hạn
+   const isPromotionExpired = (endDate: string | null): boolean => {
+      if (!endDate) return false;
+
+      try {
+         const now = new Date();
+         const promotionEndDate = new Date(endDate);
+         return now > promotionEndDate;
+      } catch (error) {
+         return false;
+      }
+   };
 
    return (
       <div className="bg-white rounded-lg shadow overflow-hidden">
@@ -624,42 +666,28 @@ const ProductTable = ({
                                                 Giá ưu đãi
                                              </th>
                                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                Hạn khuyến mãi
+                                             </th>
+                                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                                 Trạng thái
                                              </th>
                                           </tr>
                                        </thead>
                                        <tbody className="bg-white divide-y divide-gray-200">
                                           {product.details.map((detail) => {
-                                             const priceInfo = detailPrices[detail.id] || { base_price: 0, discount_price: null };
-                                             const discountPercent = calculateDiscountPercent(
-                                                priceInfo.base_price,
-                                                priceInfo.discount_price || 0
-                                             );
+                                             const priceInfo = detailPrices[detail.id] || { base_price: 0, discount_price: null, end_date: null };
+                                             const promotionExpired = isPromotionExpired(priceInfo.end_date);
+
+                                             // Nếu khuyến mãi đã hết hạn, không hiển thị giá khuyến mãi
+                                             const effectiveDiscountPrice = promotionExpired ? null : priceInfo.discount_price;
 
                                              return (
                                                 <tr key={detail.id} className="hover:bg-gray-50 transition-colors">
+                                                   {/* Các cột khác giữ nguyên */}
                                                    <td className="px-6 py-4 whitespace-nowrap">
                                                       <div className="flex items-center">
                                                          <div className="h-10 w-10 flex-shrink-0 mr-3 border rounded-full overflow-hidden">
-                                                            {detail.images && detail.images.length > 0 ? (
-                                                               <Image
-                                                                  src={detail.images[0].path}
-                                                                  alt={`${product.name} - ${detail.size} - ${detail.type}`}
-                                                                  width={40}
-                                                                  height={40}
-                                                                  className="h-10 w-10 object-cover"
-                                                                  onError={(e) => {
-                                                                     const target = e.target as HTMLImageElement;
-                                                                     target.src = "/placeholder.png";
-                                                                  }}
-                                                               />
-                                                            ) : (
-                                                               <div className="h-10 w-10 bg-gray-200 flex items-center justify-center text-gray-400">
-                                                                  <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                                                  </svg>
-                                                               </div>
-                                                            )}
+                                                            {/* Nội dung cũ */}
                                                          </div>
                                                          <span className="text-gray-900 text-sm">#{detail.id}</span>
                                                       </div>
@@ -682,12 +710,30 @@ const ProductTable = ({
                                                       {priceInfo.base_price ? formatPrice(priceInfo.base_price) : '—'}
                                                    </td>
                                                    <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                                      {priceInfo.discount_price ? (
-                                                         <div className="flex items-center">
-                                                            <span className="font-medium text-amber-600">{formatPrice(priceInfo.discount_price)}</span>
-                                                            {discountPercent > 0 && (
-                                                               <span className="ml-2 bg-red-100 text-red-800 text-xs px-2 py-0.5 rounded">
-                                                                  -{discountPercent}%
+                                                      {priceInfo.base_price ? (
+                                                         <div>
+                                                            {effectiveDiscountPrice && effectiveDiscountPrice > 0 ? (
+                                                               <>
+                                                                  {/* Hiển thị giá sau khi giảm */}
+                                                                  <div className="flex items-center">
+                                                                     <span className="font-medium text-amber-600">
+                                                                        {formatPrice(calculateDiscountedPrice(priceInfo.base_price, effectiveDiscountPrice))}
+                                                                     </span>
+                                                                     <span className="ml-2 bg-red-100 text-red-800 text-xs px-2 py-0.5 rounded">
+                                                                        -{effectiveDiscountPrice}%
+                                                                     </span>
+                                                                  </div>
+                                                                  {/* Hiển thị giá gốc có gạch ngang */}
+                                                                  <div className="mt-1">
+                                                                     <span className="text-xs text-gray-500 line-through">
+                                                                        {formatPrice(priceInfo.base_price)}
+                                                                     </span>
+                                                                  </div>
+                                                               </>
+                                                            ) : (
+                                                               /* Nếu không có giảm giá hoặc khuyến mãi hết hạn thì chỉ hiển thị giá gốc */
+                                                               <span className="text-gray-700">
+                                                                  {formatPrice(priceInfo.base_price)}
                                                                </span>
                                                             )}
                                                          </div>
@@ -695,6 +741,25 @@ const ProductTable = ({
                                                          <span className="text-gray-400">—</span>
                                                       )}
                                                    </td>
+
+                                                   {/* CỘT MỚI: Thời gian kết thúc khuyến mãi */}
+                                                   <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                                      {priceInfo.end_date ? (
+                                                         <div>
+                                                            <span className={promotionExpired ? 'text-red-500' : 'text-gray-700'}>
+                                                               {formatDate(priceInfo.end_date)}
+                                                            </span>
+                                                            {promotionExpired && (
+                                                               <span className="block text-xs text-red-500 mt-0.5">
+                                                                  Đã kết thúc
+                                                               </span>
+                                                            )}
+                                                         </div>
+                                                      ) : (
+                                                         <span className="text-gray-400">—</span>
+                                                      )}
+                                                   </td>
+
                                                    <td className="px-6 py-4 whitespace-nowrap">
                                                       <span className={`px-2 py-1 text-xs rounded-full ${detail.isActive
                                                          ? 'bg-green-100 text-green-800'
