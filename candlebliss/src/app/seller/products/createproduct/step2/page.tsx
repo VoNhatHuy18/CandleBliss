@@ -328,7 +328,7 @@ export default function Step2() {
 
             // Gửi request tạo chi tiết sản phẩm
             setLoadingMessage(`Đang lưu thông tin phiên bản ${i + 1}...`);
-            const detailResponse = await fetch('http://localhost:3000/api/product-details', {
+            const detailResponse = await fetch('http://68.183.226.198:3000/api/product-details', {
                method: 'POST',
                headers: {
                   Authorization: `Bearer ${token}`,

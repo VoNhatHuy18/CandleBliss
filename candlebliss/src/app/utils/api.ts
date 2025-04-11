@@ -55,7 +55,7 @@ export const fetchUserProfile = async (): Promise<User> => {
          throw new Error('No authentication token found');
       }
 
-      const response = await fetch('/api/v1/auth/me', {
+      const response = await fetch('http://68.183.226.198:3000/api/v1/auth/me', {
          headers: {
             Authorization: `Bearer ${token}`,
             'Content-Type': 'application/json',

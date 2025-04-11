@@ -186,7 +186,7 @@ export default function ScentsPage() {
    useEffect(() => {
       const fetchCategories = async () => {
          try {
-            const response = await fetch('http://localhost:3000/api/categories');
+            const response = await fetch('http://68.183.226.198:3000/api/categories');
             
             let categoriesData;
             
@@ -285,7 +285,7 @@ export default function ScentsPage() {
       const fetchProducts = async () => {
          try {
             // Fetch all products first
-            const productsResponse = await fetch('http://localhost:3000/api/products');
+            const productsResponse = await fetch('http://68.183.226.198:3000/api/products');
             if (!productsResponse.ok) {
                throw new Error('Failed to fetch products');
             }
@@ -346,7 +346,7 @@ export default function ScentsPage() {
             console.log(`Found ${filteredProducts.length} accessories products in category ${categoryName}`);
 
             try {
-               const pricesResponse = await fetch('http://localhost:3000/api/v1/prices', {
+               const pricesResponse = await fetch('http://68.183.226.198:3000/api/v1/prices', {
                   headers: {
                      Authorization: 'Bearer ' + (localStorage.getItem('token') || ''),
                   },

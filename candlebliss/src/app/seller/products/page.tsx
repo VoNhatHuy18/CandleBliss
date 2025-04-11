@@ -197,7 +197,7 @@ const ProductTable = ({
          // Fetch prices for each product detail using the new endpoint
          const pricePromises = product.details.map(async (detail) => {
             try {
-               const response = await fetch(`http://localhost:3000/api/v1/prices/product-detail/${detail.id}`, {
+               const response = await fetch(`http://68.183.226.198:3000/api/v1/prices/product-detail/${detail.id}`, {
                   headers: {
                      'Authorization': `Bearer ${token}`
                   }
@@ -783,7 +783,7 @@ export default function ProductManagement() {
          setLoading(true);
 
          // 1. Fetch all products first to get IDs
-         const productsResponse = await fetch('http://localhost:3000/api/products', {
+         const productsResponse = await fetch('http://68.183.226.198:3000/api/products', {
             headers: headers
          });
 
@@ -796,7 +796,7 @@ export default function ProductManagement() {
          // 2. Fetch complete details for each product using the detailed endpoint
          const detailedProductsPromises = productsData.map(async (product: Product) => {
             try {
-               const detailResponse = await fetch(`http://localhost:3000/api/products/${product.id}`, {
+               const detailResponse = await fetch(`http://68.183.226.198:3000/api/products/${product.id}`, {
                   headers: headers
                });
 
@@ -841,7 +841,7 @@ export default function ProductManagement() {
 
          // 3. Fetch all prices
          try {
-            const allPricesResponse = await fetch('http://localhost:3000/api/v1/prices', {
+            const allPricesResponse = await fetch('http://68.183.226.198:3000/api/v1/prices', {
                headers: headers
             });
 
@@ -895,7 +895,7 @@ export default function ProductManagement() {
          if (!token) return `ID: ${categoryId}`;
 
          // Sửa lại URL API endpoint đúng với cấu trúc của bạn
-         const response = await fetch(`http://localhost:3000/api/categories/${categoryId}`, {
+         const response = await fetch(`http://68.183.226.198:3000/api/categories/${categoryId}`, {
             headers: {
                'Authorization': `Bearer ${token}`
             }
@@ -965,7 +965,7 @@ export default function ProductManagement() {
          }
 
          // First, we'll make a DELETE request to the API
-         const response = await fetch(`http://localhost:3000/api/products/${productToDelete}`, {
+         const response = await fetch(`http://68.183.226.198:3000/api/products/${productToDelete}`, {
             method: 'DELETE',
             headers: {
                'Authorization': `Bearer ${token}`,

@@ -12,7 +12,7 @@ import Image from 'next/image';
 import AuthService from '@/app/utils/authService';
 
 // Cấu hình chung cho API - dễ dàng thay đổi cổng hoặc domain khi cần
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://68.183.226.198:3000';
 
 export default function SignInPage() {
    const router = useRouter();
@@ -106,7 +106,7 @@ export default function SignInPage() {
 
       try {
          // Sử dụng proxy qua rewrites
-         const response = await fetch('/api/v1/auth/email/login', {
+         const response = await fetch(`${API_URL}/api/v1/auth/email/login`, {
             method: 'POST',
             headers: {
                'Content-Type': 'application/json',
@@ -125,16 +125,25 @@ export default function SignInPage() {
             data = {};
          } else {
             try {
-               data = await response.json();
+               // Clone the response before attempting to read it
+               const responseClone = response.clone();
+
+               try {
+                  data = await response.json();
+               } catch (error) {
+                  console.error('JSON parsing error:', error);
+
+                  // Now we can safely read as text from the cloned response
+                  const textResponse = await responseClone.text();
+                  console.log('Response as text:', textResponse);
+
+                  showToastMessage('Lỗi dữ liệu từ server', 'error');
+                  throw new Error('Lỗi dữ liệu từ server');
+               }
             } catch (error) {
-               console.error('JSON parsing error:', error);
-
-               // Thử đọc response dưới dạng text
-               const textResponse = await response.text();
-               console.log('Response as text:', textResponse);
-
-               showToastMessage('Lỗi dữ liệu từ server', 'error');
-               throw new Error('Lỗi dữ liệu từ server');
+               console.error('Response processing error:', error);
+               showToastMessage('Lỗi xử lý phản hồi từ server', 'error');
+               throw error;
             }
          }
 
@@ -167,10 +176,10 @@ export default function SignInPage() {
                   id: data.user.id // Đảm bảo userId được lưu
                };
                AuthService.saveUserInfo(userInfo);
-               
+
                // Lưu userId vào localStorage để dễ dàng truy cập
                localStorage.setItem('userId', data.user.id.toString());
-               
+
                console.log("User authenticated successfully with ID:", data.user.id);
             } else {
                // Nếu API không trả về thông tin user, thực hiện request bổ sung để lấy thông tin
@@ -183,16 +192,16 @@ export default function SignInPage() {
                         'Content-Type': 'application/json',
                      }
                   });
-                  
+
                   if (userResponse.ok) {
                      const userData = await userResponse.json();
-                     
+
                      // Lưu thông tin user vào AuthService
                      AuthService.saveUserInfo(userData);
-                     
+
                      // Lưu userId vào localStorage để dễ dàng truy cập
                      localStorage.setItem('userId', userData.id.toString());
-                     
+
                      console.log("User information retrieved with ID:", userData.id);
                   } else {
                      console.warn("Failed to fetch additional user information");
@@ -306,9 +315,8 @@ export default function SignInPage() {
                         <input
                            type='email'
                            id='email'
-                           className={`w-full px-3 py-2 border rounded-lg ${
-                              emailError ? 'border-red-500' : 'border-[#553C26]'
-                           }`}
+                           className={`w-full px-3 py-2 border rounded-lg ${emailError ? 'border-red-500' : 'border-[#553C26]'
+                              }`}
                            placeholder='Nhập Email hoặc số điện thoại'
                            value={email}
                            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
@@ -332,9 +340,8 @@ export default function SignInPage() {
                            <input
                               type={showPassword ? 'text' : 'password'}
                               id='password'
-                              className={`w-full px-3 py-2 border rounded-lg ${
-                                 passwordError ? 'border-red-500' : 'border-[#553C26]'
-                              }`}
+                              className={`w-full px-3 py-2 border rounded-lg ${passwordError ? 'border-red-500' : 'border-[#553C26]'
+                                 }`}
                               placeholder='Nhập mật khẩu'
                               value={password}
                               onChange={(e: React.ChangeEvent<HTMLInputElement>) =>

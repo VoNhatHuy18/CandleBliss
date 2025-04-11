@@ -72,7 +72,7 @@ export default function Login() {
       setLoading(true);
 
       try {
-         const response = await fetch(`http://localhost:3000/api/v1/auth/email/login`, {
+         const response = await fetch(`http://68.183.226.198:3000/api/v1/auth/email/login`, {
             method: 'POST',
             headers: {
                'Content-Type': 'application/json',

@@ -192,7 +192,7 @@ export default function SignUpPage() {
    // Xử lý đăng nhập với Google
    const handleGoogleSignup = () => {
       try {
-         window.location.href = 'http://localhost:3000/api/v1/auth/google';
+         window.location.href = 'http://68.183.226.198:3000/api/v1/auth/google';
       } catch (error) {
          console.error('Google signup error:', error);
          showToastMessage('Đăng ký bằng Google thất bại', 'error');
@@ -235,7 +235,7 @@ export default function SignUpPage() {
             phone,
          };
 
-         const response = await fetch('http://localhost:3000/api/v1/auth/email/register', {
+         const response = await fetch('http://68.183.226.198:3000/api/v1/auth/email/register', {
             method: 'POST',
             headers: {
                'Content-Type': 'application/json',
@@ -379,9 +379,8 @@ export default function SignUpPage() {
                            <input
                               type='text'
                               id='lastName'
-                              className={`w-full px-3 py-2 border rounded-lg text-sm md:text-base ${
-                                 lastNameError ? 'border-red-500' : 'border-[#553C26]'
-                              }`}
+                              className={`w-full px-3 py-2 border rounded-lg text-sm md:text-base ${lastNameError ? 'border-red-500' : 'border-[#553C26]'
+                                 }`}
                               placeholder='Nhập họ'
                               value={lastName}
                               onChange={(e) => validateLastName(e.target.value)}
@@ -403,9 +402,8 @@ export default function SignUpPage() {
                            <input
                               type='text'
                               id='firstName'
-                              className={`w-full px-3 py-2 border rounded-lg text-sm md:text-base ${
-                                 firstNameError ? 'border-red-500' : 'border-[#553C26]'
-                              }`}
+                              className={`w-full px-3 py-2 border rounded-lg text-sm md:text-base ${firstNameError ? 'border-red-500' : 'border-[#553C26]'
+                                 }`}
                               placeholder='Nhập tên'
                               value={firstName}
                               onChange={(e) => validateFirstName(e.target.value)}
@@ -429,9 +427,8 @@ export default function SignUpPage() {
                         <input
                            type='text'
                            id='phone'
-                           className={`w-full px-3 py-2 border rounded-lg text-sm md:text-base ${
-                              phoneError ? 'border-red-500' : 'border-[#553C26]'
-                           }`}
+                           className={`w-full px-3 py-2 border rounded-lg text-sm md:text-base ${phoneError ? 'border-red-500' : 'border-[#553C26]'
+                              }`}
                            placeholder='Nhập số điện thoại của bạn'
                            value={phone}
                            onChange={(e) => validatePhone(e.target.value)}
@@ -452,9 +449,8 @@ export default function SignUpPage() {
                         <input
                            type='email'
                            id='email'
-                           className={`w-full px-3 py-2 border rounded-lg text-sm md:text-base ${
-                              emailError ? 'border-red-500' : 'border-[#553C26]'
-                           }`}
+                           className={`w-full px-3 py-2 border rounded-lg text-sm md:text-base ${emailError ? 'border-red-500' : 'border-[#553C26]'
+                              }`}
                            placeholder='Nhập Email'
                            value={email}
                            onChange={(e) => validateEmail(e.target.value)}
@@ -476,9 +472,8 @@ export default function SignUpPage() {
                            <input
                               type={showPassword ? 'text' : 'password'}
                               id='password'
-                              className={`w-full px-3 py-2 border rounded-lg text-sm md:text-base ${
-                                 passwordError ? 'border-red-500' : 'border-[#553C26]'
-                              }`}
+                              className={`w-full px-3 py-2 border rounded-lg text-sm md:text-base ${passwordError ? 'border-red-500' : 'border-[#553C26]'
+                                 }`}
                               placeholder='Nhập mật khẩu'
                               value={password}
                               onChange={(e) => validatePassword(e.target.value)}
@@ -512,9 +507,8 @@ export default function SignUpPage() {
                            <input
                               type={showRePassword ? 'text' : 'password'}
                               id='repassword'
-                              className={`w-full px-3 py-2 border rounded-lg text-sm md:text-base ${
-                                 rePasswordError ? 'border-red-500' : 'border-[#553C26]'
-                              }`}
+                              className={`w-full px-3 py-2 border rounded-lg text-sm md:text-base ${rePasswordError ? 'border-red-500' : 'border-[#553C26]'
+                                 }`}
                               placeholder='Xác nhận mật khẩu'
                               value={rePassword}
                               onChange={(e) => validateRePassword(e.target.value)}

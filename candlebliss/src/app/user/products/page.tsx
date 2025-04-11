@@ -202,7 +202,7 @@ export default function ProductPage() {
    useEffect(() => {
       const fetchProducts = async () => {
          try {
-            const productsResponse = await fetch('http://localhost:3000/api/products');
+            const productsResponse = await fetch('http://68.183.226.198:3000/api/products');
             if (!productsResponse.ok) {
                throw new Error('Failed to fetch products');
             }
@@ -224,7 +224,7 @@ export default function ProductPage() {
             });
 
             try {
-               const pricesResponse = await fetch('http://localhost:3000/api/v1/prices', {
+               const pricesResponse = await fetch('http://68.183.226.198:3000/api/v1/prices', {
                   headers: {
                      Authorization: 'Bearer ' + localStorage.getItem('token'),
                   },

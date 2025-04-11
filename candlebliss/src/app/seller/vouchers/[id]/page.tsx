@@ -62,7 +62,7 @@ export default function VoucherDetail() {
             }
 
             // Fetch voucher data from API
-            const response = await fetch(`http://localhost:3000/api/v1/vouchers/${params.id}`, {
+            const response = await fetch(`http://68.183.226.198:3000/api/v1/vouchers/${params.id}`, {
                method: 'GET',
                headers: {
                   'Content-Type': 'application/json',
@@ -115,7 +115,7 @@ export default function VoucherDetail() {
 
       try {
          const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-         const response = await fetch(`http://localhost:3000/api/v1/vouchers/${params.id}`, {
+         const response = await fetch(`http://68.183.226.198:3000/api/v1/vouchers/${params.id}`, {
             method: 'DELETE',
             headers: {
                'Content-Type': 'application/json',
@@ -141,7 +141,7 @@ export default function VoucherDetail() {
          const token = localStorage.getItem('token') || sessionStorage.getItem('token');
          const newStatus = !voucher?.isActive;
 
-         const response = await fetch(`http://localhost:3000/api/v1/vouchers/${params.id}/status`, {
+         const response = await fetch(`http://68.183.226.198:3000/api/v1/vouchers/${params.id}/status`, {
             method: 'PATCH',
             headers: {
                'Content-Type': 'application/json',

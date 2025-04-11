@@ -213,7 +213,7 @@ export default function CheckoutPage() {
         return false;
       }
 
-      const response = await fetch(`http://localhost:3000/api/v1/address/${addressId}`, {
+      const response = await fetch(`http://68.183.226.198:3000/api/v1/address/${addressId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -467,7 +467,7 @@ export default function CheckoutPage() {
   // Load thông tin người dùng
   const loadUserInfo = async (userId: number) => {
     try {
-      const response = await fetch(`http://localhost:3000/api/v1/users/${userId}`, {
+      const response = await fetch(`http://68.183.226.198:3000/api/v1/users/${userId}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
         }
@@ -502,7 +502,7 @@ export default function CheckoutPage() {
       const token = localStorage.getItem('token');
       if (!token) return { fullName: '', phone: '' };
 
-      const response = await fetch(`http://localhost:3000/api/v1/users/${userId}`, {
+      const response = await fetch(`http://68.183.226.198:3000/api/v1/users/${userId}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
@@ -545,7 +545,7 @@ export default function CheckoutPage() {
           // Kiểm tra nhanh một địa chỉ đầu tiên để xác nhận vẫn còn tồn tại trên server
           try {
             const firstAddress = storedAddresses[0];
-            const checkResponse = await fetch(`http://localhost:3000/api/v1/address/${firstAddress.id}`, {
+            const checkResponse = await fetch(`http://68.183.226.198:3000/api/v1/address/${firstAddress.id}`, {
               headers: { 'Authorization': `Bearer ${token}` }
             });
 
@@ -584,7 +584,7 @@ export default function CheckoutPage() {
 
         for (let id = 1; id <= maxAddressIdToTry; id++) {
           addressPromises.push(
-            fetch(`http://localhost:3000/api/v1/address/${id}`, {
+            fetch(`http://68.183.226.198:3000/api/v1/address/${id}`, {
               headers: { 'Authorization': `Bearer ${token}` }
             })
               .then(response => {
@@ -618,7 +618,7 @@ export default function CheckoutPage() {
 
       // Lấy chi tiết của từng địa chỉ đã biết ID
       const addressPromises = userAddressIds.map((id: any) =>
-        fetch(`http://localhost:3000/api/v1/address/${id}`, {
+        fetch(`http://68.183.226.198:3000/api/v1/address/${id}`, {
           headers: { 'Authorization': `Bearer ${token}` }
         })
           .then(response => {
@@ -802,7 +802,7 @@ export default function CheckoutPage() {
         return null;
       }
 
-      const response = await fetch(`http://localhost:3000/api/v1/address/${addressId}`, {
+      const response = await fetch(`http://68.183.226.198:3000/api/v1/address/${addressId}`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -910,8 +910,8 @@ export default function CheckoutPage() {
       // Xác định xem đây là cập nhật hay tạo mới
       const isUpdate = !!addressData.id;
       const url = isUpdate
-        ? `http://localhost:3000/api/v1/address/${addressData.id}`
-        : 'http://localhost:3000/api/v1/address';
+        ? `http://68.183.226.198:3000/api/v1/address/${addressData.id}`
+        : 'http://68.183.226.198:3000/api/v1/address';
 
       const method = isUpdate ? 'PATCH' : 'POST';
 
@@ -1111,7 +1111,7 @@ export default function CheckoutPage() {
       setVoucherError('');
 
       // Bước 1: Lấy tất cả vouchers
-      const allVouchersResponse = await fetch(`http://localhost:3000/api/v1/vouchers`, {
+      const allVouchersResponse = await fetch(`http://68.183.226.198:3000/api/v1/vouchers`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
         }
@@ -1132,7 +1132,7 @@ export default function CheckoutPage() {
       }
 
       // Bước 2: Lấy thông tin chi tiết của voucher theo ID
-      const voucherDetailResponse = await fetch(`http://localhost:3000/api/v1/vouchers/${matchingVoucher.id}`, {
+      const voucherDetailResponse = await fetch(`http://68.183.226.198:3000/api/v1/vouchers/${matchingVoucher.id}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
         }
@@ -1227,108 +1227,33 @@ export default function CheckoutPage() {
         };
       });
 
-      // Tạo dữ liệu đơn hàng theo định dạng mới
-      const orderData = {
+      // Tạo dữ liệu đơn hàng mới
+      const newOrderData = {
         user_id: Number(userId),
         address: formattedAddress,
         voucher_code: appliedVoucher?.code || undefined,
         item: formattedItems
       };
 
-      // Thêm cơ chế retry - thử lại tối đa 5 lần với thời gian chờ tăng dần
-      let attempts = 0;
-      const maxAttempts = 5;
-      let response = null;
-      let lastError = null;
-      let redisErrorDetected = false;
+      console.log('Đang tạo đơn hàng mới:', newOrderData);
 
-      while (attempts < maxAttempts && !redisErrorDetected) {
-        attempts++;
-        try {
-          // Tính thời gian chờ tăng dần: 1s, 2s, 4s, 8s, 16s
-          const waitTime = attempts > 1 ? Math.pow(2, attempts - 2) * 1000 : 0;
-
-          if (attempts > 1) {
-            // Thông báo cho người dùng biết đang thử lại
-            showToastMessage(`Đang thử kết nối lần ${attempts}/${maxAttempts}...`, 'info');
-
-            // Chờ theo thời gian tăng dần trước khi thử lại
-            await new Promise(resolve => setTimeout(resolve, waitTime));
-          }
-
-          // Gọi API để tạo đơn hàng
-          response = await fetch('http://localhost:3000/api/orders', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
-            },
-            body: JSON.stringify(orderData)
-          });
-
-          // Nếu thành công, thoát vòng lặp
-          if (response.ok) {
-            break;
-          }
-
-          // Xử lý lỗi từ API
-          const errorData = await response.json().catch(() => ({}));
-          lastError = errorData;
-
-          // Kiểm tra nếu có lỗi liên quan đến Redis
-          if (response.status === 400 &&
-            errorData.message === "Thao tác đang được xử lý, vui lòng thử lại sau") {
-            console.log(`Attempt ${attempts}: Redis connection or server busy error`);
-
-            // Nếu đã thử nhiều lần mà vẫn gặp lỗi Redis, đánh dấu để hiển thị thông báo đặc biệt
-            if (attempts >= 3) {
-              redisErrorDetected = true;
-            }
-          } else {
-            // Nếu là lỗi khác không phải Redis, thoát vòng lặp
-            break;
-          }
-        } catch (fetchError) {
-          console.error(`Fetch attempt ${attempts} failed:`, fetchError);
-          lastError = fetchError;
-
-          // Nếu là lỗi mạng, tiếp tục thử lại
-          if (attempts < maxAttempts) {
-            await new Promise(resolve => setTimeout(resolve, 2000));
-          }
-        }
-      }
-
-      // Xử lý sau khi đã hoàn thành tất cả các lần thử hoặc gặp lỗi Redis liên tục
-      if (redisErrorDetected) {
-        // Gợi ý giải pháp cho người dùng khi phát hiện lỗi Redis liên tục
-        showToastMessage(
-          'Hệ thống đang bảo trì. Vui lòng thử lại sau hoặc liên hệ hỗ trợ qua hotline 1900xxxx.',
-          'error'
-        );
-
-        // Lưu đơn hàng tạm thời vào localStorage để có thể thử lại sau
-        try {
-          const pendingOrders = JSON.parse(localStorage.getItem('pendingOrders') || '[]');
-          pendingOrders.push({
-            orderData,
-            timestamp: new Date().toISOString()
-          });
-          localStorage.setItem('pendingOrders', JSON.stringify(pendingOrders));
-          console.log('Saved pending order to localStorage');
-        } catch (e) {
-          console.error('Failed to save pending order:', e);
-        }
-
-        return;
-      }
+      // Gọi API để tạo đơn hàng mới
+      const response = await fetch('http://68.183.226.198:3000/api/orders', {
+        method: 'POST', // Sử dụng POST để tạo mới
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
+        },
+        body: JSON.stringify(newOrderData)
+      });
 
       if (!response) {
         throw new Error('Không thể kết nối đến máy chủ.');
       }
 
       if (response.ok) {
-        const order = await response.json();
+        const newOrder = await response.json();
+        console.log('Đơn hàng mới đã được tạo:', newOrder);
 
         // Xóa giỏ hàng và voucher sau khi đặt hàng thành công
         localStorage.setItem('cart', '[]');
@@ -1338,7 +1263,7 @@ export default function CheckoutPage() {
 
         // Chuyển hướng đến trang chi tiết đơn hàng
         setTimeout(() => {
-          router.push(`/user/orders/${order.id || ''}`);
+          router.push(`/user/order`);
         }, 2000);
       } else {
         const errorData = await response.json().catch(() => ({}));
@@ -1347,11 +1272,7 @@ export default function CheckoutPage() {
         // Xử lý các mã lỗi cụ thể từ API
         if (response.status === 400) {
           // Xử lý lỗi 400
-          if (errorData.message === "Thao tác đang được xử lý, vui lòng thử lại sau") {
-            throw new Error('Hệ thống đang bận. Vui lòng thử lại sau 5-10 phút');
-          } else {
-            throw new Error(errorData.message || 'Thông tin đơn hàng không hợp lệ');
-          }
+          throw new Error(errorData.message || 'Thông tin đơn hàng không hợp lệ');
         } else if (response.status === 401) {
           showToastMessage('Phiên đăng nhập hết hạn, vui lòng đăng nhập lại', 'error');
           setTimeout(() => router.push('/user/signin'), 2000);
@@ -1383,7 +1304,7 @@ export default function CheckoutPage() {
         }
       }
     } catch (error: any) {
-      console.error('Error placing order:', error);
+      console.error('Error creating new order:', error);
       showToastMessage(error.message || 'Đặt hàng thất bại. Vui lòng thử lại', 'error');
     } finally {
       setLoading(false);

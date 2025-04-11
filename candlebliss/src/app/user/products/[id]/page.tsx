@@ -96,7 +96,7 @@ export default function ProductDetailPage() {
             console.log("Đang lấy thông tin sản phẩm với ID:", productId);
 
             try {
-               const productResponse = await fetch(`http://localhost:3000/api/products/${productId}`);
+               const productResponse = await fetch(`http://68.183.226.198:3000/api/products/${productId}`);
 
                if (!productResponse.ok) {
                   setError(`Không tìm thấy sản phẩm có ID ${productId}`);
@@ -238,7 +238,7 @@ export default function ProductDetailPage() {
          for (const detail of details) {
             if (detail && typeof detail.id === 'number') {
                try {
-                  const priceResponse = await fetch(`http://localhost:3000/api/v1/prices/product-detail/${detail.id}`, {
+                  const priceResponse = await fetch(`http://68.183.226.198:3000/api/v1/prices/product-detail/${detail.id}`, {
                      headers: {
                         Authorization: `Bearer ${localStorage.getItem('token') || ''}`
                      }

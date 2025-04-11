@@ -84,7 +84,7 @@ export default function Step1() {
 
          console.log('Fetching categories with token:', token ? 'Token exists' : 'No token');
 
-         const response = await fetch('http://localhost:3000/api/categories', {
+         const response = await fetch('http://68.183.226.198:3000/api/categories', {
             headers: {
                Authorization: `Bearer ${token}`,
                'Content-Type': 'application/json'
@@ -205,7 +205,7 @@ export default function Step1() {
 
          // Fetch detailed category information if needed
          const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-         const response = await fetch(`http://localhost:3000/api/categories/${category.id}`, {
+         const response = await fetch(`http://68.183.226.198:3000/api/categories/${category.id}`, {
             headers: {
                Authorization: `Bearer ${token}`
             }
@@ -411,7 +411,7 @@ export default function Step1() {
          console.log('Đang gửi dữ liệu sản phẩm đến máy chủ...');
 
          // Gửi request tạo sản phẩm
-         const productResponse = await fetch('http://localhost:3000/api/products', {
+         const productResponse = await fetch('http://68.183.226.198:3000/api/products', {
             method: 'POST',
             headers: {
                'Authorization': `Bearer ${token}`

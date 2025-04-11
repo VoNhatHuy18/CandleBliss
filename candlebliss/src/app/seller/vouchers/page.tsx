@@ -47,7 +47,7 @@ export default function VoucherPage() {
             }
 
             // Fetch vouchers data from API
-            const response = await fetch('http://localhost:3000/api/v1/vouchers', {
+            const response = await fetch('http://68.183.226.198:3000/api/v1/vouchers', {
                method: 'GET',
                headers: {
                   'Content-Type': 'application/json',

@@ -103,7 +103,7 @@ export default function CartPage() {
          for (const detailId of uniqueDetailIds) {
             try {
                // Fetch product detail info
-               const response = await fetch(`http://localhost:3000/api/product-details/${detailId}`);
+               const response = await fetch(`http://68.183.226.198:3000/api/product-details/${detailId}`);
                if (response.ok) {
                   const detail = await response.json();
                   detailsMap[detailId] = detail;
@@ -142,7 +142,7 @@ export default function CartPage() {
                   // Sửa endpoint để phù hợp với API của bạn
                   // POST /api/cart/{cartId}/add-item/{productDetailId}
                   const addResponse = await fetch(
-                     `http://localhost:3000/api/cart/${apiCart.id}/add-item/${item.detailId}`,
+                     `http://68.183.226.198:3000/api/cart/${apiCart.id}/add-item/${item.detailId}`,
                      {
                         method: 'POST',
                         headers: {
@@ -167,7 +167,7 @@ export default function CartPage() {
 
          // Refresh API cart data using GET /api/cart/{cartId}
          try {
-            const updatedCartResponse = await fetch(`http://localhost:3000/api/cart/${apiCart.id}`);
+            const updatedCartResponse = await fetch(`http://68.183.226.198:3000/api/cart/${apiCart.id}`);
             if (updatedCartResponse.ok) {
                // Thêm kiểm tra phản hồi trước khi phân tích JSON
                const responseText = await updatedCartResponse.text();
@@ -207,7 +207,7 @@ export default function CartPage() {
          // Fetch user's cart from API
          let response;
          try {
-            response = await fetch(`http://localhost:3000/api/cart/user/${userId}`);
+            response = await fetch(`http://68.183.226.198:3000/api/cart/user/${userId}`);
          } catch (fetchError) {
             console.error('Network error fetching cart:', fetchError);
             setSyncMessage('Lỗi kết nối với máy chủ');
@@ -220,7 +220,7 @@ export default function CartPage() {
             // If no cart exists or any other error, try creating a new cart
             try {
                console.log('Creating new cart for user:', userId);
-               const createCartResponse = await fetch('http://localhost:3000/api/cart', {
+               const createCartResponse = await fetch('http://68.183.226.198:3000/api/cart', {
                   method: 'POST',
                   headers: {
                      'Content-Type': 'application/json',
@@ -311,7 +311,7 @@ export default function CartPage() {
    // Fetch user cart
    const fetchUserCart = async (userId: number) => {
       try {
-         const response = await fetch(`http://localhost:3000/api/cart/user/${userId}`);
+         const response = await fetch(`http://68.183.226.198:3000/api/cart/user/${userId}`);
 
          if (response.ok) {
             const responseText = await response.text();
@@ -374,7 +374,7 @@ export default function CartPage() {
       try {
          // Use the add-item endpoint with the updated quantity
          await fetch(
-            `http://localhost:3000/api/cart/${apiCart.id}/add-item/${item.detailId}`,
+            `http://68.183.226.198:3000/api/cart/${apiCart.id}/add-item/${item.detailId}`,
             {
                method: 'POST',
                headers: {
@@ -404,7 +404,7 @@ export default function CartPage() {
       if (userId && apiCart) {
          try {
             await fetch(
-               `http://localhost:3000/api/cart/${apiCart.id}/add-item/${itemToRemove.detailId}`,
+               `http://68.183.226.198:3000/api/cart/${apiCart.id}/add-item/${itemToRemove.detailId}`,
                {
                   method: 'POST',
                   headers: {
@@ -447,7 +447,7 @@ export default function CartPage() {
             setSyncMessage('Đang chuẩn bị đơn hàng...');
 
             // Create a new cart
-            const createResponse = await fetch('http://localhost:3000/api/cart', {
+            const createResponse = await fetch('http://68.183.226.198:3000/api/cart', {
                method: 'POST',
                headers: {
                   'Content-Type': 'application/json',

@@ -61,7 +61,7 @@ export default function ForgotPasswordPage() {
          setIsSendingOTP(true);
          try {
             // Gọi API gửi OTP và kiểm tra phản hồi
-            const response = await fetch('http://localhost:3000/api/v1/auth/forgot/password', {
+            const response = await fetch('http://68.183.226.198:3000/api/v1/auth/forgot/password', {
                method: 'POST',
                headers: {
                   'Content-Type': 'application/json',
@@ -194,7 +194,7 @@ export default function ForgotPasswordPage() {
 
       setIsResetting(true);
       try {
-         const response = await fetch('http://localhost:3000/api/v1/auth/reset/password', {
+         const response = await fetch('http://68.183.226.198:3000/api/v1/auth/reset/password', {
             method: 'POST',
             headers: {
                'Content-Type': 'application/json',

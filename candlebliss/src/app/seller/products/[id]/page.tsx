@@ -153,7 +153,7 @@ export default function ProductDetail() {
                     return;
                 }
 
-                const response = await fetch(`http://localhost:3000/api/products/${productId}`, {
+                const response = await fetch(`http://68.183.226.198:3000/api/products/${productId}`, {
                     headers: {
                         'Authorization': `Bearer ${token}`
                     }
@@ -205,7 +205,7 @@ export default function ProductDetail() {
             const token = localStorage.getItem('token') || sessionStorage.getItem('token');
             if (!token) return;
 
-            const response = await fetch(`http://localhost:3000/api/categories/${categoryId}`, {
+            const response = await fetch(`http://68.183.226.198:3000/api/categories/${categoryId}`, {
                 headers: {
                     'Authorization': `Bearer ${token}`
                 }
@@ -235,7 +235,7 @@ export default function ProductDetail() {
             // Fetch prices for each product detail
             const pricePromises = details.map(async (detail) => {
                 try {
-                    const response = await fetch(`http://localhost:3000/api/v1/prices/product-detail/${detail.id}`, {
+                    const response = await fetch(`http://68.183.226.198:3000/api/v1/prices/product-detail/${detail.id}`, {
                         headers: {
                             'Authorization': `Bearer ${token}`
                         }
@@ -310,7 +310,7 @@ export default function ProductDetail() {
                 return;
             }
 
-            const response = await fetch(`http://localhost:3000/api/products/${productId}`, {
+            const response = await fetch(`http://68.183.226.198:3000/api/products/${productId}`, {
                 method: 'DELETE',
                 headers: {
                     'Authorization': `Bearer ${token}`,

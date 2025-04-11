@@ -135,7 +135,7 @@ export default function AddressPage() {
             const token = localStorage.getItem('token');
             if (!token) return { fullName: '', phone: '' };
 
-            const response = await fetch(`/api/v1/users/${userId}`, {
+            const response = await fetch(`http://68.183.226.198:3000/api/v1/users/${userId}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
 
@@ -163,6 +163,7 @@ export default function AddressPage() {
                 throw new Error("No authentication token found");
             }
 
+            // Use relative URL path instead of hardcoded IP
             const response = await fetch(`/api/v1/users/${userId}`, {
                 headers: {
                     'Authorization': `Bearer ${token}`,
@@ -172,6 +173,10 @@ export default function AddressPage() {
 
             if (response.status === 401) {
                 throw new Error("Unauthorized");
+            }
+
+            if (response.status === 403) {
+                throw new Error("Forbidden: You don't have permission to access this resource");
             }
 
             if (!response.ok) {
@@ -577,7 +582,7 @@ export default function AddressPage() {
                 throw new Error("No authentication token found");
             }
 
-            const response = await fetch(`/api/v1/address/${addressId}`, {
+            const response = await fetch(`http://68.183.226.198:3000/api/v1/address/${addressId}`, {
                 method: 'DELETE',
                 headers: {
                     'Authorization': `Bearer ${token}`

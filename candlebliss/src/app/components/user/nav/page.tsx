@@ -108,7 +108,7 @@ export default function NavBar() {
       if (!userId) return;
 
       try {
-         const response = await fetch(`http://localhost:3000/api/cart/user/${userId}`);
+         const response = await fetch(`http://68.183.226.198:3000/api/cart/user/${userId}`);
 
          if (response.ok) {
             const cartData = await response.json();
@@ -178,12 +178,12 @@ export default function NavBar() {
 
       if (isLoggedIn && userId) {
          try {
-            const response = await fetch(`http://localhost:3000/api/cart/user/${userId}`);
+            const response = await fetch(`http://68.183.226.198:3000/api/cart/user/${userId}`);
 
             if (!response.ok) {
                console.log('Creating new cart for user:', userId);
 
-               const createCartResponse = await fetch('http://localhost:3000/api/cart', {
+               const createCartResponse = await fetch('http://68.183.226.198:3000/api/cart', {
                   method: 'POST',
                   headers: {
                      'Content-Type': 'application/json',

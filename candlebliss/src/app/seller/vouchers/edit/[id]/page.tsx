@@ -63,7 +63,7 @@ export default function EditVoucher() {
             }
 
             // Fetch voucher data from API
-            const response = await fetch(`http://localhost:3000/api/v1/vouchers/${params.id}`, {
+            const response = await fetch(`http://68.183.226.198:3000/api/v1/vouchers/${params.id}`, {
                method: 'GET',
                headers: {
                   'Content-Type': 'application/json',
@@ -174,7 +174,7 @@ export default function EditVoucher() {
          }
          
          // Send update request to API
-         const response = await fetch(`http://localhost:3000/api/v1/vouchers/${params.id}`, {
+         const response = await fetch(`http://68.183.226.198:3000/api/v1/vouchers/${params.id}`, {
             method: 'PATCH',
             headers: {
                'Content-Type': 'application/json',

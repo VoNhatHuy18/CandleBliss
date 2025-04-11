@@ -177,7 +177,7 @@ export default function Step3() {
             console.log('Sending price data:', priceData); // Giúp debug
 
             // Gửi request tạo giá
-            const priceResponse = await fetch('http://localhost:3000/api/v1/prices', {
+            const priceResponse = await fetch('http://68.183.226.198:3000/api/v1/prices', {
                method: 'POST',
                headers: {
                   'Content-Type': 'application/json',
@@ -203,7 +203,7 @@ export default function Step3() {
 
          // Cập nhật trạng thái hoạt động của sản phẩm
          const updateProductResponse = await fetch(
-            `http://localhost:3000/api/products/${productId}`,
+            `http://68.183.226.198:3000/api/products/${productId}`,
             {
                method: 'PATCH',
                headers: {
