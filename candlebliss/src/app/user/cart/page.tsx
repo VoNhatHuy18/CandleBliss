@@ -47,6 +47,8 @@ const formatPrice = (price: number): string => {
    }).format(price);
 };
 
+// Thêm hàm tạo giỏ hàng mới sau khi thanh toán thành công
+
 export default function CartPage() {
    const router = useRouter();
    const [cartItems, setCartItems] = useState<CartItem[]>([]);
@@ -59,6 +61,8 @@ export default function CartPage() {
    const [syncing, setSyncing] = useState(false);
    const [syncMessage, setSyncMessage] = useState('');
    const [productDetails, setProductDetails] = useState<Record<number, any>>({});
+   // Thêm state để theo dõi đơn hàng đã hoàn thành
+   const [orderCompleted, setOrderCompleted] = useState(false);
 
    // Load user data and cart on mount
    useEffect(() => {
@@ -70,6 +74,22 @@ export default function CartPage() {
             const storedUserId = localStorage.getItem('userId');
             if (storedUserId) {
                setUserId(parseInt(storedUserId));
+
+               // Check if order was just completed (flagged in localStorage)
+               const orderJustCompleted = localStorage.getItem('orderCompleted') === 'true';
+               if (orderJustCompleted) {
+                  // Clear the flag
+                  localStorage.removeItem('orderCompleted');
+                  setOrderCompleted(true);
+
+                  // Create new cart for the user and clear local cart
+                  localStorage.setItem('cart', '[]');
+                  setCartItems([]);
+                  calculateTotals([]);
+
+                  // Create a new cart in API
+                  await createNewCart();
+               }
             }
 
             // Get cart from localStorage
@@ -121,10 +141,15 @@ export default function CartPage() {
 
    // If user is logged in, fetch API cart and sync with local
    useEffect(() => {
-      if (userId) {
+      if (userId && !orderCompleted) {
          syncCartWithApi();
       }
-   }, [userId, cartItems.length]);
+
+      // Reset orderCompleted state sau khi đã xử lý
+      if (orderCompleted) {
+         setOrderCompleted(false);
+      }
+   }, [userId, cartItems.length, orderCompleted]);
 
    // Helper function to merge local cart with API cart
    const mergeCartsWithApi = async (apiCart: Cart, localItems: CartItem[]) => {
@@ -198,7 +223,7 @@ export default function CartPage() {
 
    // Sync cart with API
    const syncCartWithApi = async () => {
-      if (!userId) return;
+      if (!userId || orderCompleted) return;
 
       try {
          setSyncing(true);
@@ -500,6 +525,48 @@ export default function CartPage() {
       }
    };
 
+   // Thêm hàm tạo giỏ hàng mới
+   const createNewCart = async () => {
+      if (!userId) return null;
+
+      try {
+         setSyncMessage('Đang tạo giỏ hàng mới...');
+
+         const token = localStorage.getItem('token');
+         if (!token) return null;
+
+         const createResponse = await fetch('http://68.183.226.198:3000/api/cart', {
+            method: 'POST',
+            headers: {
+               'Content-Type': 'application/json',
+               'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ userId })
+         });
+
+         if (createResponse.ok) {
+            const responseText = await createResponse.text();
+            if (responseText && responseText.trim()) {
+               try {
+                  const newCart = JSON.parse(responseText);
+                  console.log('New cart created after order:', newCart);
+                  setApiCart(newCart);
+                  setSyncMessage('Giỏ hàng mới đã được tạo');
+                  setTimeout(() => setSyncMessage(''), 2000);
+                  return newCart;
+               } catch (jsonError) {
+                  console.error('Error parsing create cart response:', jsonError);
+               }
+            }
+         }
+         return null;
+      } catch (error) {
+         console.error('Error creating new cart:', error);
+         setSyncMessage('Lỗi khi tạo giỏ hàng mới');
+         return null;
+      }
+   };
+
    if (loading) {
       return (
          <div className='bg-[#F1EEE9] min-h-screen'>
@@ -518,6 +585,13 @@ export default function CartPage() {
 
          <div className='container mx-auto px-4 py-8'>
             <h1 className='text-3xl font-medium mb-6'>Giỏ hàng của bạn</h1>
+
+            {/* Notification when cart is newly created after order */}
+            {orderCompleted && (
+               <div className="mb-4 p-3 bg-green-50 text-green-700 rounded-md">
+                  Đơn hàng của bạn đã được đặt thành công. Chúng tôi đã tạo giỏ hàng mới cho bạn.
+               </div>
+            )}
 
             {/* Sync message */}
             {syncMessage && (
