@@ -80,12 +80,6 @@ interface ApiWard {
    code: string;
    name: string;
 }
-
-interface AddressOption {
-   id: string;
-   name: string;
-}
-
 interface AddressResponseData {
    id: number;
    fullName?: string;
@@ -330,7 +324,7 @@ export default function CheckoutPage() {
                   if (existingAddressesStr) {
                      const existingAddresses = JSON.parse(existingAddressesStr);
                      const updatedAddresses = existingAddresses.filter(
-                        (addr: any) => addr.id !== addressId,
+                        (addr: Address) => addr.id !== addressId,
                      );
                      localStorage.setItem(addressStorageKey, JSON.stringify(updatedAddresses));
                      console.log(
@@ -868,7 +862,17 @@ export default function CheckoutPage() {
    };
 
    // Cập nhật hàm updateAddress để lưu thông tin đầy đủ về địa chỉ vào localStorage
-   const updateAddress = async (addressData: any) => {
+   const updateAddress = async (addressData: {
+      id?: number;
+      fullName: string;
+      phone: string;
+      province: string;
+      district: string;
+      ward: string;
+      street: string;
+      userId: number;
+      isDefault: boolean;
+   }) => {
       try {
          const token = localStorage.getItem('token');
          if (!token) {
@@ -994,8 +998,18 @@ export default function CheckoutPage() {
          // Hiển thị loading state
          setLoading(true);
 
-         // Chuẩn bị dữ liệu để gửi lên API
-         const addressData = {
+         // Fix for line 865:46 - In updateAddress function
+         const addressData: {
+            id?: number;
+            fullName: string;
+            phone: string;
+            province: string;
+            district: string;
+            ward: string;
+            street: string;
+            userId: number;
+            isDefault: boolean;
+         } = {
             id: newAddress.id, // Thêm ID nếu đang cập nhật, undefined nếu là địa chỉ mới
             fullName: String(newAddress.fullName).trim(), // Đảm bảo tên được cắt khoảng trắng và là chuỗi
             phone: String(newAddress.phone).trim(), // Đảm bảo số điện thoại là chuỗi và được cắt khoảng trắng
@@ -1004,7 +1018,7 @@ export default function CheckoutPage() {
             ward: String(newAddress.ward).toLowerCase(), // API lưu tên phường/xã viết thường
             street: String(newAddress.streetAddress), // Đổi tên field để phù hợp với API
             userId: userId as number, // Đảm bảo userId là number không phải null
-            isDefault: newAddress.isDefault,
+            isDefault: newAddress.isDefault || false, // Đảm bảo isDefault là boolean
          };
 
          console.log('Sending address data:', addressData);
@@ -1323,11 +1337,16 @@ export default function CheckoutPage() {
                // Xử lý lỗi validation
                let errorMessage = 'Dữ liệu đơn hàng không hợp lệ: ';
 
+               // Fix for the error in handlePlaceOrder function
                if (errorData.errors?.item) {
                   const itemErrors = Object.values(errorData.errors.item)
-                     .map((err: any) => {
-                        const errorMessages = Object.values(err).join(', ');
-                        return errorMessages;
+                     .map((err: unknown) => {
+                        // First check if err is an object we can work with
+                        if (err && typeof err === 'object') {
+                           // Then safely get values
+                           return Object.values(err as Record<string, string>).join(', ');
+                        }
+                        return String(err); // Fallback case
                      })
                      .join('; ');
 
@@ -1430,7 +1449,7 @@ export default function CheckoutPage() {
          }
 
          // Đảm bảo tất cả detailId là số
-         const validatedCart = localCart.map((item: { detailId: any }) => ({
+         const validatedCart = localCart.map((item: { detailId: number }) => ({
             ...item,
             detailId: Number(item.detailId),
          }));
@@ -1535,8 +1554,9 @@ export default function CheckoutPage() {
                      'error',
                   );
                }
-            } catch (error) {
+            } catch (error: unknown) {
                console.error('Error verifying MOMO payment:', error);
+               showToastMessage('Không thể xác minh thanh toán', 'error');
             }
          }
       };
