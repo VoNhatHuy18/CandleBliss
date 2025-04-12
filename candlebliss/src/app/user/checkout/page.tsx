@@ -63,6 +63,68 @@ interface UserInfo {
    phone?: string;
 }
 
+// Define interfaces for API responses
+interface ApiProvince {
+   code: string;
+   name: string;
+   districts?: ApiDistrict[];
+}
+
+interface ApiDistrict {
+   code: string;
+   name: string;
+   wards?: ApiWard[];
+}
+
+interface ApiWard {
+   code: string;
+   name: string;
+}
+
+interface AddressOption {
+   id: string;
+   name: string;
+}
+
+interface AddressResponseData {
+   id: number;
+   fullName?: string;
+   phone?: string;
+   province?: string;
+   district?: string;
+   ward?: string;
+   street?: string;
+   isDefault?: boolean;
+   userId?: number;
+   user?: {
+      id: number;
+      firstName?: string;
+      lastName?: string;
+      phone?: string;
+   };
+}
+
+interface VoucherResponseData {
+   id: number;
+   code: string;
+   description: string;
+   amount_off: string;
+   percent_off: string;
+   min_order_value: string;
+   max_voucher_amount: string;
+   usage_limit: number;
+   usage_per_customer: number;
+   start_date: string;
+   end_date: string;
+   applicable_categories: string | null;
+   new_customers_only: boolean;
+   isActive: boolean;
+   createdAt: string;
+   updatedAt: string;
+   deletedAt: string | null;
+   isDeleted: boolean;
+}
+
 // Format price helper function
 const formatPrice = (price: number): string => {
    return new Intl.NumberFormat('vi-VN', {
@@ -231,7 +293,10 @@ export default function CheckoutPage() {
             const errorMessage = errorData.message || 'Không thể xóa địa chỉ';
             throw new Error(errorMessage);
          }
-      } catch (error) {
+      } catch (error: unknown) {
+         console.error('Error deleting address:', error);
+         const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+         showToastMessage(errorMessage, 'error');
          throw error;
       }
    };
@@ -288,9 +353,10 @@ export default function CheckoutPage() {
 
                showToastMessage('Đã xóa địa chỉ thành công', 'success');
             }
-         } catch (error: any) {
+         } catch (error: unknown) {
             console.error('Error deleting address:', error);
-            showToastMessage(error.message || 'Không thể xóa địa chỉ', 'error');
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+            showToastMessage(errorMessage, 'error');
          } finally {
             setLoading(false);
          }
@@ -400,7 +466,7 @@ export default function CheckoutPage() {
          const response = await fetch('https://provinces.open-api.vn/api/p/');
          if (response.ok) {
             const data = await response.json();
-            setProvinces(data.map((p: any) => ({ id: p.code, name: p.name })));
+            setProvinces(data.map((p: ApiProvince) => ({ id: p.code, name: p.name })));
          }
       } catch (error) {
          console.error('Error fetching provinces:', error);
@@ -511,7 +577,7 @@ export default function CheckoutPage() {
             }
 
             // Lấy chi tiết của từng địa chỉ đã biết ID
-            const addressPromises = userAddressIds.map((id: any) =>
+            const addressPromises = userAddressIds.map((id: number) =>
                fetch(`http://68.183.226.198:3000/api/v1/address/${id}`, {
                   headers: { Authorization: `Bearer ${token}` },
                })
@@ -528,8 +594,11 @@ export default function CheckoutPage() {
 
             // Lọc ra các địa chỉ còn tồn tại và thuộc về userId
             const validAddresses = addressesData
-               .filter((data) => data && (data.userId === userId || data.user?.id === userId))
-               .map((data) => ({
+               .filter(
+                  (data: AddressResponseData | null) =>
+                     data && (data.userId === userId || data.user?.id === userId),
+               )
+               .map((data: AddressResponseData) => ({
                   id: data.id,
                   fullName:
                      data.fullName ||
@@ -585,9 +654,7 @@ export default function CheckoutPage() {
                showToastMessage(`Đã tìm thấy ${validAddresses.length} địa chỉ giao hàng`, 'info');
 
                // Nếu có địa chỉ mặc định, chọn địa chỉ đó
-               const defaultAddress = validAddresses.find(
-                  (addr: { isDefault: any }) => addr.isDefault,
-               );
+               const defaultAddress = validAddresses.find((addr: Address) => addr.isDefault);
                if (defaultAddress) {
                   setSelectedAddressId(defaultAddress.id ?? null);
                   // Cập nhật phí vận chuyển dựa trên địa chỉ mặc định
@@ -652,7 +719,7 @@ export default function CheckoutPage() {
          const response = await fetch(`https://provinces.open-api.vn/api/p/${provinceId}?depth=2`);
          if (response.ok) {
             const data = await response.json();
-            setDistricts(data.districts.map((d: any) => ({ id: d.code, name: d.name })));
+            setDistricts(data.districts.map((d: ApiDistrict) => ({ id: d.code, name: d.name })));
          }
       } catch (error) {
          console.error('Error fetching districts:', error);
@@ -672,7 +739,7 @@ export default function CheckoutPage() {
          const response = await fetch(`https://provinces.open-api.vn/api/d/${districtId}?depth=2`);
          if (response.ok) {
             const data = await response.json();
-            setWards(data.wards.map((w: any) => ({ id: w.code, name: w.name })));
+            setWards(data.wards.map((w: ApiWard) => ({ id: w.code, name: w.name })));
          }
       } catch (error) {
          console.error('Error fetching wards:', error);
@@ -854,7 +921,7 @@ export default function CheckoutPage() {
             if (isUpdate) {
                // Nếu là cập nhật, thay thế địa chỉ cũ trong mảng
                const addressIndex = existingAddresses.findIndex(
-                  (addr: any) => addr.id === savedAddress.id,
+                  (addr: Address) => addr.id === savedAddress.id,
                );
                if (addressIndex >= 0) {
                   existingAddresses[addressIndex] = fullAddressData;
@@ -888,7 +955,10 @@ export default function CheckoutPage() {
                errorData.message || `Không thể ${isUpdate ? 'cập nhật' : 'tạo'} địa chỉ`;
             throw new Error(errorMessage);
          }
-      } catch (error: any) {
+      } catch (error: unknown) {
+         console.error('Error updating address:', error);
+         const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+         showToastMessage(errorMessage, 'error');
          throw error;
       }
    };
@@ -1004,9 +1074,10 @@ export default function CheckoutPage() {
             streetAddress: '',
             isDefault: addresses.length === 0,
          });
-      } catch (error: any) {
+      } catch (error: unknown) {
          console.error('Error saving address:', error);
-         showToastMessage(error.message || 'Không thể lưu địa chỉ', 'error');
+         const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+         showToastMessage(errorMessage, 'error');
       } finally {
          setLoading(false);
       }
@@ -1038,7 +1109,7 @@ export default function CheckoutPage() {
 
          // Tìm ID của voucher theo mã code
          const matchingVoucher = allVouchers.find(
-            (v: any) => v.code.toLowerCase() === voucherCode.trim().toLowerCase(),
+            (v: VoucherResponseData) => v.code.toLowerCase() === voucherCode.trim().toLowerCase(),
          );
 
          if (!matchingVoucher) {
@@ -1086,9 +1157,10 @@ export default function CheckoutPage() {
 
          // Hiển thị thông báo thành công
          showToastMessage(`Đã áp dụng mã giảm giá: ${voucher.code}`, 'success');
-      } catch (error: any) {
+      } catch (error: unknown) {
          console.error('Error applying voucher:', error);
-         setVoucherError(error.message || 'Không thể áp dụng mã giảm giá');
+         const errorMessage = error instanceof Error ? error.message : 'Unable to apply voucher';
+         setVoucherError(errorMessage);
          setAppliedVoucher(null);
          setDiscount(0);
          localStorage.removeItem('appliedVoucher');
@@ -1137,9 +1209,10 @@ export default function CheckoutPage() {
          } else {
             throw new Error(momoData.message || 'Không thể tạo thanh toán MoMo');
          }
-      } catch (error: any) {
+      } catch (error: unknown) {
          console.error('Error creating MOMO payment:', error);
-         showToastMessage(error.message || 'Không thể tạo thanh toán MoMo', 'error');
+         const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+         showToastMessage(errorMessage, 'error');
          setProcessingPayment(false);
       }
    };
@@ -1268,9 +1341,10 @@ export default function CheckoutPage() {
                throw new Error(errorData.message || 'Không thể tạo đơn hàng. Vui lòng thử lại sau');
             }
          }
-      } catch (error: any) {
+      } catch (error: unknown) {
          console.error('Error creating new order:', error);
-         showToastMessage(error.message || 'Đặt hàng thất bại. Vui lòng thử lại', 'error');
+         const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+         showToastMessage(errorMessage, 'error');
       } finally {
          // Only set loading to false if we're not processing MOMO payment
          if (paymentMethod !== 'MOMO') {
