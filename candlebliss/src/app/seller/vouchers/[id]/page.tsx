@@ -3,7 +3,15 @@ import { useState, useEffect } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { FiCalendar, FiTag, FiPercent, FiDollarSign, FiUsers, FiInfo, FiAlertCircle } from 'react-icons/fi';
+import {
+   FiCalendar,
+   FiTag,
+   FiPercent,
+   FiDollarSign,
+   FiUsers,
+   FiInfo,
+   FiAlertCircle,
+} from 'react-icons/fi';
 
 import Header from '@/app/components/seller/header/page';
 import MenuSideBar from '@/app/components/seller/menusidebar/page';
@@ -62,13 +70,16 @@ export default function VoucherDetail() {
             }
 
             // Fetch voucher data from API
-            const response = await fetch(`http://68.183.226.198:3000/api/v1/vouchers/${params.id}`, {
-               method: 'GET',
-               headers: {
-                  'Content-Type': 'application/json',
-                  Authorization: `Bearer ${token}`,
+            const response = await fetch(
+               `http://68.183.226.198:3000/api/v1/vouchers/${params.id}`,
+               {
+                  method: 'GET',
+                  headers: {
+                     'Content-Type': 'application/json',
+                     Authorization: `Bearer ${token}`,
+                  },
                },
-            });
+            );
 
             if (!response.ok) {
                if (response.status === 404) {
@@ -79,9 +90,29 @@ export default function VoucherDetail() {
 
             const data = await response.json();
             setVoucher(data);
-         } catch (err: any) {
-            console.error('Failed to fetch voucher:', err);
-            setError(err.message || 'Không thể tải thông tin voucher. Vui lòng thử lại sau.');
+         } catch (err: unknown) {
+            if (err instanceof Error) {
+               console.error('Failed to fetch voucher:', err.message);
+               if (err instanceof Error) {
+                  if (err instanceof Error) {
+                     setError(
+                        err.message || 'Không thể tải thông tin voucher. Vui lòng thử lại sau.',
+                     );
+                  } else {
+                     setError('Không thể tải thông tin voucher. Vui lòng thử lại sau.');
+                  }
+               } else {
+                  setError('Không thể tải thông tin voucher. Vui lòng thử lại sau.');
+               }
+            } else {
+               console.error('Failed to fetch voucher:', err);
+               setError('Không thể tải thông tin voucher. Vui lòng thử lại sau.');
+            }
+            if (err instanceof Error) {
+               setError(err.message || 'Không thể tải thông tin voucher. Vui lòng thử lại sau.');
+            } else {
+               setError('Không thể tải thông tin voucher. Vui lòng thử lại sau.');
+            }
          } finally {
             setLoading(false);
          }
@@ -103,8 +134,7 @@ export default function VoucherDetail() {
 
       if (now < startDate) return 'Chưa bắt đầu';
       if (endDate < now) return 'Hết hạn';
-      if (voucher.usage_limit && voucher.usage_count >= voucher.usage_limit)
-         return 'Đã dùng hết';
+      if (voucher.usage_limit && voucher.usage_count >= voucher.usage_limit) return 'Đã dùng hết';
 
       return 'Còn hiệu lực';
    };
@@ -141,14 +171,17 @@ export default function VoucherDetail() {
          const token = localStorage.getItem('token') || sessionStorage.getItem('token');
          const newStatus = !voucher?.isActive;
 
-         const response = await fetch(`http://68.183.226.198:3000/api/v1/vouchers/${params.id}/status`, {
-            method: 'PATCH',
-            headers: {
-               'Content-Type': 'application/json',
-               Authorization: `Bearer ${token}`,
+         const response = await fetch(
+            `http://68.183.226.198:3000/api/v1/vouchers/${params.id}/status`,
+            {
+               method: 'PATCH',
+               headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: `Bearer ${token}`,
+               },
+               body: JSON.stringify({ isActive: newStatus }),
             },
-            body: JSON.stringify({ isActive: newStatus }),
-         });
+         );
 
          if (!response.ok) {
             throw new Error('Không thể cập nhật trạng thái mã giảm giá');
@@ -227,8 +260,12 @@ export default function VoucherDetail() {
                <div className='flex-1 p-6 mt-16'>
                   <div className='flex flex-col items-center justify-center py-12 text-center'>
                      <FiInfo className='h-16 w-16 text-gray-300 mb-4' />
-                     <h3 className='text-lg font-medium text-gray-600 mb-1'>Không tìm thấy mã giảm giá</h3>
-                     <p className='text-gray-500 max-w-md'>Mã giảm giá không tồn tại hoặc đã bị xóa</p>
+                     <h3 className='text-lg font-medium text-gray-600 mb-1'>
+                        Không tìm thấy mã giảm giá
+                     </h3>
+                     <p className='text-gray-500 max-w-md'>
+                        Mã giảm giá không tồn tại hoặc đã bị xóa
+                     </p>
                      <Link href='/seller/vouchers'>
                         <button className='mt-4 px-4 py-2 bg-amber-500 text-white rounded-md hover:bg-amber-600 focus:outline-none'>
                            Quay lại danh sách
@@ -244,10 +281,13 @@ export default function VoucherDetail() {
    // Get status display information
    const status = getVoucherStatus();
    const statusColor =
-      status === 'Còn hiệu lực' ? 'text-green-600 bg-green-50' :
-         status === 'Chưa bắt đầu' ? 'text-blue-600 bg-blue-50' :
-            status === 'Đã hủy' ? 'text-red-600 bg-red-50' :
-               'text-gray-600 bg-gray-100';
+      status === 'Còn hiệu lực'
+         ? 'text-green-600 bg-green-50'
+         : status === 'Chưa bắt đầu'
+         ? 'text-blue-600 bg-blue-50'
+         : status === 'Đã hủy'
+         ? 'text-red-600 bg-red-50'
+         : 'text-gray-600 bg-gray-100';
 
    return (
       <div className='flex min-h-screen bg-[#f8f5f0]'>
@@ -294,8 +334,6 @@ export default function VoucherDetail() {
                               readOnly
                            />
                         </div>
-
-
 
                         <div className='grid grid-cols-1 md:grid-cols-2 gap-4 mb-4'>
                            <div>
@@ -389,7 +427,11 @@ export default function VoucherDetail() {
                                  <label className='text-xs text-gray-500'>Giới hạn</label>
                                  <input
                                     type='text'
-                                    value={voucher.usage_limit === null ? 'Không giới hạn' : voucher.usage_limit}
+                                    value={
+                                       voucher.usage_limit === null
+                                          ? 'Không giới hạn'
+                                          : voucher.usage_limit
+                                    }
                                     className='block w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm'
                                     readOnly
                                  />
@@ -463,7 +505,9 @@ export default function VoucherDetail() {
                                        </div>
                                     </div>
 
-                                    <div className='text-lg font-semibold my-2'>{voucher.name || voucher.code}</div>
+                                    <div className='text-lg font-semibold my-2'>
+                                       {voucher.name || voucher.code}
+                                    </div>
 
                                     <div className='text-md font-semibold border-t border-dashed border-gray-200 pt-2 mt-2'>
                                        Giảm{' '}
@@ -478,7 +522,9 @@ export default function VoucherDetail() {
                                        <div className='text-xs'>
                                           Hạn sử dụng: {formatDate(voucher.end_date)}
                                        </div>
-                                       <div className={`text-xs font-medium px-2 py-0.5 rounded-full ${statusColor}`}>
+                                       <div
+                                          className={`text-xs font-medium px-2 py-0.5 rounded-full ${statusColor}`}
+                                       >
                                           {status}
                                        </div>
                                     </div>
@@ -490,26 +536,32 @@ export default function VoucherDetail() {
                                  <div className='mb-2 flex items-center'>
                                     <FiDollarSign className='mr-1 text-amber-500' />
                                     <span className='font-medium'>Giá trị tối thiểu:</span>{' '}
-                                    <span className='ml-1'>{formatCurrency(voucher.min_order_value)}</span>
+                                    <span className='ml-1'>
+                                       {formatCurrency(voucher.min_order_value)}
+                                    </span>
                                  </div>
                                  <div className='mb-2 flex items-center'>
                                     <FiCalendar className='mr-1 text-amber-500' />
                                     <span className='font-medium'>Thời gian:</span>{' '}
                                     <span className='ml-1'>
-                                       {formatDate(voucher.start_date)} - {formatDate(voucher.end_date)}
+                                       {formatDate(voucher.start_date)} -{' '}
+                                       {formatDate(voucher.end_date)}
                                     </span>
                                  </div>
                                  <div className='mb-2 flex items-center'>
                                     <FiUsers className='mr-1 text-amber-500' />
                                     <span className='font-medium'>Lượt sử dụng:</span>{' '}
                                     <span className='ml-1'>
-                                       {voucher.usage_count}/{voucher.usage_limit === null ? '∞' : voucher.usage_limit}
+                                       {voucher.usage_count}/
+                                       {voucher.usage_limit === null ? '∞' : voucher.usage_limit}
                                     </span>
                                  </div>
                                  <div className='flex items-center'>
                                     <FiInfo className='mr-1 text-amber-500' />
                                     <span className='font-medium'>Áp dụng:</span>{' '}
-                                    <span className='ml-1'>{voucher.applicable_products || 'Tất cả sản phẩm'}</span>
+                                    <span className='ml-1'>
+                                       {voucher.applicable_products || 'Tất cả sản phẩm'}
+                                    </span>
                                  </div>
                               </div>
                            </div>
@@ -522,7 +574,11 @@ export default function VoucherDetail() {
                               </Link>
                               <button
                                  onClick={handleToggleStatus}
-                                 className={`px-4 py-2 ${voucher.isActive ? 'bg-blue-500 hover:bg-blue-600' : 'bg-green-500 hover:bg-green-600'} text-white rounded-md focus:outline-none focus:ring-2 focus:ring-opacity-50 w-full mb-2`}
+                                 className={`px-4 py-2 ${
+                                    voucher.isActive
+                                       ? 'bg-blue-500 hover:bg-blue-600'
+                                       : 'bg-green-500 hover:bg-green-600'
+                                 } text-white rounded-md focus:outline-none focus:ring-2 focus:ring-opacity-50 w-full mb-2`}
                               >
                                  {voucher.isActive ? 'Tạm dừng' : 'Kích hoạt'}
                               </button>

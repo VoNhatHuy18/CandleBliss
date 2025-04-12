@@ -12,7 +12,6 @@ import {
    ChevronRightIcon,
    PencilIcon,
    TrashIcon,
-   ArrowPathIcon,
    EyeIcon,
    PlusIcon,
 } from '@heroicons/react/24/outline';
@@ -31,7 +30,7 @@ interface ProductDetail {
    values: string;
    quantities: number;
    images: Image[];
-   product?: any;
+   product?: Product; // Replace 'any' with the 'Product' interface
    isActive: boolean;
 }
 
@@ -282,7 +281,7 @@ export default function ProductDetail() {
                   discount_price: null,
                   promotion_deadline: null,
                };
-            } catch (error) {
+            } catch {
                return {
                   detailId: detail.id,
                   base_price: 0,

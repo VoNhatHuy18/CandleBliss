@@ -16,7 +16,6 @@ import {
    ArrowPathIcon,
    PhotoIcon,
    XMarkIcon,
-   DocumentTextIcon,
 } from '@heroicons/react/24/outline';
 
 // Cập nhật interface Image để khớp với cấu trúc dữ liệu trả về
@@ -459,7 +458,7 @@ export default function EditProduct() {
                      product_detail_id: detail.id,
                   },
                };
-            } catch (error) {
+            } catch {
                return {
                   detail_id: detail.id,
                   price: {
@@ -787,7 +786,7 @@ export default function EditProduct() {
       try {
          const date = new Date(dateString);
          return date.toISOString().split('T')[0]; // Format as YYYY-MM-DD
-      } catch (e) {
+      } catch {
          return '';
       }
    };
@@ -1013,14 +1012,14 @@ export default function EditProduct() {
                   );
 
                   // Log the full response for debugging
-                  let responseText = await detailRes.text();
+                  const responseText = await detailRes.text();
                   console.log(`Raw response for detail ${detail.id}:`, responseText);
 
                   // Try to parse as JSON if possible
                   let responseData;
                   try {
                      responseData = JSON.parse(responseText);
-                  } catch (e) {
+                  } catch {
                      // Not JSON, keep as text
                      responseData = responseText;
                   }
@@ -1202,13 +1201,7 @@ export default function EditProduct() {
       }
    };
 
-   const formatPrice = (price: number): string => {
-      return new Intl.NumberFormat('vi-VN', {
-         style: 'currency',
-         currency: 'VND',
-         minimumFractionDigits: 0,
-      }).format(price);
-   };
+   
 
    if (loading && !product) {
       return (

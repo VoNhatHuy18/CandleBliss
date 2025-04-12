@@ -12,7 +12,7 @@ import Toast from '@/app/components/ui/toast/page'; // Add Toast import
 interface Variant {
    type: string;
    values?: string; // From Step2
-   value?: string;  // For Step3 compatibility
+   value?: string; // For Step3 compatibility
    isExpanded?: boolean;
    size?: string;
    images?: string[];
@@ -28,9 +28,9 @@ export default function Step3() {
    const [startDate, setStartDate] = useState('');
    const [endDate, setEndDate] = useState('');
    const [variants, setVariants] = useState<Variant[]>(formData.variants || []);
-   const [isActive, setIsActive] = useState(true);
+   const [isActive] = useState(true);
    const [videoUrl, setVideoUrl] = useState(formData.videoUrl || '');
-   const [promotion, setPromotion] = useState('');
+   const [promotion] = useState('');
    const [isLoading, setIsLoading] = useState(false);
    const [calculatedPrice, setCalculatedPrice] = useState('');
 
@@ -38,7 +38,7 @@ export default function Step3() {
    const [toast, setToast] = useState({
       show: false,
       message: '',
-      type: 'info' as 'success' | 'error' | 'info'
+      type: 'info' as 'success' | 'error' | 'info',
    });
 
    // Helper function to show toast messages
@@ -46,13 +46,13 @@ export default function Step3() {
       setToast({
          show: true,
          message,
-         type
+         type,
       });
    };
 
    // Initialize dates if empty
    useEffect(() => {
-      console.log("Received form data:", formData);
+      console.log('Received form data:', formData);
 
       if (!startDate) {
          setStartDate(new Date().toISOString().split('T')[0]);
@@ -232,8 +232,10 @@ export default function Step3() {
       } catch (error) {
          console.error('Error creating product pricing:', error);
          showToast(
-            `Lỗi khi cài đặt giá sản phẩm: ${error instanceof Error ? error.message : 'Lỗi không xác định'}`,
-            'error'
+            `Lỗi khi cài đặt giá sản phẩm: ${
+               error instanceof Error ? error.message : 'Lỗi không xác định'
+            }`,
+            'error',
          );
       } finally {
          setIsLoading(false);
@@ -450,8 +452,9 @@ export default function Step3() {
                                     </div>
                                     <svg
                                        xmlns='http://www.w3.org/2000/svg'
-                                       className={`h-5 w-5 transform transition-transform ${variant.isExpanded ? 'rotate-180' : ''
-                                          }`}
+                                       className={`h-5 w-5 transform transition-transform ${
+                                          variant.isExpanded ? 'rotate-180' : ''
+                                       }`}
                                        fill='none'
                                        viewBox='0 0 24 24'
                                        stroke='currentColor'
@@ -526,8 +529,9 @@ export default function Step3() {
                                                    <Image
                                                       key={imgIndex}
                                                       src={img}
-                                                      alt={`Variant ${index + 1} image ${imgIndex + 1
-                                                         }`}
+                                                      alt={`Variant ${index + 1} image ${
+                                                         imgIndex + 1
+                                                      }`}
                                                       className='w-20 h-20 object-cover rounded border'
                                                       width={80}
                                                       height={80}
@@ -566,7 +570,7 @@ export default function Step3() {
                               placeholder='Nhập giá gốc'
                               required
                            />
-                           <p className="text-xs text-gray-500 mt-1">Giá bán gốc của sản phẩm</p>
+                           <p className='text-xs text-gray-500 mt-1'>Giá bán gốc của sản phẩm</p>
                         </div>
 
                         {/* Phần trăm khuyến mãi */}
@@ -584,11 +588,11 @@ export default function Step3() {
                                     setDiscountPrice(value);
                                  }
                               }}
-                              min="0"
-                              max="100"
+                              min='0'
+                              max='100'
                               placeholder='Nhập % khuyến mãi (nếu có)'
                            />
-                           <p className="text-xs text-gray-500 mt-1">% giảm giá so với giá gốc</p>
+                           <p className='text-xs text-gray-500 mt-1'>% giảm giá so với giá gốc</p>
                         </div>
                      </div>
 
@@ -607,7 +611,9 @@ export default function Step3() {
                                  </span>
                                  <div className='flex items-center mt-1 justify-end'>
                                     <span className='text-sm text-gray-500 line-through mr-2'>
-                                       {basePrice ? `${Number(basePrice).toLocaleString('vi-VN')} VNĐ` : '0 VNĐ'}
+                                       {basePrice
+                                          ? `${Number(basePrice).toLocaleString('vi-VN')} VNĐ`
+                                          : '0 VNĐ'}
                                     </span>
                                     <span className='text-xs bg-red-100 text-red-600 px-1.5 py-0.5 rounded'>
                                        -{discountPrice}%
@@ -616,7 +622,9 @@ export default function Step3() {
                               </div>
                            ) : (
                               <span className='font-bold text-lg text-blue-600'>
-                                 {basePrice ? `${Number(basePrice).toLocaleString('vi-VN')} VNĐ` : '0 VNĐ'}
+                                 {basePrice
+                                    ? `${Number(basePrice).toLocaleString('vi-VN')} VNĐ`
+                                    : '0 VNĐ'}
                               </span>
                            )}
                         </div>
@@ -630,14 +638,14 @@ export default function Step3() {
                            // Update formData with current values before going back
                            updateFormData({
                               ...formData,
-                              variants: variants.map(variant => ({
+                              variants: variants.map((variant) => ({
                                  type: variant.type,
                                  values: variant.values || variant.value || '', // Ensure values is always a string, not undefined
                                  size: variant.size || '',
                                  images: variant.images || [],
                                  quantity: variant.quantity || 0,
                                  detailId: variant.detailId,
-                                 isExpanded: variant.isExpanded
+                                 isExpanded: variant.isExpanded,
                               })),
                            });
                            // Wait for formData update to complete before navigating
@@ -678,9 +686,9 @@ export default function Step3() {
                show={toast.show}
                message={toast.message}
                type={toast.type}
-               onClose={() => setToast(prev => ({ ...prev, show: false }))}
+               onClose={() => setToast((prev) => ({ ...prev, show: false }))}
                duration={3000}
-               position="top-right"
+               position='top-right'
             />
          </div>
       </div>

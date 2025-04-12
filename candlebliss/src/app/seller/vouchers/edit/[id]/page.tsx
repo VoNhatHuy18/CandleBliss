@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { FiCalendar, FiTag, FiPercent, FiDollarSign, FiUsers, FiInfo, FiAlertCircle, FiSave } from 'react-icons/fi';
+import { FiInfo, FiAlertCircle, FiSave } from 'react-icons/fi';
 
 import Header from '@/app/components/seller/header/page';
 import MenuSideBar from '@/app/components/seller/menusidebar/page';
@@ -35,12 +35,6 @@ export default function EditVoucher() {
    const [error, setError] = useState('');
    const [discountType, setDiscountType] = useState<'percent' | 'fixed'>('percent');
    const [hasLimitedUses, setHasLimitedUses] = useState(true);
-   
-
-   // Format currency for display
-   const formatCurrency = (amount: number) => {
-      return amount.toLocaleString('vi-VN') + ' VND';
-   };
 
    // Format date for inputs (YYYY-MM-DD)
    const formatDateForInput = (dateString: string) => {
@@ -63,13 +57,16 @@ export default function EditVoucher() {
             }
 
             // Fetch voucher data from API
-            const response = await fetch(`http://68.183.226.198:3000/api/v1/vouchers/${params.id}`, {
-               method: 'GET',
-               headers: {
-                  'Content-Type': 'application/json',
-                  Authorization: `Bearer ${token}`,
+            const response = await fetch(
+               `http://68.183.226.198:3000/api/v1/vouchers/${params.id}`,
+               {
+                  method: 'GET',
+                  headers: {
+                     'Content-Type': 'application/json',
+                     Authorization: `Bearer ${token}`,
+                  },
                },
-            });
+            );
 
             if (!response.ok) {
                if (response.status === 404) {
@@ -81,14 +78,18 @@ export default function EditVoucher() {
             const data = await response.json();
             setOriginalVoucher(data);
             setVoucher(data);
-            
+
             // Set initial form state based on voucher data
             setDiscountType(data.percent_off > 0 ? 'percent' : 'fixed');
             setHasLimitedUses(data.usage_limit !== null);
-            
-         } catch (err: any) {
-            console.error('Failed to fetch voucher:', err);
-            setError(err.message || 'Không thể tải thông tin voucher. Vui lòng thử lại sau.');
+         } catch (err: unknown) {
+            if (err instanceof Error) {
+               console.error('Failed to fetch voucher:', err.message);
+               setError(err.message || 'Không thể tải thông tin voucher. Vui lòng thử lại sau.');
+            } else {
+               console.error('Failed to fetch voucher:', err);
+               setError('Không thể tải thông tin voucher. Vui lòng thử lại sau.');
+            }
          } finally {
             setLoading(false);
          }
@@ -100,7 +101,9 @@ export default function EditVoucher() {
    }, [params.id, router]);
 
    // Handle input changes
-   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+   const handleChange = (
+      e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>,
+   ) => {
       if (!voucher) return;
 
       const { name, value } = e.target;
@@ -148,31 +151,31 @@ export default function EditVoucher() {
    // Handle form submission
    const handleSubmit = async (e: React.FormEvent) => {
       e.preventDefault();
-      
+
       if (!voucher) return;
-      
+
       setSubmitting(true);
-      
+
       try {
          const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-         
+
          // Only include fields that have changed in update request
          const changedFields: Record<string, string | number | boolean | null> = {};
-         
+
          Object.keys(voucher).forEach((key) => {
             const voucherKey = key as keyof Voucher;
             if (originalVoucher && voucher[voucherKey] !== originalVoucher[voucherKey]) {
                changedFields[voucherKey] = voucher[voucherKey];
             }
          });
-         
+
          // Skip update if nothing changed
          if (Object.keys(changedFields).length === 0) {
             alert('Không có thông tin nào được thay đổi.');
             router.push(`/seller/vouchers/${params.id}`);
             return;
          }
-         
+
          // Send update request to API
          const response = await fetch(`http://68.183.226.198:3000/api/v1/vouchers/${params.id}`, {
             method: 'PATCH',
@@ -182,18 +185,25 @@ export default function EditVoucher() {
             },
             body: JSON.stringify(changedFields),
          });
-         
+
          if (!response.ok) {
             const errorData = await response.json();
             throw new Error(errorData.message || 'Cập nhật thất bại');
          }
-         
+
          alert('Cập nhật mã giảm giá thành công');
          router.push(`/seller/vouchers/${params.id}`);
-         
-      } catch (err: any) {
-         console.error('Failed to update voucher:', err);
-         setError(err.message || 'Không thể cập nhật mã giảm giá. Vui lòng thử lại sau.');
+      } catch (err: unknown) {
+         if (err instanceof Error) {
+            console.error('Failed to update voucher:', err.message);
+         } else {
+            console.error('Failed to update voucher:', err);
+         }
+         if (err instanceof Error) {
+            setError(err.message || 'Không thể cập nhật mã giảm giá. Vui lòng thử lại sau.');
+         } else {
+            setError('Không thể cập nhật mã giảm giá. Vui lòng thử lại sau.');
+         }
       } finally {
          setSubmitting(false);
       }
@@ -279,8 +289,12 @@ export default function EditVoucher() {
                <div className='flex-1 p-6 mt-16'>
                   <div className='flex flex-col items-center justify-center py-12 text-center'>
                      <FiInfo className='h-16 w-16 text-gray-300 mb-4' />
-                     <h3 className='text-lg font-medium text-gray-600 mb-1'>Không tìm thấy mã giảm giá</h3>
-                     <p className='text-gray-500 max-w-md'>Mã giảm giá không tồn tại hoặc đã bị xóa</p>
+                     <h3 className='text-lg font-medium text-gray-600 mb-1'>
+                        Không tìm thấy mã giảm giá
+                     </h3>
+                     <p className='text-gray-500 max-w-md'>
+                        Mã giảm giá không tồn tại hoặc đã bị xóa
+                     </p>
                      <Link href='/seller/vouchers'>
                         <button className='mt-4 px-4 py-2 bg-amber-500 text-white rounded-md hover:bg-amber-600 focus:outline-none'>
                            Quay lại danh sách
@@ -306,7 +320,7 @@ export default function EditVoucher() {
             <div className='fixed top-0 right-0 left-64 bg-white z-20 shadow-sm'>
                <Header />
             </div>
-            
+
             {/* Main content */}
             <div className='flex-1 p-6 mt-16'>
                <Head>
@@ -319,8 +333,8 @@ export default function EditVoucher() {
                         Quản lý mã giảm giá
                      </Link>
                      <span className='mx-2 text-gray-400'>/</span>
-                     <Link 
-                        href={`/seller/vouchers/${voucher.id}`} 
+                     <Link
+                        href={`/seller/vouchers/${voucher.id}`}
                         className='text-amber-600 hover:text-amber-800'
                      >
                         Chi tiết mã giảm giá
@@ -335,7 +349,10 @@ export default function EditVoucher() {
                   <div className='mb-6 p-4 bg-amber-50 border border-amber-200 rounded-md'>
                      <div className='flex items-center text-amber-700'>
                         <FiAlertCircle className='h-5 w-5 mr-2' />
-                        <p>Mã giảm giá này đã hết hạn. Bạn có thể cập nhật ngày hết hạn để kích hoạt lại.</p>
+                        <p>
+                           Mã giảm giá này đã hết hạn. Bạn có thể cập nhật ngày hết hạn để kích hoạt
+                           lại.
+                        </p>
                      </div>
                   </div>
                )}
@@ -345,7 +362,7 @@ export default function EditVoucher() {
                      <div className='grid grid-cols-1 md:grid-cols-2 gap-6'>
                         <div>
                            <h2 className='text-lg font-medium mb-4'>Thông tin cơ bản</h2>
-                           
+
                            <div className='mb-4'>
                               <label className='block text-sm font-medium text-gray-700 mb-1'>
                                  Mã voucher
@@ -363,7 +380,7 @@ export default function EditVoucher() {
                                  Mã voucher là duy nhất và được sử dụng để áp dụng giảm giá.
                               </p>
                            </div>
-                           
+
                            <div className='mb-4'>
                               <label className='block text-sm font-medium text-gray-700 mb-1'>
                                  Tên mã giảm giá
@@ -377,7 +394,7 @@ export default function EditVoucher() {
                                  placeholder='Nhập tên mã giảm giá (tùy chọn)'
                               />
                            </div>
-                           
+
                            <div className='mb-4'>
                               <label className='block text-sm font-medium text-gray-700 mb-1'>
                                  Mô tả
@@ -391,7 +408,7 @@ export default function EditVoucher() {
                                  placeholder='Nhập mô tả cho mã giảm giá (tùy chọn)'
                               />
                            </div>
-                           
+
                            <div className='mb-4'>
                               <label className='block text-sm font-medium text-gray-700 mb-1'>
                                  Đối tượng áp dụng
@@ -409,10 +426,10 @@ export default function EditVoucher() {
                               </p>
                            </div>
                         </div>
-                        
+
                         <div>
                            <h2 className='text-lg font-medium mb-4'>Thiết lập giảm giá</h2>
-                           
+
                            <div className='mb-4'>
                               <label className='block text-sm font-medium text-gray-700 mb-2'>
                                  Loại giảm giá
@@ -442,7 +459,7 @@ export default function EditVoucher() {
                                  </label>
                               </div>
                            </div>
-                           
+
                            {discountType === 'percent' ? (
                               <div className='mb-4'>
                                  <label className='block text-sm font-medium text-gray-700 mb-1'>
@@ -482,7 +499,7 @@ export default function EditVoucher() {
                                  />
                               </div>
                            )}
-                           
+
                            <div className='mb-4'>
                               <label className='block text-sm font-medium text-gray-700 mb-1'>
                                  Giá trị đơn hàng tối thiểu (VND)
@@ -498,10 +515,11 @@ export default function EditVoucher() {
                                  required
                               />
                               <p className='text-xs text-gray-500 mt-1'>
-                                 Đơn hàng phải có giá trị lớn hơn hoặc bằng giá trị này để áp dụng mã giảm giá.
+                                 Đơn hàng phải có giá trị lớn hơn hoặc bằng giá trị này để áp dụng
+                                 mã giảm giá.
                               </p>
                            </div>
-                           
+
                            <div className='mb-4'>
                               <label className='block text-sm font-medium text-gray-700 mb-1'>
                                  Thời gian bắt đầu
@@ -515,7 +533,7 @@ export default function EditVoucher() {
                                  required
                               />
                            </div>
-                           
+
                            <div className='mb-4'>
                               <label className='block text-sm font-medium text-gray-700 mb-1'>
                                  Thời gian kết thúc
@@ -529,7 +547,7 @@ export default function EditVoucher() {
                                  required
                               />
                            </div>
-                           
+
                            <div className='mb-4'>
                               <label className='block text-sm font-medium text-gray-700 mb-2'>
                                  Giới hạn sử dụng
@@ -558,7 +576,7 @@ export default function EditVoucher() {
                                     Không giới hạn
                                  </label>
                               </div>
-                              
+
                               {hasLimitedUses && (
                                  <div>
                                     <label className='block text-sm font-medium text-gray-700 mb-1'>
@@ -577,7 +595,10 @@ export default function EditVoucher() {
                                     <div className='flex items-center mt-2 text-sm text-gray-600'>
                                        <span>Đã sử dụng: {voucher.usage_count || 0}</span>
                                        <span className='mx-2'>|</span>
-                                       <span>Còn lại: {(voucher.usage_limit || 0) - (voucher.usage_count || 0)}</span>
+                                       <span>
+                                          Còn lại:{' '}
+                                          {(voucher.usage_limit || 0) - (voucher.usage_count || 0)}
+                                       </span>
                                     </div>
                                  </div>
                               )}
@@ -585,7 +606,7 @@ export default function EditVoucher() {
                         </div>
                      </div>
                   </div>
-                  
+
                   <div className='flex justify-between'>
                      <button
                         type='button'

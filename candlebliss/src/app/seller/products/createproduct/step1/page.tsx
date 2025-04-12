@@ -50,12 +50,8 @@ export default function Step1() {
    });
    const [isLoading, setIsLoading] = useState(false);
 
-   // Bổ sung thêm states cho việc loading
    const [imageUploading, setImageUploading] = useState(false);
    const [imageProcessingCount, setImageProcessingCount] = useState(0);
-
-   // Thêm kiểm tra token khi component mount
-   // filepath: /d:/New folder/candlebliss/src/app/seller/products/createproduct/step1/page.tsx
 
    useEffect(() => {
       const token = localStorage.getItem('token') || sessionStorage.getItem('token');
@@ -653,7 +649,12 @@ export default function Step1() {
                                                       ? 'bg-amber-50 text-amber-700'
                                                       : 'text-gray-700'
                                                 }`}
+                                                disabled={isCategoryDetailLoading}
                                              >
+                                                {isCategoryDetailLoading &&
+                                                   selectedCategory?.id === category.id && (
+                                                      <Loader2 className='inline h-3 w-3 mr-2 animate-spin' />
+                                                   )}
                                                 {category.name || `Danh mục ${category.id}`}
                                              </button>
                                           ))}
@@ -708,7 +709,17 @@ export default function Step1() {
 
                               {/* Upload area */}
                               <div className='flex flex-col items-center justify-center'>
-                                 {productImages.length < 9 ? (
+                                 {imageUploading ? (
+                                    // Show loader when images are uploading
+                                    <div className='flex flex-col items-center p-4'>
+                                       <Loader2 className='h-8 w-8 animate-spin text-amber-500 mb-2' />
+                                       <p className='text-sm text-gray-500'>
+                                          {imageProcessingCount > 0
+                                             ? `Đang xử lý ${imageProcessingCount} hình ảnh...`
+                                             : 'Đang xử lý hình ảnh...'}
+                                       </p>
+                                    </div>
+                                 ) : productImages.length < 9 ? (
                                     <>
                                        <label className='cursor-pointer flex flex-col items-center'>
                                           <svg
@@ -734,6 +745,7 @@ export default function Step1() {
                                              multiple
                                              className='hidden'
                                              onChange={handleImageUpload}
+                                             disabled={imageUploading}
                                           />
                                        </label>
                                     </>

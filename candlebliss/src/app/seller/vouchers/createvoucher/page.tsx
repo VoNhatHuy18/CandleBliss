@@ -49,9 +49,12 @@ export default function CreateVoucher() {
    };
 
    // Cập nhật dữ liệu voucher
-   const handleChange = (e: { target: { name: any; value: any } }) => {
+   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
       const { name, value } = e.target;
-      setVoucherData((prev) => ({ ...prev, [name]: value }));
+      setVoucherData((prev) => ({
+         ...prev,
+         [name as keyof typeof voucherData]: value,
+      }));
    };
 
    const validateForm = () => {
@@ -172,8 +175,8 @@ export default function CreateVoucher() {
             let responseText = '';
             try {
                responseText = await response.text();
-            } catch (e) {
-               console.error("Couldn't read response text:", e);
+            } catch (error) {
+               console.error("Couldn't read response text:", error);
             }
 
             if (!response.ok) {
@@ -185,7 +188,7 @@ export default function CreateVoucher() {
                   const errorData = JSON.parse(responseText);
                   errorMessage =
                      errorData.message || errorData.error || 'Lỗi không xác định từ server';
-               } catch (e) {
+               } catch {
                   // If it's not valid JSON, use the raw text
                   errorMessage = `Lỗi server: ${responseText.substring(0, 100)}...`;
                }
@@ -197,7 +200,7 @@ export default function CreateVoucher() {
             let result;
             try {
                result = JSON.parse(responseText);
-            } catch (e) {
+            } catch {
                console.warn('Response not valid JSON, using text response');
                result = { message: 'Voucher created successfully' };
             }

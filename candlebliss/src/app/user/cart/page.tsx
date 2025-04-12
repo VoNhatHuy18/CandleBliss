@@ -60,7 +60,15 @@ export default function CartPage() {
    const [apiCart, setApiCart] = useState<Cart | null>(null);
    const [syncing, setSyncing] = useState(false);
    const [syncMessage, setSyncMessage] = useState('');
-   const [productDetails, setProductDetails] = useState<Record<number, any>>({});
+   interface ProductDetail {
+      id: number;
+      name: string;
+      stock: number;
+      price: number;
+      [key: string]: string | number | boolean | undefined; // Add additional fields if necessary
+   }
+
+   const [productDetails, setProductDetails] = useState<Record<number, ProductDetail>>({});
    const [orderCompleted, setOrderCompleted] = useState(false);
 
    // First, declare mergeCartsWithApi since syncCartWithApi depends on it
@@ -364,7 +372,7 @@ export default function CartPage() {
          const detailIds = cartItems.map((item) => item.detailId);
          const uniqueDetailIds = [...new Set(detailIds)];
 
-         const detailsMap: Record<number, any> = {};
+         const detailsMap: Record<number, ProductDetail> = {};
 
          for (const detailId of uniqueDetailIds) {
             try {
@@ -556,7 +564,7 @@ export default function CartPage() {
                   try {
                      newCart = JSON.parse(responseText);
                   } catch (e) {
-                     console.error('Invalid JSON in create cart response');
+                     console.error('Invalid JSON in create cart response:', e);
                   }
                }
 
@@ -619,8 +627,20 @@ export default function CartPage() {
 
             {/* Sync message */}
             {syncMessage && (
-               <div className='mb-4 p-3 bg-blue-50 text-blue-700 rounded-md'>{syncMessage}</div>
+               <div
+                  className={`mb-4 p-3 bg-blue-50 text-blue-700 rounded-md flex items-center ${
+                     syncing ? 'justify-between' : 'justify-center'
+                  }`}
+               >
+                  <span>{syncMessage}</span>
+                  {syncing && (
+                     <div className='animate-spin h-5 w-5 border-2 border-blue-700 rounded-full border-t-transparent'></div>
+                  )}
+               </div>
             )}
+
+            {/* Error message */}
+            {error && <div className='mb-4 p-3 bg-red-50 text-red-700 rounded-md'>{error}</div>}
 
             {cartItems.length === 0 ? (
                <div className='bg-white rounded-lg shadow p-8 text-center'>
@@ -751,6 +771,29 @@ export default function CartPage() {
                                                       </span>
                                                    </div>
                                                 )}
+                                             {/* Add stock information if available in product details */}
+                                             {productDetails[item.detailId] && (
+                                                <div className='text-sm mt-1'>
+                                                   <span
+                                                      className={`${
+                                                         productDetails[item.detailId].stock > 10
+                                                            ? 'text-green-600'
+                                                            : productDetails[item.detailId].stock >
+                                                              0
+                                                            ? 'text-orange-600'
+                                                            : 'text-red-600'
+                                                      }`}
+                                                   >
+                                                      {productDetails[item.detailId].stock > 10
+                                                         ? 'Còn hàng'
+                                                         : productDetails[item.detailId].stock > 0
+                                                         ? `Chỉ còn ${
+                                                              productDetails[item.detailId].stock
+                                                           } sản phẩm`
+                                                         : 'Hết hàng'}
+                                                   </span>
+                                                </div>
+                                             )}
                                           </div>
                                        </div>
                                     </div>
@@ -854,10 +897,15 @@ export default function CartPage() {
                         </div>
 
                         <button
-                           className='w-full py-3 bg-orange-700 text-white rounded hover:bg-orange-800 transition'
+                           className={`w-full py-3 ${
+                              syncing
+                                 ? 'bg-gray-400 cursor-not-allowed'
+                                 : 'bg-orange-700 hover:bg-orange-800'
+                           } text-white rounded transition`}
                            onClick={handleCheckout}
+                           disabled={syncing}
                         >
-                           Tiến hành đặt hàng
+                           {syncing ? 'Đang xử lý...' : 'Tiến hành đặt hàng'}
                         </button>
 
                         <Link

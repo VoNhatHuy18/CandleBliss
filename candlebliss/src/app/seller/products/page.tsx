@@ -30,7 +30,7 @@ interface ProductDetail {
    values: string;
    quantities: number;
    images: Image[];
-   product?: any;
+   product?: Product; // Replace 'Product' with the correct type if known
    isActive: boolean;
 }
 
@@ -216,7 +216,7 @@ const ProductTable = ({
             month: '2-digit',
             day: '2-digit',
          }).format(date);
-      } catch (error) {
+      } catch {
          return dateString || '—';
       }
    };
@@ -261,7 +261,7 @@ const ProductTable = ({
                   }
                }
                return { detailId: detail.id, base_price: 0, discount_price: null, end_date: null };
-            } catch (error) {
+            } catch {
                return { detailId: detail.id, base_price: 0, discount_price: null, end_date: null };
             }
          });
@@ -348,7 +348,7 @@ const ProductTable = ({
          const now = new Date();
          const promotionEndDate = new Date(endDate);
          return now > promotionEndDate;
-      } catch (error) {
+      } catch {
          return false;
       }
    };
@@ -425,7 +425,7 @@ const ProductTable = ({
             searchTerm ? (
                <div className='p-10 text-center'>
                   <p className='text-gray-500'>
-                     Không tìm thấy sản phẩm phù hợp với từ khóa "{searchTerm}"
+                     Không tìm thấy sản phẩm phù hợp với từ khóa: {searchTerm}
                   </p>
                   <button
                      onClick={() => setSearchTerm('')}
@@ -884,7 +884,7 @@ const isPromotionActive = (endDate: string | null | undefined): boolean => {
       const now = new Date();
       const promotionEndDate = new Date(endDate);
       return now <= promotionEndDate;
-   } catch (error) {
+   } catch {
       return true; // If date parsing fails, assume it's active
    }
 };
@@ -992,7 +992,7 @@ export default function ProductManagement() {
                   pricing: [], // We'll fetch pricing separately
                   categories: detailData.categories || [],
                };
-            } catch (error) {
+            } catch {
                return {
                   ...product,
                   images: Array.isArray(product.images)

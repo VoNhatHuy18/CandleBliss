@@ -23,10 +23,15 @@ export default function ViewedCarousel() {
    const [loading, setLoading] = useState(true);
 
    // Thêm hook để đảm bảo giá được tính toán lại sau khi client-side hydration
-   const [formattedPrices, setFormattedPrices] = useState<Record<number, {
-      price: string,
-      discountPrice: string | null
-   }>>({});
+   const [formattedPrices, setFormattedPrices] = useState<
+      Record<
+         number,
+         {
+            price: string;
+            discountPrice: string | null;
+         }
+      >
+   >({});
 
    // Load viewed products from localStorage
    useEffect(() => {
@@ -36,16 +41,16 @@ export default function ViewedCarousel() {
             const storedProducts = localStorage.getItem('viewedProducts');
             if (storedProducts) {
                const parsedProducts = JSON.parse(storedProducts);
-               console.log("Loaded viewed products:", parsedProducts);
+               console.log('Loaded viewed products:', parsedProducts);
 
                // Kiểm tra và log chi tiết để debug
                if (Array.isArray(parsedProducts)) {
-                  parsedProducts.forEach((product: any, index: number) => {
+                  parsedProducts.forEach((product: ViewedProduct, index: number) => {
                      console.log(`Product ${index} - ${product.name}:`, {
                         price: typeof product.price,
                         priceValue: product.price,
                         discountPrice: typeof product.discountPrice,
-                        discountPriceValue: product.discountPrice
+                        discountPriceValue: product.discountPrice,
                      });
                   });
                }
@@ -63,12 +68,12 @@ export default function ViewedCarousel() {
    // Tính toán giá đã format sau khi component đã mount
    useEffect(() => {
       if (viewedProducts.length > 0) {
-         const prices: Record<number, { price: string, discountPrice: string | null }> = {};
+         const prices: Record<number, { price: string; discountPrice: string | null }> = {};
 
-         viewedProducts.forEach(product => {
+         viewedProducts.forEach((product) => {
             prices[product.id] = {
                price: formatPrice(product.price),
-               discountPrice: product.discountPrice ? formatPrice(product.discountPrice) : null
+               discountPrice: product.discountPrice ? formatPrice(product.discountPrice) : null,
             };
          });
 
@@ -79,7 +84,7 @@ export default function ViewedCarousel() {
    // Debug viewed products data
    useEffect(() => {
       if (viewedProducts.length > 0) {
-         console.log("Viewed products data:", viewedProducts);
+         console.log('Viewed products data:', viewedProducts);
       }
    }, [viewedProducts]);
 
@@ -90,7 +95,7 @@ export default function ViewedCarousel() {
 
    // Format price helper function
    const formatPrice = (price: number | string | null): string => {
-      if (price === null || price === undefined) return "0";
+      if (price === null || price === undefined) return '0';
 
       // Chuyển đổi giá trị thành số
       let numPrice: number;
@@ -103,7 +108,7 @@ export default function ViewedCarousel() {
       }
 
       // Kiểm tra nếu không phải là số hợp lệ
-      if (isNaN(numPrice)) return "0";
+      if (isNaN(numPrice)) return '0';
 
       // Format số với dấu phẩy ngăn cách hàng nghìn
       return numPrice.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
@@ -120,18 +125,18 @@ export default function ViewedCarousel() {
       const hasHalfStar = rating % 1 !== 0;
 
       for (let i = 0; i < fullStars; i++) {
-         stars.push(<Star key={`star-${i}`} className="w-4 h-4 fill-yellow-400 text-yellow-400" />);
+         stars.push(<Star key={`star-${i}`} className='w-4 h-4 fill-yellow-400 text-yellow-400' />);
       }
 
       if (hasHalfStar) {
          stars.push(
-            <StarHalf key="half-star" className="w-4 h-4 fill-yellow-400 text-yellow-400" />,
+            <StarHalf key='half-star' className='w-4 h-4 fill-yellow-400 text-yellow-400' />,
          );
       }
 
       const remainingStars = 5 - Math.ceil(rating);
       for (let i = 0; i < remainingStars; i++) {
-         stars.push(<Star key={`empty-star-${i}`} className="w-4 h-4 text-yellow-400" />);
+         stars.push(<Star key={`empty-star-${i}`} className='w-4 h-4 text-yellow-400' />);
       }
 
       return stars;
@@ -144,13 +149,13 @@ export default function ViewedCarousel() {
          name: product.name,
          price: product.discountPrice || product.price,
          quantity: 1,
-         imageUrl: product.image
+         imageUrl: product.image,
       };
 
       const cartItems = JSON.parse(localStorage.getItem('cart') || '[]');
 
       const existingItemIndex = cartItems.findIndex(
-         (item: any) => item.productId === product.id
+         (item: { productId: number }) => item.productId === product.id,
       );
 
       if (existingItemIndex >= 0) {
@@ -164,67 +169,66 @@ export default function ViewedCarousel() {
    };
 
    return (
-      <div className="my-12">
-         <div className="px-4 pb-8">
-            <p className="text-center text-[#555659] text-lg font-mont">G Ầ N &nbsp; Đ Â Y</p>
-            <p className="text-center font-mont font-semibold text-xl lg:text-3xl pb-4">Sản Phẩm Đã Xem</p>
+      <div className='my-12'>
+         <div className='px-4 pb-8'>
+            <p className='text-center text-[#555659] text-lg font-mont'>G Ầ N &nbsp; Đ Â Y</p>
+            <p className='text-center font-mont font-semibold text-xl lg:text-3xl pb-4'>
+               Sản Phẩm Đã Xem
+            </p>
          </div>
 
-         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 px-4 lg:px-0 max-w-7xl mx-auto">
+         <div className='grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 px-4 lg:px-0 max-w-7xl mx-auto'>
             {displayProducts.map((product) => (
-               <div key={product.id} className="rounded-lg bg-white p-3 shadow-lg hover:shadow-md transition-shadow">
-                  <div className="relative aspect-square overflow-hidden rounded-lg group">
+               <div
+                  key={product.id}
+                  className='rounded-lg bg-white p-3 shadow-lg hover:shadow-md transition-shadow'
+               >
+                  <div className='relative aspect-square overflow-hidden rounded-lg group'>
                      <Image
                         src={product.image || '/images/placeholder.jpg'}
                         alt={product.name}
                         height={400}
                         width={400}
-                        className="h-full w-full object-cover transition-all duration-300 group-hover:blur-sm"
+                        className='h-full w-full object-cover transition-all duration-300 group-hover:blur-sm'
                      />
-                     <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                     <div className='absolute inset-0 flex flex-col items-center justify-center gap-4 opacity-0 group-hover:opacity-100 transition-opacity duration-300'>
                         <Link href={`/user/products/${product.id}`}>
-                           <button
-                              className="bg-white/90 hover:bg-white text-gray-800 px-4 py-2 rounded-full flex items-center gap-2 transition-colors duration-200 border border-black"
-                           >
-                              <Eye className="w-4 h-4" />
+                           <button className='bg-white/90 hover:bg-white text-gray-800 px-4 py-2 rounded-full flex items-center gap-2 transition-colors duration-200 border border-black'>
+                              <Eye className='w-4 h-4' />
                               <span>Xem chi tiết</span>
                            </button>
                         </Link>
                         <button
                            onClick={() => handleAddToCart(product)}
-                           className="bg-white/90 hover:bg-white text-gray-800 px-4 py-2 rounded-full flex items-center gap-2 transition-colors duration-200 border border-black"
+                           className='bg-white/90 hover:bg-white text-gray-800 px-4 py-2 rounded-full flex items-center gap-2 transition-colors duration-200 border border-black'
                         >
-                           <ShoppingCart className="w-4 h-4" />
+                           <ShoppingCart className='w-4 h-4' />
                            <span>Thêm vào giỏ</span>
                         </button>
                      </div>
                   </div>
-                  <div className="mt-3">
-                     <h3 className="text-sm font-medium text-gray-700 mb-1">{product.name}</h3>
-                     <p className="text-xs text-gray-500 line-clamp-2 mb-1">
+                  <div className='mt-3'>
+                     <h3 className='text-sm font-medium text-gray-700 mb-1'>{product.name}</h3>
+                     <p className='text-xs text-gray-500 line-clamp-2 mb-1'>
                         {product.description || ''}
                      </p>
 
-
-
-                     <div className="flex items-center">{renderStars(product.rating || 4.5)}</div>
-                     <div className="mt-1">
-
-
+                     <div className='flex items-center'>{renderStars(product.rating || 4.5)}</div>
+                     <div className='mt-1'>
                         {/* Sử dụng formattedPrices thay vì gọi formatPrice trực tiếp */}
                         {formattedPrices[product.id] && (
                            <div>
                               {product.discountPrice ? (
-                                 <div className="flex items-center gap-2">
-                                    <p className="text-sm font-medium text-red-600">
+                                 <div className='flex items-center gap-2'>
+                                    <p className='text-sm font-medium text-red-600'>
                                        {formattedPrices[product.id].discountPrice}đ
                                     </p>
-                                    <p className="text-xs text-gray-500 line-through">
+                                    <p className='text-xs text-gray-500 line-through'>
                                        {formattedPrices[product.id].price}đ
                                     </p>
                                  </div>
                               ) : (
-                                 <p className="text-sm font-medium text-red-600">
+                                 <p className='text-sm font-medium text-red-600'>
                                     {formattedPrices[product.id].price}đ
                                  </p>
                               )}
@@ -233,8 +237,11 @@ export default function ViewedCarousel() {
 
                         {/* Phương án dự phòng - hiển thị trực tiếp nếu formattedPrices chưa sẵn sàng */}
                         {!formattedPrices[product.id] && (
-                           <p className="text-sm font-medium text-red-600">
-                              {product.discountPrice ? formatPrice(product.discountPrice) : formatPrice(product.price)}đ
+                           <p className='text-sm font-medium text-red-600'>
+                              {product.discountPrice
+                                 ? formatPrice(product.discountPrice)
+                                 : formatPrice(product.price)}
+                              đ
                            </p>
                         )}
                      </div>
@@ -244,8 +251,11 @@ export default function ViewedCarousel() {
          </div>
 
          {viewedProducts.length > displayLimit && (
-            <div className="text-center mt-8">
-               <Link href="/user/products" className="inline-block bg-orange-700 text-white px-6 py-2 rounded-md hover:bg-orange-800 transition-colors">
+            <div className='text-center mt-8'>
+               <Link
+                  href='/user/products'
+                  className='inline-block bg-orange-700 text-white px-6 py-2 rounded-md hover:bg-orange-800 transition-colors'
+               >
                   Xem tất cả sản phẩm
                </Link>
             </div>
