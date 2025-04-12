@@ -75,7 +75,7 @@ export default function ProductDetailPage() {
    const [selectedSize, setSelectedSize] = useState<string>('');
    const [selectedType, setSelectedType] = useState<string>('');
    const [productDetails, setProductDetails] = useState<ProductDetail[]>([]);
-   const [detailPrices, setDetailPrices] = useState<Record<number, { base_price: number, discount_price: number | null }>>({});
+   const [detailPrices, setDetailPrices] = useState<Record<number, { base_price: number, discount_price: number | null, start_date?: string, end_date?: string }>>({});
    const [selectedDetailId, setSelectedDetailId] = useState<number | null>(null);
    const [showCartNotification, setShowCartNotification] = useState(false);
 
@@ -238,7 +238,7 @@ export default function ProductDetailPage() {
 
    const fetchDetailPrices = async (details: ProductDetail[]) => {
       try {
-         const pricesMap: Record<number, { base_price: number, discount_price: number | null }> = {};
+         const pricesMap: Record<number, { base_price: number, discount_price: number | null, start_date?: string, end_date?: string }> = {};
 
          for (const detail of details) {
             if (detail && typeof detail.id === 'number') {
@@ -266,7 +266,9 @@ export default function ProductDetailPage() {
                         // Store base price and the discount percentage
                         pricesMap[detail.id] = {
                            base_price: Number(priceInfo.base_price) || 0,
-                           discount_price: priceInfo.discount_price // This is the percentage value
+                           discount_price: priceInfo.discount_price, // This is the percentage value
+                           start_date: priceInfo.start_date,
+                           end_date: priceInfo.end_date
                         };
                      } else {
                         pricesMap[detail.id] = {
@@ -413,7 +415,20 @@ export default function ProductDetailPage() {
 
       const basePrice = selectedPriceInfo.base_price || 0;
       const discountPercentage = selectedPriceInfo.discount_price || null;
-      let price = discountPercentage ?
+
+      // Check if discount is valid based on dates
+      let useDiscount = false;
+      if (discountPercentage && selectedPriceInfo.start_date && selectedPriceInfo.end_date) {
+         const now = new Date();
+         const startDate = new Date(selectedPriceInfo.start_date);
+         const endDate = new Date(selectedPriceInfo.end_date);
+
+         // Only apply discount if current date is within range
+         useDiscount = now >= startDate && now <= endDate;
+      }
+
+      // Apply discount only if it's valid
+      let price = useDiscount ?
          calculateDiscountedPrice(basePrice, discountPercentage) :
          basePrice;
 
@@ -636,26 +651,46 @@ export default function ProductDetailPage() {
                   <div className="mb-6 bg-gray-50 p-4 rounded">
                      {selectedPriceInfo && (
                         <div className="flex items-center">
-                           {selectedPriceInfo.discount_price && Number(selectedPriceInfo.discount_price) > 0 ? (
-                              <>
-                                 <span className="text-red-600 text-2xl font-medium">
-                                    {formatPrice(calculateDiscountedPrice(
-                                       selectedPriceInfo.base_price,
-                                       selectedPriceInfo.discount_price
-                                    ))}
-                                 </span>
-                                 <span className="ml-2 text-gray-500 line-through">
-                                    {formatPrice(selectedPriceInfo.base_price)}
-                                 </span>
-                                 <div className="bg-red-600 text-white text-xs px-2 py-1 rounded ml-2">
-                                    Giảm {selectedPriceInfo.discount_price}%
-                                 </div>
-                              </>
-                           ) : (
-                              <span className="text-red-600 text-2xl font-medium">
-                                 {formatPrice(selectedPriceInfo.base_price)}
-                              </span>
-                           )}
+                           {(() => {
+                              // Check if discount is valid
+                              let isDiscountValid = false;
+                              if (selectedPriceInfo.discount_price &&
+                                 selectedPriceInfo.start_date &&
+                                 selectedPriceInfo.end_date) {
+                                 const now = new Date();
+                                 const startDate = new Date(selectedPriceInfo.start_date);
+                                 const endDate = new Date(selectedPriceInfo.end_date);
+                                 isDiscountValid = now >= startDate && now <= endDate;
+                              }
+
+                              // Show discounted price only if discount is valid
+                              if (selectedPriceInfo.discount_price &&
+                                 Number(selectedPriceInfo.discount_price) > 0 &&
+                                 isDiscountValid) {
+                                 return (
+                                    <>
+                                       <span className="text-red-600 text-2xl font-medium">
+                                          {formatPrice(calculateDiscountedPrice(
+                                             selectedPriceInfo.base_price,
+                                             selectedPriceInfo.discount_price
+                                          ))}
+                                       </span>
+                                       <span className="ml-2 text-gray-500 line-through">
+                                          {formatPrice(selectedPriceInfo.base_price)}
+                                       </span>
+                                       <div className="bg-red-600 text-white text-xs px-2 py-1 rounded ml-2">
+                                          Giảm {selectedPriceInfo.discount_price}%
+                                       </div>
+                                    </>
+                                 );
+                              } else {
+                                 return (
+                                    <span className="text-red-600 text-2xl font-medium">
+                                       {formatPrice(selectedPriceInfo.base_price)}
+                                    </span>
+                                 );
+                              }
+                           })()}
                         </div>
                      )}
                   </div>

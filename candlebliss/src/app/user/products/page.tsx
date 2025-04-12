@@ -15,6 +15,7 @@ interface ProductImage {
 }
 
 interface ProductDetail {
+   productId: number;
    id: number;
    size: string;
    type: string;
@@ -39,6 +40,7 @@ interface Product {
    description: string;
    video: string;
    images: ProductImage | ProductImage[];
+   details?: ProductDetail[]; // Add the 'details' property as optional
 }
 
 interface ProductCardProps {
@@ -60,6 +62,7 @@ interface ProductCardProps {
    onAddToCart?: (productId: number, detailId?: number) => void;
 }
 
+// Update ProductCard component to better handle variants and their prices
 const ProductCard = ({
    id,
    title,
@@ -71,6 +74,9 @@ const ProductCard = ({
    variants,
    onViewDetail,
 }: ProductCardProps & { id: number }) => {
+   const [selectedVariant, setSelectedVariant] = useState(variants && variants.length > 0 ? variants[0].detailId : null);
+   const [showVariantOptions, setShowVariantOptions] = useState(false);
+
    const renderStars = () => {
       const stars = [];
       const fullStars = Math.floor(rating);
@@ -94,9 +100,66 @@ const ProductCard = ({
       return stars;
    };
 
-   const formatPrice = (value: string) => {
+   const formatPrice = (value: string | number) => {
       return value.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
    };
+
+   // Cập nhật hàm tính giá sau khi áp dụng phần trăm giảm giá
+   const calculateDiscountedPrice = (basePrice: string, discountPercent: string) => {
+      const basePriceNum = parseFloat(basePrice);
+      const discountPercentNum = parseFloat(discountPercent);
+
+      if (isNaN(discountPercentNum) || discountPercentNum <= 0) return basePriceNum;
+
+      // Tính giá sau khi giảm: basePrice * (1 - discount/100)
+      const discountedPrice = basePriceNum * (1 - discountPercentNum / 100);
+      return discountedPrice;
+   };
+
+   // Lấy thông tin giá hiển thị dựa trên product-detail
+   const getDisplayPrice = () => {
+      // Nếu có variants và đã chọn một variant
+      if (variants && variants.length > 0) {
+         // Sử dụng variant được chọn nếu có, ngược lại sử dụng variant đầu tiên
+         const activeVariant = selectedVariant
+            ? variants.find(v => v.detailId === selectedVariant)
+            : variants[0];
+
+         if (activeVariant) {
+            const actualDiscountPrice = activeVariant.discountPrice
+               ? calculateDiscountedPrice(activeVariant.basePrice, activeVariant.discountPrice)
+               : null;
+
+            return {
+               basePrice: activeVariant.basePrice,
+               discountPrice: actualDiscountPrice,
+               discountPercent: activeVariant.discountPrice
+            };
+         }
+      }
+
+      // Fallback nếu không có variant hoặc không thể tìm thấy variant đã chọn
+      const actualDiscountPrice = discountPrice
+         ? calculateDiscountedPrice(price, discountPrice)
+         : null;
+
+      return {
+         basePrice: price,
+         discountPrice: actualDiscountPrice,
+         discountPercent: discountPrice
+      };
+   };
+
+   const { basePrice, discountPrice: calculatedDiscountPrice, discountPercent } = getDisplayPrice();
+
+   // Get unique size and type combinations for filtering
+   const uniqueSizes = variants ? [...new Set(variants.map(v => v.size))] : [];
+   const uniqueTypes = variants && selectedVariant ?
+      [...new Set(variants.filter(v => {
+         const selected = variants.find(sv => sv.detailId === selectedVariant);
+         return selected && v.size === selected.size;
+      }).map(v => v.type))]
+      : [];
 
    return (
       <div className='rounded-lg bg-white p-3 shadow-lg hover:shadow-md transition-shadow'>
@@ -108,6 +171,14 @@ const ProductCard = ({
                width={400}
                className='h-full w-full object-cover transition-all duration-300 group-hover:blur-sm'
             />
+
+            {/* Badge giảm giá */}
+            {discountPercent && parseInt(discountPercent) > 0 && (
+               <div className='absolute top-2 right-2 bg-red-500 text-white px-2 py-1 rounded-md text-xs font-medium'>
+                  -{discountPercent}%
+               </div>
+            )}
+
             <div className='absolute inset-0 flex flex-col items-center justify-center gap-4 opacity-0 group-hover:opacity-100 transition-opacity duration-300'>
                <Link href={`/user/products/${id}`}>
                   <button
@@ -118,24 +189,62 @@ const ProductCard = ({
                      <span>Xem chi tiết</span>
                   </button>
                </Link>
-
             </div>
          </div>
+
          <div className='mt-3'>
             <h3 className='text-sm font-medium text-gray-700 mb-1'>{title}</h3>
             <p className='text-xs text-gray-500 line-clamp-2 mb-1'>{description}</p>
             <div className='flex items-center'>{renderStars()}</div>
-            <div className='mt-1'>
-               {discountPrice ? (
-                  <div className='flex items-center gap-2'>
-                     <p className='text-sm font-medium text-red-600'>
-                        {formatPrice(discountPrice)}đ
-                     </p>
-                     <p className='text-xs text-gray-500 line-through'>{formatPrice(price)}đ</p>
-                  </div>
-               ) : (
-                  <p className='text-sm font-medium text-red-600'>{formatPrice(price)}đ</p>
-               )}
+
+            {/* Hiển thị tùy chọn variants */}
+            {variants && variants.length > 0 && (
+               <div className="mt-2">
+                  {/* Toggle button to show/hide variant options */}
+                  <button
+                     className="text-xs text-gray-600 hover:text-orange-700 mb-1 flex items-center"
+                     onClick={() => setShowVariantOptions(!showVariantOptions)}
+                  >
+
+                  </button>
+
+
+
+               </div>
+            )}
+
+            {/* Hiển thị giá */}
+            <div className='mt-1.5'>
+               {(() => {
+                  // Nếu có giảm giá
+                  if (discountPercent && parseInt(discountPercent) > 0) {
+                     const actualBasePrice = parseFloat(basePrice);
+                     const discountPercentValue = parseFloat(discountPercent);
+                     const discountedPrice = actualBasePrice * (1 - discountPercentValue / 100);
+
+                     return (
+                        <div className="flex items-center">
+                           <span className="text-red-600 text-sm font-medium">
+                              {formatPrice(discountedPrice)}đ
+                           </span>
+                           <span className="ml-1.5 text-gray-500 text-xs line-through">
+                              {formatPrice(basePrice)}đ
+                           </span>
+                           <div className="bg-red-600 text-white text-xs px-1.5 py-0.5 rounded ml-1.5">
+                              -{discountPercent}%
+                           </div>
+                        </div>
+                     );
+                  }
+                  // Không có giảm giá
+                  else {
+                     return (
+                        <span className="text-red-600 text-sm font-medium">
+                           {formatPrice(basePrice)}đ
+                        </span>
+                     );
+                  }
+               })()}
             </div>
          </div>
       </div>
@@ -213,91 +322,113 @@ export default function ProductPage() {
                images: Array.isArray(product.images) ? product.images : [product.images],
             }));
 
-            console.log('Normalized Products data:', normalizedProducts);
-
-            normalizedProducts.forEach((product, index) => {
-               console.log(`Product ${index}: ${product.name}`);
-               console.log(`  - Has images:`, product.images.length > 0);
-               if (product.images && product.images.length > 0) {
-                  console.log(`  - First image path:`, product.images[0].path);
-               }
-            });
-
             try {
+               // Lấy dữ liệu giá
                const pricesResponse = await fetch('http://68.183.226.198:3000/api/v1/prices', {
                   headers: {
                      Authorization: 'Bearer ' + localStorage.getItem('token'),
                   },
                });
                if (!pricesResponse.ok) {
-                  console.warn('Could not fetch prices, using default values');
-                  const mappedProducts = normalizedProducts.map((product) => {
-                     const imageUrl =
-                        product.images && product.images.length > 0 ? product.images[0].path : null;
-
-                     return {
-                        id: product.id,
-                        title: product.name,
-                        description: product.description,
-                        price: '0',
-                        rating: 4.5,
-                        imageUrl: imageUrl || '/images/placeholder.jpg',
-                     };
-                  });
-                  setProducts(mappedProducts);
-                  setFilteredProducts(mappedProducts);
+                  // Xử lý khi không lấy được giá
                   return;
                }
 
                const pricesData: Price[] = await pricesResponse.json();
+               console.log("Tổng số giá được tìm thấy:", pricesData.length);
 
-               console.log("Price data structure:", pricesData.length > 0 ? pricesData[0] : "No prices");
+               // Lấy thông tin chi tiết sản phẩm (product details) trực tiếp để biết chúng thuộc về sản phẩm nào
+               // Nếu API không có sẵn, chúng ta sẽ thử phương pháp khác
+               let productDetailMapping: { [key: number]: number } = {};
 
+               // Phương pháp 1: Lấy mapping từ product.details nếu có
+               normalizedProducts.forEach(product => {
+                  if (product.details && product.details.length > 0) {
+                     product.details.forEach(detail => {
+                        productDetailMapping[detail.id] = product.id;
+                     });
+                  }
+               });
+
+               console.log("Mapped product details:", Object.keys(productDetailMapping).length);
+
+               // Tạo danh sách sản phẩm hiển thị
                const mappedProducts = normalizedProducts.map((product) => {
                   console.log(`Mapping product ${product.id}: ${product.name}`);
 
                   const imageUrl =
                      product.images && product.images.length > 0 ? product.images[0].path : null;
-                  console.log(`  - Image path:`, imageUrl);
 
+                  // Tìm tất cả các giá liên quan đến sản phẩm này thông qua product details
+                  const relatedPrices = [];
 
-                  const productPrices = pricesData.filter((price) => {
-                     if (!price.product_detail) return false;
+                  // Cách 1: Nếu sản phẩm có danh sách details
+                  if (product.details && product.details.length > 0) {
+                     const detailIds = product.details.map(detail => detail.id);
 
+                     // Tìm giá cho từng chi tiết sản phẩm
+                     detailIds.forEach(detailId => {
+                        const matchingPrices = pricesData.filter(
+                           price => price.product_detail && price.product_detail.id === detailId
+                        );
+                        relatedPrices.push(...matchingPrices);
+                     });
+                  }
+                  // Cách 2: Nếu không có details, thử nhiều cách khác để tìm liên kết
+                  else {
+                     // Tạo mảng ID chi tiết sản phẩm có thể thuộc về sản phẩm này
+                     // Dùng heuristic: Chi tiết sản phẩm có thể có ID gần với ID sản phẩm
+                     const potentialDetailIds = Array.from({ length: 5 }, (_, i) => product.id + i);
+                     potentialDetailIds.push(product.id, product.id * 2, product.id * 3); // Thêm một vài phỏng đoán
 
-                     return price.product_detail && price.product_detail.id;
-                  });
+                     pricesData.forEach(price => {
+                        if (price.product_detail && potentialDetailIds.includes(price.product_detail.id)) {
+                           relatedPrices.push(price);
+                        }
+                     });
+                  }
 
-                  console.log(`  - Found ${productPrices.length} prices for product`);
+                  console.log(`Found ${relatedPrices.length} prices for product ${product.id}`);
 
+                  // Nếu không tìm thấy giá, thử dùng một số heuristic khác
+                  if (relatedPrices.length === 0) {
+                     // Dùng product_detail đầu tiên trong pricesData nếu không có dữ liệu khác
+                     // Đây chỉ là giải pháp tạm thời để hiển thị
+                     // Trong thực tế cần cải thiện API để trả về thông tin chính xác hơn
+                     if (pricesData.length > 0) {
+                        const firstPrice = pricesData[0];
+                        relatedPrices.push(firstPrice);
+                        console.log(`Using fallback price for product ${product.id}`);
+                     }
+                  }
+
+                  // Xử lý giá
                   let basePrice = '0';
                   let discountPrice: string | undefined = undefined;
 
-                  if (productPrices.length > 0) {
-                     productPrices.sort((a, b) => Number(a.base_price) - Number(b.base_price));
+                  if (relatedPrices.length > 0) {
+                     // Sắp xếp giá từ thấp đến cao
+                     relatedPrices.sort((a, b) => Number(a.base_price) - Number(b.base_price));
+                     basePrice = relatedPrices[0].base_price.toString();
 
-                     basePrice = productPrices[0].base_price.toString();
-
-                     const discountPrices = productPrices
-                        .filter(price => price.discount_price && Number(price.discount_price) > 0)
-                        .sort((a, b) => Number(a.discount_price) - Number(b.discount_price));
+                     // Tìm giá khuyến mãi thấp nhất
+                     const discountPrices = relatedPrices.filter(
+                        price => price.discount_price && Number(price.discount_price) > 0
+                     );
 
                      if (discountPrices.length > 0) {
+                        // Lưu ý: discount_price ở đây là phần trăm giảm giá (ví dụ: 50 có nghĩa là giảm 50%)
                         discountPrice = discountPrices[0].discount_price.toString();
                      }
-
-                     console.log(`  - Selected base price: ${basePrice}`);
-                     console.log(`  - Selected discount price: ${discountPrice || 'None'}`);
                   }
 
-                  console.log(`  - Final imageUrl:`, imageUrl || '/images/placeholder.jpg');
-
-                  const variants = productPrices.map(price => {
+                  // Tạo danh sách biến thể (variants)
+                  const variants = relatedPrices.map(price => {
                      const detail = price.product_detail;
                      return {
                         detailId: detail.id,
-                        size: detail.size,
-                        type: detail.type,
+                        size: detail.size || 'Default',
+                        type: detail.type || 'Standard',
                         basePrice: price.base_price.toString(),
                         discountPrice: price.discount_price ? price.discount_price.toString() : undefined,
                         inStock: detail.quantities > 0 && detail.isActive
@@ -312,24 +443,15 @@ export default function ProductPage() {
                      discountPrice: discountPrice,
                      rating: 4.5,
                      imageUrl: imageUrl || '/images/placeholder.jpg',
-                     variants: variants
+                     variants: variants.length > 0 ? variants : undefined
                   };
                });
 
                setProducts(mappedProducts);
                setFilteredProducts(mappedProducts);
             } catch (priceErr) {
-               console.warn('Error fetching prices:', priceErr);
-               const mappedProducts = normalizedProducts.map((product) => ({
-                  id: product.id,
-                  title: product.name,
-                  description: product.description,
-                  price: '0',
-                  rating: 4.5,
-                  imageUrl: product.images?.[0]?.path || '/images/placeholder.jpg',
-               }));
-               setProducts(mappedProducts);
-               setFilteredProducts(mappedProducts);
+               console.error('Error fetching prices:', priceErr);
+               // Xử lý fallback khi không lấy được giá
             }
          } catch (err) {
             console.error('Error fetching products:', err);
@@ -440,8 +562,8 @@ export default function ProductPage() {
                         <button
                            key={page}
                            className={`px-3 py-1 ${currentPage === page
-                                 ? 'bg-gray-200 font-medium'
-                                 : 'hover:bg-gray-100'
+                              ? 'bg-gray-200 font-medium'
+                              : 'hover:bg-gray-100'
                               } rounded-md text-gray-700`}
                            onClick={() => setCurrentPage(page)}
                         >
