@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, ChangeEvent } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -194,7 +194,7 @@ export default function CheckoutPage() {
    const [processingPayment, setProcessingPayment] = useState(false);
 
    // Thêm hàm hiện toast message
-   const showToastMessage = (message: string, type: 'success' | 'error' | 'info') => {
+   const showToastMessage = useCallback((message: string, type: 'success' | 'error' | 'info') => {
       setToast({
          show: true,
          message,
@@ -205,7 +205,7 @@ export default function CheckoutPage() {
       setTimeout(() => {
          setToast((prev) => ({ ...prev, show: false }));
       }, 3000);
-   };
+   }, []);
 
    // Thêm hàm xóa địa chỉ
    const deleteAddress = async (addressId: number) => {
@@ -338,8 +338,8 @@ export default function CheckoutPage() {
       setWards([]);
    };
 
-   // Cập nhật hàm tính phí vận chuyển dựa trên địa chỉ
-   const calculateShippingFee = (province: string): number => {
+   // Wrap calculateShippingFee in useCallback to prevent it from recreating on each render
+   const calculateShippingFee = useCallback((province: string): number => {
       // Kiểm tra nếu tỉnh/thành phố là TP.HCM (với nhiều cách viết khác nhau)
       const hcmVariations = [
          'hồ chí minh',
@@ -356,436 +356,45 @@ export default function CheckoutPage() {
 
       // Nếu là TP.HCM thì phí ship là 20.000đ, ngược lại là 30.000đ
       return hcmVariations.includes(normalizedProvince) ? 20000 : 30000;
-   };
-
-   useEffect(() => {
-      const init = async () => {
-         // Lấy thông tin userId từ localStorage
-         const storedUserId = localStorage.getItem('userId');
-         if (!storedUserId) {
-            // Nếu không có userId, chuyển về trang đăng nhập
-            router.push('/user/signin');
-            return;
-         }
-
-         const userId = parseInt(storedUserId);
-         setUserId(userId);
-
-         try {
-            setLoading(true);
-
-            // Lấy thông tin người dùng trước
-            await loadUserInfo(userId);
-
-            // Sau đó tải địa chỉ của họ
-            await loadUserAddresses(userId);
-
-            // Cuối cùng tải tỉnh thành để chuẩn bị cho form
-            await fetchProvinces();
-         } catch (error) {
-            console.error('Error initializing data:', error);
-            showToastMessage('Có lỗi xảy ra khi tải dữ liệu', 'error');
-         } finally {
-            setLoading(false);
-         }
-
-         // Tải giỏ hàng từ localStorage
-         const localCart = JSON.parse(localStorage.getItem('cart') || '[]');
-         if (localCart.length === 0) {
-            // Nếu giỏ hàng trống, chuyển về trang giỏ hàng
-            router.push('/user/cart');
-            return;
-         }
-
-         // Đảm bảo tất cả detailId là số
-         const validatedCart = localCart.map((item: { detailId: any }) => ({
-            ...item,
-            detailId: Number(item.detailId),
-         }));
-
-         setCartItems(validatedCart);
-
-         // Tính toán giá trị đơn hàng
-         const subtotal = validatedCart.reduce(
-            (sum: number, item: CartItem) => sum + item.price * item.quantity,
-            0,
-         );
-         setSubTotal(subtotal);
-         setTotalPrice(subtotal + shippingFee);
-      };
-
-      init();
    }, []);
 
-   // Thêm vào useEffect để load voucher đã áp dụng từ cart
-   useEffect(() => {
-      // Lấy voucher đã áp dụng từ localStorage nếu có
-      const savedVoucher = localStorage.getItem('appliedVoucher');
-      if (savedVoucher) {
-         try {
-            const voucherData = JSON.parse(savedVoucher);
-
-            // Kiểm tra voucher còn hợp lệ không
-            const now = new Date();
-            const startDate = new Date(voucherData.start_date);
-            const endDate = new Date(voucherData.end_date);
-
-            if (now < startDate || now > endDate || !voucherData.isActive) {
-               // Voucher hết hạn hoặc vô hiệu, xóa khỏi localStorage
-               localStorage.removeItem('appliedVoucher');
-               showToastMessage('Mã giảm giá đã hết hạn hoặc không còn hiệu lực', 'error');
-               return;
-            }
-
-            // Kiểm tra giá trị đơn hàng tối thiểu
-            const minOrderValue = parseFloat(voucherData.min_order_value);
-            if (minOrderValue > subTotal) {
-               localStorage.removeItem('appliedVoucher');
-               showToastMessage(
-                  `Đơn hàng tối thiểu ${formatPrice(minOrderValue)} để áp dụng mã này`,
-                  'error',
-               );
-               return;
-            }
-
-            // Tính lại số tiền giảm giá dựa trên giá trị đơn hàng hiện tại
-            const recalculatedDiscount = calculateDiscountAmount(voucherData, subTotal);
-
-            // Làm tròn và cập nhật state
-            setAppliedVoucher(voucherData);
-            setVoucherCode(voucherData.code);
-            setDiscount(recalculatedDiscount);
-
-            // Cập nhật lại localStorage với số tiền giảm giá mới
-            localStorage.setItem(
-               'appliedVoucher',
-               JSON.stringify({
-                  ...voucherData,
-                  discountAmount: recalculatedDiscount,
-               }),
-            );
-         } catch (error) {
-            console.error('Error parsing saved voucher:', error);
-            localStorage.removeItem('appliedVoucher');
-         }
-      }
-   }, [subTotal]);
-
-   // Thêm useEffect để cập nhật tổng tiền khi có discount
-   useEffect(() => {
-      // Tính tổng tiền = subtotal + shippingFee - discount
-      setTotalPrice(subTotal + shippingFee - discount);
-   }, [subTotal, shippingFee, discount]);
-
-   // Add this useEffect to verify MOMO payment when user returns from payment page
-   useEffect(() => {
-      const checkMomoPayment = async () => {
-         // Check if there's a pending order ID in localStorage
-         const pendingOrderId = localStorage.getItem('pendingOrderId');
-
-         // Check if there are URL parameters indicating payment return
-         const urlParams = new URLSearchParams(window.location.search);
-         const paymentStatus = urlParams.get('status');
-
-         if (pendingOrderId && paymentStatus) {
-            try {
-               // TODO: Add API call to verify payment status with your backend if needed
-
-               // Clear the pending order ID
-               localStorage.removeItem('pendingOrderId');
-
-               if (paymentStatus === 'success') {
-                  showToastMessage('Thanh toán thành công!', 'success');
-                  router.push(`/user/order`);
-               } else {
-                  showToastMessage(
-                     'Thanh toán thất bại. Vui lòng thử lại hoặc chọn phương thức khác',
-                     'error',
-                  );
-               }
-            } catch (error) {
-               console.error('Error verifying MOMO payment:', error);
-            }
-         }
-      };
-
-      checkMomoPayment();
-   }, [router]);
-
    // Load thông tin người dùng
-   const loadUserInfo = async (userId: number) => {
-      try {
-         const response = await fetch(`http://68.183.226.198:3000/api/v1/users/${userId}`, {
-            headers: {
-               Authorization: `Bearer ${localStorage.getItem('token') || ''}`,
-            },
-         });
-
-         if (response.ok) {
-            const user = await response.json();
-            setUserInfo({
-               id: user.id,
-               email: user.email,
-               firstName: user.firstName,
-               lastName: user.lastName,
-               phone: user.phone,
+   const loadUserInfo = useCallback(
+      async (userId: number) => {
+         try {
+            const response = await fetch(`http://68.183.226.198:3000/api/v1/users/${userId}`, {
+               headers: {
+                  Authorization: `Bearer ${localStorage.getItem('token') || ''}`,
+               },
             });
 
-            // Pre-fill new address form with user info
-            setNewAddress((prev) => ({
-               ...prev,
-               fullName: `${user.firstName} ${user.lastName}`,
-               phone: user.phone || '',
-            }));
-         }
-      } catch (error) {
-         console.error('Error loading user info:', error);
-         showToastMessage('Không thể tải thông tin người dùng', 'error');
-      }
-   };
+            if (response.ok) {
+               const user = await response.json();
+               setUserInfo({
+                  id: user.id,
+                  email: user.email,
+                  firstName: user.firstName,
+                  lastName: user.lastName,
+                  phone: user.phone,
+               });
 
-   // Thêm hàm này vào phần các hàm tiện ích của bạn
-   const getUserNameAndPhone = async (userId: number) => {
-      try {
-         const token = localStorage.getItem('token');
-         if (!token) return { fullName: '', phone: '' };
-
-         const response = await fetch(`http://68.183.226.198:3000/api/v1/users/${userId}`, {
-            headers: { Authorization: `Bearer ${token}` },
-         });
-
-         if (response.ok) {
-            const user = await response.json();
-
-            // Tạo tên đầy đủ từ firstName và lastName
-            const fullName = `${user.firstName || ''} ${user.lastName || ''}`.trim();
-
-            // Lấy số điện thoại nếu có
-            const phone = user.phone?.toString() || '';
-
-            return { fullName, phone };
-         }
-
-         return { fullName: '', phone: '' };
-      } catch (error) {
-         console.error('Error fetching user info:', error);
-         return { fullName: '', phone: '' };
-      }
-   };
-
-   // Cập nhật hàm findAddressesByUserId để sử dụng thông tin đầy đủ từ localStorage
-   const findAddressesByUserId = async (userId: number) => {
-      try {
-         setLoading(true);
-
-         const token = localStorage.getItem('token');
-         if (!token) return [];
-
-         // Thử lấy địa chỉ đầy đủ từ localStorage trước
-         const addressStorageKey = `user_${userId}_addresses`;
-         const storedAddressesStr = localStorage.getItem(addressStorageKey);
-
-         if (storedAddressesStr) {
-            const storedAddresses = JSON.parse(storedAddressesStr);
-            console.log(`Found ${storedAddresses.length} complete addresses in localStorage`);
-
-            if (storedAddresses.length > 0) {
-               // Kiểm tra nhanh một địa chỉ đầu tiên để xác nhận vẫn còn tồn tại trên server
-               try {
-                  const firstAddress = storedAddresses[0];
-                  const checkResponse = await fetch(
-                     `http://68.183.226.198:3000/api/v1/address/${firstAddress.id}`,
-                     {
-                        headers: { Authorization: `Bearer ${token}` },
-                     },
-                  );
-
-                  // Nếu địa chỉ đầu tiên vẫn tồn tại, giả định các địa chỉ khác cũng vậy
-                  if (checkResponse.ok) {
-                     console.log('Verified addresses from localStorage are valid');
-                     // Sử dụng thông tin đầy đủ từ localStorage
-                     return storedAddresses;
-                  } else {
-                     console.log('Addresses in localStorage may be outdated, fetching from server');
-                  }
-               } catch (e) {
-                  console.log('Error checking address validity:', e);
-               }
+               // Pre-fill new address form with user info
+               setNewAddress((prev) => ({
+                  ...prev,
+                  fullName: `${user.firstName} ${user.lastName}`,
+                  phone: user.phone || '',
+               }));
             }
+         } catch (error) {
+            console.error('Error loading user info:', error);
+            showToastMessage('Không thể tải thông tin người dùng', 'error');
          }
-
-         // Nếu không có trong localStorage hoặc dữ liệu không còn hợp lệ, tiếp tục với logic hiện tại
-         console.log('Using ID-based approach to fetch addresses');
-
-         // Lấy danh sách các ID địa chỉ đã biết từ localStorage
-         const userAddressIdsString = localStorage.getItem(`user_${userId}_addressIds`);
-         const userAddressIds = userAddressIdsString ? JSON.parse(userAddressIdsString) : [];
-
-         console.log(`Found ${userAddressIds.length} saved address IDs for user ${userId}`);
-
-         // Còn lại là logic hiện tại để tìm và lấy địa chỉ
-         // ...
-
-         // Nếu không có địa chỉ nào trong localStorage, thử tìm kiếm các địa chỉ từ API
-         if (userAddressIds.length === 0) {
-            console.log('No saved address IDs found, trying to retrieve addresses from API');
-            // Thử tìm địa chỉ trong một khoảng ID nhỏ (1-10) để tìm địa chỉ đầu tiên
-            const addressPromises = [];
-            const maxAddressIdToTry = 10; // Giới hạn số lượng địa chỉ cần kiểm tra ban đầu
-
-            for (let id = 1; id <= maxAddressIdToTry; id++) {
-               addressPromises.push(
-                  fetch(`http://68.183.226.198:3000/api/v1/address/${id}`, {
-                     headers: { Authorization: `Bearer ${token}` },
-                  })
-                     .then((response) => {
-                        if (response.ok) {
-                           return response.json();
-                        }
-                        return null;
-                     })
-                     .catch(() => null),
-               );
-            }
-
-            const results = await Promise.all(addressPromises);
-            const foundAddressIds = [];
-
-            // Lọc và tìm các địa chỉ thuộc về userId
-            for (const data of results) {
-               if (data && (data.userId === userId || data.user?.id === userId)) {
-                  foundAddressIds.push(data.id);
-               }
-            }
-
-            // Lưu danh sách ID vào localStorage để sử dụng trong tương lai
-            if (foundAddressIds.length > 0) {
-               localStorage.setItem(`user_${userId}_addressIds`, JSON.stringify(foundAddressIds));
-               console.log(`Found and saved ${foundAddressIds.length} address IDs`);
-               // Cập nhật lại danh sách ID
-               userAddressIds.push(...foundAddressIds);
-            }
-         }
-
-         // Lấy chi tiết của từng địa chỉ đã biết ID
-         const addressPromises = userAddressIds.map((id: any) =>
-            fetch(`http://68.183.226.198:3000/api/v1/address/${id}`, {
-               headers: { Authorization: `Bearer ${token}` },
-            })
-               .then((response) => {
-                  if (response.ok) {
-                     return response.json();
-                  }
-                  return null;
-               })
-               .catch(() => null),
-         );
-
-         const addressesData = await Promise.all(addressPromises);
-
-         // Lọc ra các địa chỉ còn tồn tại và thuộc về userId
-         const validAddresses = addressesData
-            .filter((data) => data && (data.userId === userId || data.user?.id === userId))
-            .map((data) => ({
-               id: data.id,
-               fullName:
-                  data.fullName ||
-                  `${userInfo?.firstName || ''} ${userInfo?.lastName || ''}`.trim(),
-               phone: data.phone || userInfo?.phone?.toString() || '',
-               province: data.province || '',
-               district: data.district || '',
-               ward: data.ward || '',
-               streetAddress: data.street || '',
-               isDefault: data.isDefault || false,
-               userId: userId,
-            }));
-
-         // Lưu đầy đủ thông tin địa chỉ vào localStorage
-         if (validAddresses.length > 0) {
-            localStorage.setItem(addressStorageKey, JSON.stringify(validAddresses));
-            console.log(`Saved ${validAddresses.length} complete addresses to localStorage`);
-         }
-
-         // Cập nhật lại danh sách ID địa chỉ hợp lệ trong localStorage
-         if (validAddresses.length !== userAddressIds.length) {
-            const validIds = validAddresses.map((addr) => addr.id);
-            localStorage.setItem(`user_${userId}_addressIds`, JSON.stringify(validIds));
-            console.log(`Updated valid address IDs: ${validIds.length} addresses`);
-         }
-
-         return validAddresses;
-      } catch (error) {
-         console.error('Error fetching user addresses:', error);
-         return [];
-      } finally {
-         setLoading(false);
-      }
-   };
-
-   // Sử dụng hàm này trong loadUserAddresses
-   const loadUserAddresses = async (userId: number) => {
-      try {
-         setLoading(true);
-
-         // Tìm các địa chỉ thuộc người dùng
-         const validAddresses = await findAddressesByUserId(userId);
-         console.log('Valid addresses found:', validAddresses.length);
-
-         if (validAddresses.length > 0) {
-            // Người dùng có địa chỉ
-            setAddresses(validAddresses);
-            setShowAddAddressForm(false); // Ẩn form thêm địa chỉ
-            console.log('Loaded addresses:', validAddresses);
-            showToastMessage(`Đã tìm thấy ${validAddresses.length} địa chỉ giao hàng`, 'info');
-
-            // Nếu có địa chỉ mặc định, chọn địa chỉ đó
-            const defaultAddress = validAddresses.find(
-               (addr: { isDefault: any }) => addr.isDefault,
-            );
-            if (defaultAddress) {
-               setSelectedAddressId(defaultAddress.id ?? null);
-               // Cập nhật phí vận chuyển dựa trên địa chỉ mặc định
-               const newShippingFee = calculateShippingFee(defaultAddress.province);
-               setShippingFee(newShippingFee);
-               // Cập nhật tổng tiền
-               setTotalPrice(subTotal + newShippingFee - discount);
-            } else if (validAddresses.length > 0) {
-               // Nếu không có địa chỉ mặc định, chọn địa chỉ đầu tiên
-               setSelectedAddressId(validAddresses[0].id ?? null);
-               // Cập nhật phí vận chuyển dựa trên địa chỉ đầu tiên
-               const newShippingFee = calculateShippingFee(validAddresses[0].province);
-               setShippingFee(newShippingFee);
-               // Cập nhật tổng tiền
-               setTotalPrice(subTotal + newShippingFee - discount);
-            }
-         } else {
-            // Không có địa chỉ
-            setAddresses([]);
-            // Khi không có địa chỉ, hiển thị form thêm mới và đặt isDefault thành true
-            setNewAddress((prev) => ({
-               ...prev,
-               isDefault: true, // Địa chỉ đầu tiên luôn là mặc định
-            }));
-            setShowAddAddressForm(true);
-            showToastMessage('Vui lòng thêm địa chỉ giao hàng mới', 'info');
-         }
-      } catch (error) {
-         console.error('Error loading addresses:', error);
-         setAddresses([]);
-         // Khi gặp lỗi, hiển thị form thêm mới và đặt isDefault thành true
-         setNewAddress((prev) => ({
-            ...prev,
-            isDefault: true, // Địa chỉ đầu tiên luôn là mặc định
-         }));
-         setShowAddAddressForm(true);
-         showToastMessage('Không thể tải địa chỉ giao hàng, vui lòng tạo mới', 'error');
-      } finally {
-         setLoading(false);
-      }
-   };
+      },
+      [showToastMessage],
+   ); // Add showToastMessage as a dependency
 
    // Tải danh sách tỉnh/thành phố từ API
-   const fetchProvinces = async () => {
+   const fetchProvinces = useCallback(async () => {
       try {
          // Thay thế bằng API thực tế
          const response = await fetch('https://provinces.open-api.vn/api/p/');
@@ -802,7 +411,239 @@ export default function CheckoutPage() {
             { id: '3', name: 'Đà Nẵng' },
          ]);
       }
-   };
+   }, []); // Empty dependency array means this function won't change between renders
+
+   // Cập nhật hàm findAddressesByUserId để sử dụng thông tin đầy đủ từ localStorage
+   const findAddressesByUserId = useCallback(
+      async (userId: number) => {
+         try {
+            setLoading(true);
+
+            const token = localStorage.getItem('token');
+            if (!token) return [];
+
+            // Thử lấy địa chỉ đầy đủ từ localStorage trước
+            const addressStorageKey = `user_${userId}_addresses`;
+            const storedAddressesStr = localStorage.getItem(addressStorageKey);
+
+            if (storedAddressesStr) {
+               const storedAddresses = JSON.parse(storedAddressesStr);
+               console.log(`Found ${storedAddresses.length} complete addresses in localStorage`);
+
+               if (storedAddresses.length > 0) {
+                  // Kiểm tra nhanh một địa chỉ đầu tiên để xác nhận vẫn còn tồn tại trên server
+                  try {
+                     const firstAddress = storedAddresses[0];
+                     const checkResponse = await fetch(
+                        `http://68.183.226.198:3000/api/v1/address/${firstAddress.id}`,
+                        {
+                           headers: { Authorization: `Bearer ${token}` },
+                        },
+                     );
+
+                     // Nếu địa chỉ đầu tiên vẫn tồn tại, giả định các địa chỉ khác cũng vậy
+                     if (checkResponse.ok) {
+                        console.log('Verified addresses from localStorage are valid');
+                        // Sử dụng thông tin đầy đủ từ localStorage
+                        return storedAddresses;
+                     } else {
+                        console.log(
+                           'Addresses in localStorage may be outdated, fetching from server',
+                        );
+                     }
+                  } catch (e) {
+                     console.log('Error checking address validity:', e);
+                  }
+               }
+            }
+
+            // Nếu không có trong localStorage hoặc dữ liệu không còn hợp lệ, tiếp tục với logic hiện tại
+            console.log('Using ID-based approach to fetch addresses');
+
+            // Lấy danh sách các ID địa chỉ đã biết từ localStorage
+            const userAddressIdsString = localStorage.getItem(`user_${userId}_addressIds`);
+            const userAddressIds = userAddressIdsString ? JSON.parse(userAddressIdsString) : [];
+
+            console.log(`Found ${userAddressIds.length} saved address IDs for user ${userId}`);
+
+            // Nếu không có địa chỉ nào trong localStorage, thử tìm kiếm các địa chỉ từ API
+            if (userAddressIds.length === 0) {
+               console.log('No saved address IDs found, trying to retrieve addresses from API');
+               // Thử tìm địa chỉ trong một khoảng ID nhỏ (1-10) để tìm địa chỉ đầu tiên
+               const addressPromises = [];
+               const maxAddressIdToTry = 10; // Giới hạn số lượng địa chỉ cần kiểm tra ban đầu
+
+               for (let id = 1; id <= maxAddressIdToTry; id++) {
+                  addressPromises.push(
+                     fetch(`http://68.183.226.198:3000/api/v1/address/${id}`, {
+                        headers: { Authorization: `Bearer ${token}` },
+                     })
+                        .then((response) => {
+                           if (response.ok) {
+                              return response.json();
+                           }
+                           return null;
+                        })
+                        .catch(() => null),
+                  );
+               }
+
+               const results = await Promise.all(addressPromises);
+               const foundAddressIds = [];
+
+               // Lọc và tìm các địa chỉ thuộc về userId
+               for (const data of results) {
+                  if (data && (data.userId === userId || data.user?.id === userId)) {
+                     foundAddressIds.push(data.id);
+                  }
+               }
+
+               // Lưu danh sách ID vào localStorage để sử dụng trong tương lai
+               if (foundAddressIds.length > 0) {
+                  localStorage.setItem(
+                     `user_${userId}_addressIds`,
+                     JSON.stringify(foundAddressIds),
+                  );
+                  console.log(`Found and saved ${foundAddressIds.length} address IDs`);
+                  // Cập nhật lại danh sách ID
+                  userAddressIds.push(...foundAddressIds);
+               }
+            }
+
+            // Lấy chi tiết của từng địa chỉ đã biết ID
+            const addressPromises = userAddressIds.map((id: any) =>
+               fetch(`http://68.183.226.198:3000/api/v1/address/${id}`, {
+                  headers: { Authorization: `Bearer ${token}` },
+               })
+                  .then((response) => {
+                     if (response.ok) {
+                        return response.json();
+                     }
+                     return null;
+                  })
+                  .catch(() => null),
+            );
+
+            const addressesData = await Promise.all(addressPromises);
+
+            // Lọc ra các địa chỉ còn tồn tại và thuộc về userId
+            const validAddresses = addressesData
+               .filter((data) => data && (data.userId === userId || data.user?.id === userId))
+               .map((data) => ({
+                  id: data.id,
+                  fullName:
+                     data.fullName ||
+                     `${userInfo?.firstName || ''} ${userInfo?.lastName || ''}`.trim(),
+                  phone: data.phone || userInfo?.phone?.toString() || '',
+                  province: data.province || '',
+                  district: data.district || '',
+                  ward: data.ward || '',
+                  streetAddress: data.street || '',
+                  isDefault: data.isDefault || false,
+                  userId: userId,
+               }));
+
+            // Lưu đầy đủ thông tin địa chỉ vào localStorage
+            if (validAddresses.length > 0) {
+               localStorage.setItem(addressStorageKey, JSON.stringify(validAddresses));
+               console.log(`Saved ${validAddresses.length} complete addresses to localStorage`);
+            }
+
+            // Cập nhật lại danh sách ID địa chỉ hợp lệ trong localStorage
+            if (validAddresses.length !== userAddressIds.length) {
+               const validIds = validAddresses.map((addr) => addr.id);
+               localStorage.setItem(`user_${userId}_addressIds`, JSON.stringify(validIds));
+               console.log(`Updated valid address IDs: ${validIds.length} addresses`);
+            }
+
+            return validAddresses;
+         } catch (error) {
+            console.error('Error fetching user addresses:', error);
+            return [];
+         } finally {
+            setLoading(false);
+         }
+      },
+      [userInfo, setLoading],
+   ); // Add dependencies used inside the function
+
+   // Sử dụng hàm này trong loadUserAddresses
+   const loadUserAddresses = useCallback(
+      async (userId: number) => {
+         try {
+            setLoading(true);
+
+            // Tìm các địa chỉ thuộc người dùng
+            const validAddresses = await findAddressesByUserId(userId);
+            console.log('Valid addresses found:', validAddresses.length);
+
+            if (validAddresses.length > 0) {
+               // Người dùng có địa chỉ
+               setAddresses(validAddresses);
+               setShowAddAddressForm(false); // Ẩn form thêm địa chỉ
+               console.log('Loaded addresses:', validAddresses);
+               showToastMessage(`Đã tìm thấy ${validAddresses.length} địa chỉ giao hàng`, 'info');
+
+               // Nếu có địa chỉ mặc định, chọn địa chỉ đó
+               const defaultAddress = validAddresses.find(
+                  (addr: { isDefault: any }) => addr.isDefault,
+               );
+               if (defaultAddress) {
+                  setSelectedAddressId(defaultAddress.id ?? null);
+                  // Cập nhật phí vận chuyển dựa trên địa chỉ mặc định
+                  const newShippingFee = calculateShippingFee(defaultAddress.province);
+                  setShippingFee(newShippingFee);
+                  // Cập nhật tổng tiền
+                  setTotalPrice(subTotal + newShippingFee - discount);
+               } else if (validAddresses.length > 0) {
+                  // Nếu không có địa chỉ mặc định, chọn địa chỉ đầu tiên
+                  setSelectedAddressId(validAddresses[0].id ?? null);
+                  // Cập nhật phí vận chuyển dựa trên địa chỉ đầu tiên
+                  const newShippingFee = calculateShippingFee(validAddresses[0].province);
+                  setShippingFee(newShippingFee);
+                  // Cập nhật tổng tiền
+                  setTotalPrice(subTotal + newShippingFee - discount);
+               }
+            } else {
+               // Không có địa chỉ
+               setAddresses([]);
+               // Khi không có địa chỉ, hiển thị form thêm mới và đặt isDefault thành true
+               setNewAddress((prev) => ({
+                  ...prev,
+                  isDefault: true, // Địa chỉ đầu tiên luôn là mặc định
+               }));
+               setShowAddAddressForm(true);
+               showToastMessage('Vui lòng thêm địa chỉ giao hàng mới', 'info');
+            }
+         } catch (error) {
+            console.error('Error loading addresses:', error);
+            setAddresses([]);
+            // Khi gặp lỗi, hiển thị form thêm mới và đặt isDefault thành true
+            setNewAddress((prev) => ({
+               ...prev,
+               isDefault: true, // Địa chỉ đầu tiên luôn là mặc định
+            }));
+            setShowAddAddressForm(true);
+            showToastMessage('Không thể tải địa chỉ giao hàng, vui lòng tạo mới', 'error');
+         } finally {
+            setLoading(false);
+         }
+      },
+      [
+         findAddressesByUserId,
+         calculateShippingFee,
+         showToastMessage,
+         subTotal,
+         discount,
+         setLoading,
+         setAddresses,
+         setShowAddAddressForm,
+         setNewAddress,
+         setSelectedAddressId,
+         setShippingFee,
+         setTotalPrice,
+      ],
+   );
 
    // Tải danh sách quận/huyện dựa trên tỉnh/thành phố
    const fetchDistricts = async (provinceId: string) => {
@@ -1475,6 +1316,189 @@ export default function CheckoutPage() {
       }
    };
 
+   useEffect(() => {
+      const init = async () => {
+         // Lấy thông tin userId từ localStorage
+         const storedUserId = localStorage.getItem('userId');
+         if (!storedUserId) {
+            // Nếu không có userId, chuyển về trang đăng nhập
+            router.push('/user/signin');
+            return;
+         }
+
+         const userId = parseInt(storedUserId);
+         setUserId(userId);
+
+         try {
+            setLoading(true);
+
+            // Lấy thông tin người dùng trước
+            await loadUserInfo(userId);
+
+            // Sau đó tải địa chỉ của họ
+            await loadUserAddresses(userId);
+
+            // Cuối cùng tải tỉnh thành để chuẩn bị cho form
+            await fetchProvinces();
+         } catch (error) {
+            console.error('Error initializing data:', error);
+            showToastMessage('Có lỗi xảy ra khi tải dữ liệu', 'error');
+         } finally {
+            setLoading(false);
+         }
+
+         // Tải giỏ hàng từ localStorage
+         const localCart = JSON.parse(localStorage.getItem('cart') || '[]');
+         if (localCart.length === 0) {
+            // Nếu giỏ hàng trống, chuyển về trang giỏ hàng
+            router.push('/user/cart');
+            return;
+         }
+
+         // Đảm bảo tất cả detailId là số
+         const validatedCart = localCart.map((item: { detailId: any }) => ({
+            ...item,
+            detailId: Number(item.detailId),
+         }));
+
+         setCartItems(validatedCart);
+
+         // Tính toán giá trị đơn hàng
+         const subtotal = validatedCart.reduce(
+            (sum: number, item: CartItem) => sum + item.price * item.quantity,
+            0,
+         );
+         setSubTotal(subtotal);
+         setTotalPrice(subtotal + shippingFee);
+      };
+
+      init();
+   }, [router, shippingFee, loadUserInfo, loadUserAddresses, fetchProvinces, showToastMessage]);
+
+   // Thêm vào useEffect để load voucher đã áp dụng từ cart
+   useEffect(() => {
+      // Lấy voucher đã áp dụng từ localStorage nếu có
+      const savedVoucher = localStorage.getItem('appliedVoucher');
+      if (savedVoucher) {
+         try {
+            const voucherData = JSON.parse(savedVoucher);
+
+            // Kiểm tra voucher còn hợp lệ không
+            const now = new Date();
+            const startDate = new Date(voucherData.start_date);
+            const endDate = new Date(voucherData.end_date);
+
+            if (now < startDate || now > endDate || !voucherData.isActive) {
+               // Voucher hết hạn hoặc vô hiệu, xóa khỏi localStorage
+               localStorage.removeItem('appliedVoucher');
+               showToastMessage('Mã giảm giá đã hết hạn hoặc không còn hiệu lực', 'error');
+               return;
+            }
+
+            // Kiểm tra giá trị đơn hàng tối thiểu
+            const minOrderValue = parseFloat(voucherData.min_order_value);
+            if (minOrderValue > subTotal) {
+               localStorage.removeItem('appliedVoucher');
+               showToastMessage(
+                  `Đơn hàng tối thiểu ${formatPrice(minOrderValue)} để áp dụng mã này`,
+                  'error',
+               );
+               return;
+            }
+
+            // Tính lại số tiền giảm giá dựa trên giá trị đơn hàng hiện tại
+            const recalculatedDiscount = calculateDiscountAmount(voucherData, subTotal);
+
+            // Làm tròn và cập nhật state
+            setAppliedVoucher(voucherData);
+            setVoucherCode(voucherData.code);
+            setDiscount(recalculatedDiscount);
+
+            // Cập nhật lại localStorage với số tiền giảm giá mới
+            localStorage.setItem(
+               'appliedVoucher',
+               JSON.stringify({
+                  ...voucherData,
+                  discountAmount: recalculatedDiscount,
+               }),
+            );
+         } catch (error) {
+            console.error('Error parsing saved voucher:', error);
+            localStorage.removeItem('appliedVoucher');
+         }
+      }
+   }, [subTotal, showToastMessage]);
+
+   // Thêm useEffect để cập nhật tổng tiền khi có discount
+   useEffect(() => {
+      // Tính tổng tiền = subtotal + shippingFee - discount
+      setTotalPrice(subTotal + shippingFee - discount);
+   }, [subTotal, shippingFee, discount]);
+
+   // Add this useEffect to verify MOMO payment when user returns from payment page
+   useEffect(() => {
+      const checkMomoPayment = async () => {
+         // Check if there's a pending order ID in localStorage
+         const pendingOrderId = localStorage.getItem('pendingOrderId');
+
+         // Check if there are URL parameters indicating payment return
+         const urlParams = new URLSearchParams(window.location.search);
+         const paymentStatus = urlParams.get('status');
+
+         if (pendingOrderId && paymentStatus) {
+            try {
+               // TODO: Add API call to verify payment status with your backend if needed
+
+               // Clear the pending order ID
+               localStorage.removeItem('pendingOrderId');
+
+               if (paymentStatus === 'success') {
+                  showToastMessage('Thanh toán thành công!', 'success');
+                  router.push(`/user/order`);
+               } else {
+                  showToastMessage(
+                     'Thanh toán thất bại. Vui lòng thử lại hoặc chọn phương thức khác',
+                     'error',
+                  );
+               }
+            } catch (error) {
+               console.error('Error verifying MOMO payment:', error);
+            }
+         }
+      };
+
+      checkMomoPayment();
+   }, [router, showToastMessage]); // Add showToastMessage to the dependency array
+
+   // Thêm hàm này vào phần các hàm tiện ích của bạn
+   const getUserNameAndPhone = async (userId: number) => {
+      try {
+         const token = localStorage.getItem('token');
+         if (!token) return { fullName: '', phone: '' };
+
+         const response = await fetch(`http://68.183.226.198:3000/api/v1/users/${userId}`, {
+            headers: { Authorization: `Bearer ${token}` },
+         });
+
+         if (response.ok) {
+            const user = await response.json();
+
+            // Tạo tên đầy đủ từ firstName và lastName
+            const fullName = `${user.firstName || ''} ${user.lastName || ''}`.trim();
+
+            // Lấy số điện thoại nếu có
+            const phone = user.phone?.toString() || '';
+
+            return { fullName, phone };
+         }
+
+         return { fullName: '', phone: '' };
+      } catch (error) {
+         console.error('Error fetching user info:', error);
+         return { fullName: '', phone: '' };
+      }
+   };
+
    if (loading) {
       return (
          <div className='bg-[#F1EEE9] min-h-screen'>
@@ -1498,7 +1522,6 @@ export default function CheckoutPage() {
 
    // Thêm handler cho việc thay đổi phường/xã
    const handleWardChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-      const wardId = e.target.value;
       const wardName = e.target.options[e.target.selectedIndex].text;
 
       setNewAddress((prev) => ({ ...prev, ward: wardName }));
