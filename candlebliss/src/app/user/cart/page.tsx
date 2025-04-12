@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -43,7 +43,7 @@ const formatPrice = (price: number): string => {
    return new Intl.NumberFormat('vi-VN', {
       style: 'currency',
       currency: 'VND',
-      minimumFractionDigits: 0
+      minimumFractionDigits: 0,
    }).format(price);
 };
 
@@ -61,168 +61,90 @@ export default function CartPage() {
    const [syncing, setSyncing] = useState(false);
    const [syncMessage, setSyncMessage] = useState('');
    const [productDetails, setProductDetails] = useState<Record<number, any>>({});
-   // Thêm state để theo dõi đơn hàng đã hoàn thành
    const [orderCompleted, setOrderCompleted] = useState(false);
 
-   // Load user data and cart on mount
-   useEffect(() => {
-      const loadCart = async () => {
+   // First, declare mergeCartsWithApi since syncCartWithApi depends on it
+   const mergeCartsWithApi = useCallback(
+      async (apiCart: Cart, localItems: CartItem[]) => {
          try {
-            setLoading(true);
+            setSyncMessage('Đang đồng bộ sản phẩm...');
 
-            // Check if user is logged in by looking for userId in localStorage
-            const storedUserId = localStorage.getItem('userId');
-            if (storedUserId) {
-               setUserId(parseInt(storedUserId));
+            for (const item of localItems) {
+               // Check if item already exists in API cart
+               const existsInApi = apiCart.cartItems.some(
+                  (apiItem) => apiItem.productDetailId === item.detailId,
+               );
 
-               // Check if order was just completed (flagged in localStorage)
-               const orderJustCompleted = localStorage.getItem('orderCompleted') === 'true';
-               if (orderJustCompleted) {
-                  // Clear the flag
-                  localStorage.removeItem('orderCompleted');
-                  setOrderCompleted(true);
-
-                  // Create new cart for the user and clear local cart
-                  localStorage.setItem('cart', '[]');
-                  setCartItems([]);
-                  calculateTotals([]);
-
-                  // Create a new cart in API
-                  await createNewCart();
-               }
-            }
-
-            // Get cart from localStorage
-            const localCart = JSON.parse(localStorage.getItem('cart') || '[]');
-            setCartItems(localCart);
-
-            // Calculate totals
-            calculateTotals(localCart);
-
-            setLoading(false);
-         } catch (err) {
-            console.error('Error loading cart:', err);
-            setError('Không thể tải giỏ hàng. Vui lòng thử lại sau.');
-            setLoading(false);
-         }
-      };
-
-      loadCart();
-   }, []);
-
-   // Fetch product details for all cart items
-   useEffect(() => {
-      const fetchProductDetails = async () => {
-         if (cartItems.length === 0) return;
-
-         const detailIds = cartItems.map(item => item.detailId);
-         const uniqueDetailIds = [...new Set(detailIds)];
-
-         const detailsMap: Record<number, any> = {};
-
-         for (const detailId of uniqueDetailIds) {
-            try {
-               // Fetch product detail info
-               const response = await fetch(`http://68.183.226.198:3000/api/product-details/${detailId}`);
-               if (response.ok) {
-                  const detail = await response.json();
-                  detailsMap[detailId] = detail;
-               }
-            } catch (err) {
-               console.error(`Error fetching details for product detail ${detailId}:`, err);
-            }
-         }
-
-         setProductDetails(detailsMap);
-      };
-
-      fetchProductDetails();
-   }, [cartItems]);
-
-   // If user is logged in, fetch API cart and sync with local
-   useEffect(() => {
-      if (userId && !orderCompleted) {
-         syncCartWithApi();
-      }
-
-      // Reset orderCompleted state sau khi đã xử lý
-      if (orderCompleted) {
-         setOrderCompleted(false);
-      }
-   }, [userId, cartItems.length, orderCompleted]);
-
-   // Helper function to merge local cart with API cart
-   const mergeCartsWithApi = async (apiCart: Cart, localItems: CartItem[]) => {
-      try {
-         setSyncMessage('Đang đồng bộ sản phẩm...');
-
-         for (const item of localItems) {
-            // Check if item already exists in API cart
-            const existsInApi = apiCart.cartItems.some(
-               apiItem => apiItem.productDetailId === item.detailId
-            );
-
-            if (!existsInApi) {
-               try {
-                  // Sửa endpoint để phù hợp với API của bạn
-                  // POST /api/cart/{cartId}/add-item/{productDetailId}
-                  const addResponse = await fetch(
-                     `http://68.183.226.198:3000/api/cart/${apiCart.id}/add-item/${item.detailId}`,
-                     {
-                        method: 'POST',
-                        headers: {
-                           'Content-Type': 'application/json',
-                           'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
-                        },
-                        body: JSON.stringify({
-                           quantity: item.quantity
-                        })
-                     }
-                  );
-
-                  if (!addResponse.ok) {
-                     const errorText = await addResponse.text();
-                     console.error('Error adding item to cart:', errorText);
-                  }
-               } catch (fetchError) {
-                  console.error('Network error adding item:', fetchError);
-               }
-            }
-         }
-
-         // Refresh API cart data using GET /api/cart/{cartId}
-         try {
-            const updatedCartResponse = await fetch(`http://68.183.226.198:3000/api/cart/${apiCart.id}`);
-            if (updatedCartResponse.ok) {
-               // Thêm kiểm tra phản hồi trước khi phân tích JSON
-               const responseText = await updatedCartResponse.text();
-
-               // Chỉ phân tích JSON nếu phản hồi không rỗng
-               if (responseText && responseText.trim()) {
+               if (!existsInApi) {
                   try {
-                     const updatedCart = JSON.parse(responseText);
-                     setApiCart(updatedCart);
-                  } catch (jsonError) {
-                     console.error('Error parsing updated cart response:', jsonError, 'Response was:', responseText);
+                     // Sửa endpoint để phù hợp với API của bạn
+                     // POST /api/cart/{cartId}/add-item/{productDetailId}
+                     const addResponse = await fetch(
+                        `http://68.183.226.198:3000/api/cart/${apiCart.id}/add-item/${item.detailId}`,
+                        {
+                           method: 'POST',
+                           headers: {
+                              'Content-Type': 'application/json',
+                              Authorization: `Bearer ${localStorage.getItem('token') || ''}`,
+                           },
+                           body: JSON.stringify({
+                              quantity: item.quantity,
+                           }),
+                        },
+                     );
+
+                     if (!addResponse.ok) {
+                        const errorText = await addResponse.text();
+                        console.error('Error adding item to cart:', errorText);
+                     }
+                  } catch (fetchError) {
+                     console.error('Network error adding item:', fetchError);
                   }
-               } else {
-                  console.log('Empty response when fetching updated cart');
                }
             }
-         } catch (fetchError) {
-            console.error('Network error refreshing cart:', fetchError);
+
+            // Refresh API cart data using GET /api/cart/{cartId}
+            try {
+               const updatedCartResponse = await fetch(
+                  `http://68.183.226.198:3000/api/cart/${apiCart.id}`,
+               );
+               if (updatedCartResponse.ok) {
+                  // Thêm kiểm tra phản hồi trước khi phân tích JSON
+                  const responseText = await updatedCartResponse.text();
+
+                  // Chỉ phân tích JSON nếu phản hồi không rỗng
+                  if (responseText && responseText.trim()) {
+                     try {
+                        const updatedCart = JSON.parse(responseText);
+                        setApiCart(updatedCart);
+                     } catch (jsonError) {
+                        console.error(
+                           'Error parsing updated cart response:',
+                           jsonError,
+                           'Response was:',
+                           responseText,
+                        );
+                     }
+                  } else {
+                     console.log('Empty response when fetching updated cart');
+                  }
+               }
+            } catch (fetchError) {
+               console.error('Network error refreshing cart:', fetchError);
+            }
+
+            setSyncMessage('Đồng bộ hoàn tất!');
+            setTimeout(() => setSyncMessage(''), 2000);
+         } catch (err) {
+            console.error('Error merging carts:', err);
+            setSyncMessage('Lỗi khi đồng bộ. Xin thử lại sau.');
          }
+      },
+      [setSyncMessage, setApiCart],
+   );
 
-         setSyncMessage('Đồng bộ hoàn tất!');
-         setTimeout(() => setSyncMessage(''), 2000);
-      } catch (err) {
-         console.error('Error merging carts:', err);
-         setSyncMessage('Lỗi khi đồng bộ. Xin thử lại sau.');
-      }
-   };
-
-   // Sync cart with API
-   const syncCartWithApi = async () => {
+   // Then declare syncCartWithApi
+   const syncCartWithApi = useCallback(async () => {
       if (!userId || orderCompleted) return;
 
       try {
@@ -249,9 +171,9 @@ export default function CartPage() {
                   method: 'POST',
                   headers: {
                      'Content-Type': 'application/json',
-                     'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
+                     Authorization: `Bearer ${localStorage.getItem('token') || ''}`,
                   },
-                  body: JSON.stringify({ userId })
+                  body: JSON.stringify({ userId }),
                });
 
                if (createCartResponse.ok) {
@@ -311,7 +233,12 @@ export default function CartPage() {
                         await mergeCartsWithApi(userCart, cartItems);
                      }
                   } catch (jsonError) {
-                     console.error('Error parsing API response:', jsonError, 'Response was:', responseText);
+                     console.error(
+                        'Error parsing API response:',
+                        jsonError,
+                        'Response was:',
+                        responseText,
+                     );
                      setSyncMessage('Lỗi định dạng phản hồi từ máy chủ');
                   }
                } else {
@@ -331,7 +258,146 @@ export default function CartPage() {
          setSyncing(false);
          setSyncMessage('Đồng bộ thất bại. Xin thử lại sau.');
       }
-   };
+   }, [
+      userId,
+      orderCompleted,
+      setSyncMessage,
+      setSyncing,
+      setApiCart,
+      cartItems,
+      mergeCartsWithApi,
+   ]);
+
+   // Now, declare createNewCart which might use the above functions
+   const createNewCart = useCallback(async () => {
+      if (!userId) return null;
+
+      try {
+         setSyncMessage('Đang tạo giỏ hàng mới...');
+
+         const token = localStorage.getItem('token');
+         if (!token) return null;
+
+         const createResponse = await fetch('http://68.183.226.198:3000/api/cart', {
+            method: 'POST',
+            headers: {
+               'Content-Type': 'application/json',
+               Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ userId }),
+         });
+
+         if (createResponse.ok) {
+            const responseText = await createResponse.text();
+            if (responseText && responseText.trim()) {
+               try {
+                  const newCart = JSON.parse(responseText);
+                  console.log('New cart created after order:', newCart);
+                  setApiCart(newCart);
+                  setSyncMessage('Giỏ hàng mới đã được tạo');
+                  setTimeout(() => setSyncMessage(''), 2000);
+                  return newCart;
+               } catch (jsonError) {
+                  console.error('Error parsing create cart response:', jsonError);
+               }
+            }
+         }
+         return null;
+      } catch (error) {
+         console.error('Error creating new cart:', error);
+         setSyncMessage('Lỗi khi tạo giỏ hàng mới');
+         return null;
+      }
+   }, [userId, setSyncMessage, setApiCart]); // Chỉ tạo lại khi các dependency thay đổi
+
+   // Load user data and cart on mount
+   useEffect(() => {
+      const loadCart = async () => {
+         try {
+            setLoading(true);
+
+            // Check if user is logged in by looking for userId in localStorage
+            const storedUserId = localStorage.getItem('userId');
+            if (storedUserId) {
+               setUserId(parseInt(storedUserId));
+
+               // Check if order was just completed (flagged in localStorage)
+               const orderJustCompleted = localStorage.getItem('orderCompleted') === 'true';
+               if (orderJustCompleted) {
+                  // Clear the flag
+                  localStorage.removeItem('orderCompleted');
+                  setOrderCompleted(true);
+
+                  // Create new cart for the user and clear local cart
+                  localStorage.setItem('cart', '[]');
+                  setCartItems([]);
+                  calculateTotals([]);
+
+                  // Create a new cart in API
+                  await createNewCart();
+               }
+            }
+
+            // Get cart from localStorage
+            const localCart = JSON.parse(localStorage.getItem('cart') || '[]');
+            setCartItems(localCart);
+
+            // Calculate totals
+            calculateTotals(localCart);
+
+            setLoading(false);
+         } catch (err) {
+            console.error('Error loading cart:', err);
+            setError('Không thể tải giỏ hàng. Vui lòng thử lại sau.');
+            setLoading(false);
+         }
+      };
+
+      loadCart();
+   }, [createNewCart]); // Add createNewCart to the dependency array
+
+   // Fetch product details for all cart items
+   useEffect(() => {
+      const fetchProductDetails = async () => {
+         if (cartItems.length === 0) return;
+
+         const detailIds = cartItems.map((item) => item.detailId);
+         const uniqueDetailIds = [...new Set(detailIds)];
+
+         const detailsMap: Record<number, any> = {};
+
+         for (const detailId of uniqueDetailIds) {
+            try {
+               // Fetch product detail info
+               const response = await fetch(
+                  `http://68.183.226.198:3000/api/product-details/${detailId}`,
+               );
+               if (response.ok) {
+                  const detail = await response.json();
+                  detailsMap[detailId] = detail;
+               }
+            } catch (err) {
+               console.error(`Error fetching details for product detail ${detailId}:`, err);
+            }
+         }
+
+         setProductDetails(detailsMap);
+      };
+
+      fetchProductDetails();
+   }, [cartItems]);
+
+   // If user is logged in, fetch API cart and sync with local
+   useEffect(() => {
+      if (userId && !orderCompleted) {
+         syncCartWithApi();
+      }
+
+      // Reset orderCompleted state sau khi đã xử lý
+      if (orderCompleted) {
+         setOrderCompleted(false);
+      }
+   }, [userId, cartItems.length, orderCompleted, syncCartWithApi]);
 
    // Fetch user cart
    const fetchUserCart = async (userId: number) => {
@@ -361,7 +427,7 @@ export default function CartPage() {
    // Calculate totals
    const calculateTotals = (items: CartItem[]) => {
       const quantity = items.reduce((sum, item) => sum + item.quantity, 0);
-      const price = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+      const price = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
 
       setTotalQuantity(quantity);
       setTotalPrice(price);
@@ -404,12 +470,12 @@ export default function CartPage() {
                method: 'POST',
                headers: {
                   'Content-Type': 'application/json',
-                  'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
+                  Authorization: `Bearer ${localStorage.getItem('token') || ''}`,
                },
                body: JSON.stringify({
-                  quantity: item.quantity
-               })
-            }
+                  quantity: item.quantity,
+               }),
+            },
          );
       } catch (err) {
          console.error('Error updating API cart item:', err);
@@ -434,12 +500,12 @@ export default function CartPage() {
                   method: 'POST',
                   headers: {
                      'Content-Type': 'application/json',
-                     'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
+                     Authorization: `Bearer ${localStorage.getItem('token') || ''}`,
                   },
                   body: JSON.stringify({
-                     quantity: 0  // Setting quantity to 0 will remove the item
-                  })
-               }
+                     quantity: 0, // Setting quantity to 0 will remove the item
+                  }),
+               },
             );
          } catch (err) {
             console.error('Error removing item from API cart:', err);
@@ -458,7 +524,7 @@ export default function CartPage() {
       const token = localStorage.getItem('token');
       const storedUserId = localStorage.getItem('userId');
 
-      console.log("Checkout initiated", { token: !!token, userId: storedUserId });
+      console.log('Checkout initiated', { token: !!token, userId: storedUserId });
 
       if (!storedUserId || !token) {
          // Redirect to login page with return URL
@@ -476,9 +542,9 @@ export default function CartPage() {
                method: 'POST',
                headers: {
                   'Content-Type': 'application/json',
-                  'Authorization': `Bearer ${token}`
+                  Authorization: `Bearer ${token}`,
                },
-               body: JSON.stringify({ userId: parseInt(storedUserId) })
+               body: JSON.stringify({ userId: parseInt(storedUserId) }),
             });
 
             if (createResponse.ok) {
@@ -525,48 +591,6 @@ export default function CartPage() {
       }
    };
 
-   // Thêm hàm tạo giỏ hàng mới
-   const createNewCart = async () => {
-      if (!userId) return null;
-
-      try {
-         setSyncMessage('Đang tạo giỏ hàng mới...');
-
-         const token = localStorage.getItem('token');
-         if (!token) return null;
-
-         const createResponse = await fetch('http://68.183.226.198:3000/api/cart', {
-            method: 'POST',
-            headers: {
-               'Content-Type': 'application/json',
-               'Authorization': `Bearer ${token}`
-            },
-            body: JSON.stringify({ userId })
-         });
-
-         if (createResponse.ok) {
-            const responseText = await createResponse.text();
-            if (responseText && responseText.trim()) {
-               try {
-                  const newCart = JSON.parse(responseText);
-                  console.log('New cart created after order:', newCart);
-                  setApiCart(newCart);
-                  setSyncMessage('Giỏ hàng mới đã được tạo');
-                  setTimeout(() => setSyncMessage(''), 2000);
-                  return newCart;
-               } catch (jsonError) {
-                  console.error('Error parsing create cart response:', jsonError);
-               }
-            }
-         }
-         return null;
-      } catch (error) {
-         console.error('Error creating new cart:', error);
-         setSyncMessage('Lỗi khi tạo giỏ hàng mới');
-         return null;
-      }
-   };
-
    if (loading) {
       return (
          <div className='bg-[#F1EEE9] min-h-screen'>
@@ -588,29 +612,43 @@ export default function CartPage() {
 
             {/* Notification when cart is newly created after order */}
             {orderCompleted && (
-               <div className="mb-4 p-3 bg-green-50 text-green-700 rounded-md">
+               <div className='mb-4 p-3 bg-green-50 text-green-700 rounded-md'>
                   Đơn hàng của bạn đã được đặt thành công. Chúng tôi đã tạo giỏ hàng mới cho bạn.
                </div>
             )}
 
             {/* Sync message */}
             {syncMessage && (
-               <div className="mb-4 p-3 bg-blue-50 text-blue-700 rounded-md">
-                  {syncMessage}
-               </div>
+               <div className='mb-4 p-3 bg-blue-50 text-blue-700 rounded-md'>{syncMessage}</div>
             )}
 
             {cartItems.length === 0 ? (
                <div className='bg-white rounded-lg shadow p-8 text-center'>
                   <div className='flex flex-col items-center justify-center'>
                      <div className='text-gray-500 mb-4'>
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-24 w-24 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                           <path strokeLinecap="round" strokeLinejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+                        <svg
+                           xmlns='http://www.w3.org/2000/svg'
+                           className='h-24 w-24 mx-auto'
+                           fill='none'
+                           viewBox='0 0 24 24'
+                           stroke='currentColor'
+                           strokeWidth={2}
+                        >
+                           <path
+                              strokeLinecap='round'
+                              strokeLinejoin='round'
+                              d='M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z'
+                           />
                         </svg>
                      </div>
                      <h2 className='text-xl font-medium mb-2'>Giỏ hàng của bạn đang trống</h2>
-                     <p className='text-gray-500 mb-6'>Hãy thêm sản phẩm vào giỏ hàng để tiếp tục mua sắm</p>
-                     <Link href='/user/products' className='px-6 py-2 bg-orange-700 text-white rounded-md hover:bg-orange-800 transition'>
+                     <p className='text-gray-500 mb-6'>
+                        Hãy thêm sản phẩm vào giỏ hàng để tiếp tục mua sắm
+                     </p>
+                     <Link
+                        href='/user/products'
+                        className='px-6 py-2 bg-orange-700 text-white rounded-md hover:bg-orange-800 transition'
+                     >
                         Khám phá sản phẩm
                      </Link>
                   </div>
@@ -631,7 +669,10 @@ export default function CartPage() {
                         {/* Items */}
                         <div className='divide-y divide-gray-100'>
                            {cartItems.map((item, index) => (
-                              <div key={`${item.id}-${item.detailId}`} className='p-4 hover:bg-gray-50'>
+                              <div
+                                 key={`${item.id}-${item.detailId}`}
+                                 className='p-4 hover:bg-gray-50'
+                              >
                                  <div className='md:grid md:grid-cols-12 gap-4'>
                                     {/* Product info */}
                                     <div className='md:col-span-6 flex mb-4 md:mb-0'>
@@ -645,38 +686,68 @@ export default function CartPage() {
                                           />
                                        </div>
                                        <div className='ml-4 flex-1'>
-                                          <Link href={`/user/products/${item.id}`} className='text-gray-800 font-medium hover:text-orange-700'>
+                                          <Link
+                                             href={`/user/products/${item.id}`}
+                                             className='text-gray-800 font-medium hover:text-orange-700'
+                                          >
                                              {item.name}
                                           </Link>
                                           <div className='text-sm text-gray-500 mt-1'>
                                              {/* Extract size from options */}
-                                             {item.options && item.options.find(opt => opt.name === "Kích thước") && (
-                                                <div className='flex items-center'>
-                                                   <span className='text-gray-500'>Kích thước:</span>
-                                                   <span className='text-gray-700 ml-1'>
-                                                      {item.options.find(opt => opt.name === "Kích thước")?.value}
-                                                   </span>
-                                                </div>
-                                             )}
+                                             {item.options &&
+                                                item.options.find(
+                                                   (opt) => opt.name === 'Kích thước',
+                                                ) && (
+                                                   <div className='flex items-center'>
+                                                      <span className='text-gray-500'>
+                                                         Kích thước:
+                                                      </span>
+                                                      <span className='text-gray-700 ml-1'>
+                                                         {
+                                                            item.options.find(
+                                                               (opt) => opt.name === 'Kích thước',
+                                                            )?.value
+                                                         }
+                                                      </span>
+                                                   </div>
+                                                )}
 
                                              {/* Extract fragrance/value from options */}
-                                             {item.options && item.options.find(opt => opt.name === "Giá trị" || opt.name === "Mùi hương") && (
-                                                <div className='flex items-center'>
-                                                   <span className='text-gray-500'>Mùi hương:</span>
-                                                   <span className='text-gray-700 ml-1'>
-                                                      {item.options.find(opt => opt.name === "Giá trị" || opt.name === "Mùi hương")?.value}
-                                                   </span>
-                                                </div>
-                                             )}
+                                             {item.options &&
+                                                item.options.find(
+                                                   (opt) =>
+                                                      opt.name === 'Giá trị' ||
+                                                      opt.name === 'Mùi hương',
+                                                ) && (
+                                                   <div className='flex items-center'>
+                                                      <span className='text-gray-500'>
+                                                         Mùi hương:
+                                                      </span>
+                                                      <span className='text-gray-700 ml-1'>
+                                                         {
+                                                            item.options.find(
+                                                               (opt) =>
+                                                                  opt.name === 'Giá trị' ||
+                                                                  opt.name === 'Mùi hương',
+                                                            )?.value
+                                                         }
+                                                      </span>
+                                                   </div>
+                                                )}
 
                                              {/* Show type without "Loại:" prefix if no specific options found */}
-                                             {item.type && !item.options?.some(opt =>
-                                                opt.name === "Giá trị" || opt.name === "Mùi hương"
-                                             ) && (
+                                             {item.type &&
+                                                !item.options?.some(
+                                                   (opt) =>
+                                                      opt.name === 'Giá trị' ||
+                                                      opt.name === 'Mùi hương',
+                                                ) && (
                                                    <div className='flex items-center'>
-                                                      <span className='text-gray-500'>Mùi hương:</span>
+                                                      <span className='text-gray-500'>
+                                                         Mùi hương:
+                                                      </span>
                                                       <span className='text-gray-700 ml-1'>
-                                                         {item.type.replace("Loại: ", "")}
+                                                         {item.type.replace('Loại: ', '')}
                                                       </span>
                                                    </div>
                                                 )}
@@ -687,7 +758,9 @@ export default function CartPage() {
                                     {/* Price */}
                                     <div className='md:col-span-2 flex items-center justify-between md:justify-center mb-2 md:mb-0'>
                                        <span className='md:hidden text-gray-500'>Đơn giá:</span>
-                                       <span className='font-medium'>{formatPrice(item.price)}</span>
+                                       <span className='font-medium'>
+                                          {formatPrice(item.price)}
+                                       </span>
                                     </div>
 
                                     {/* Quantity */}
@@ -695,7 +768,9 @@ export default function CartPage() {
                                        <div className='flex border border-gray-300 rounded'>
                                           <button
                                              className='px-2 py-1 text-gray-600 hover:bg-gray-100'
-                                             onClick={() => updateQuantity(index, item.quantity - 1)}
+                                             onClick={() =>
+                                                updateQuantity(index, item.quantity - 1)
+                                             }
                                              disabled={item.quantity <= 1}
                                           >
                                              -
@@ -708,7 +783,9 @@ export default function CartPage() {
                                           />
                                           <button
                                              className='px-2 py-1 text-gray-600 hover:bg-gray-100'
-                                             onClick={() => updateQuantity(index, item.quantity + 1)}
+                                             onClick={() =>
+                                                updateQuantity(index, item.quantity + 1)
+                                             }
                                           >
                                              +
                                           </button>
@@ -718,7 +795,9 @@ export default function CartPage() {
                                     {/* Subtotal */}
                                     <div className='md:col-span-2 flex items-center justify-between md:justify-center'>
                                        <span className='md:hidden text-gray-500'>Thành tiền:</span>
-                                       <span className='text-red-600 font-medium'>{formatPrice(item.price * item.quantity)}</span>
+                                       <span className='text-red-600 font-medium'>
+                                          {formatPrice(item.price * item.quantity)}
+                                       </span>
                                     </div>
                                  </div>
 
@@ -728,8 +807,19 @@ export default function CartPage() {
                                        className='text-gray-500 hover:text-red-600 text-sm flex items-center'
                                        onClick={() => removeItem(index)}
                                     >
-                                       <svg className='w-4 h-4 mr-1' fill='none' stroke='currentColor' viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'>
-                                          <path strokeLinecap='round' strokeLinejoin='round' strokeWidth='2' d='M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16'></path>
+                                       <svg
+                                          className='w-4 h-4 mr-1'
+                                          fill='none'
+                                          stroke='currentColor'
+                                          viewBox='0 0 24 24'
+                                          xmlns='http://www.w3.org/2000/svg'
+                                       >
+                                          <path
+                                             strokeLinecap='round'
+                                             strokeLinejoin='round'
+                                             strokeWidth='2'
+                                             d='M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16'
+                                          ></path>
                                        </svg>
                                        Xóa
                                     </button>
@@ -747,16 +837,19 @@ export default function CartPage() {
 
                         <div className='space-y-3 mb-4'>
                            <div className='flex justify-between'>
-                              <span className='text-gray-600'>Tạm tính ({totalQuantity} sản phẩm)</span>
+                              <span className='text-gray-600'>
+                                 Tạm tính ({totalQuantity} sản phẩm)
+                              </span>
                               <span>{formatPrice(totalPrice)}</span>
                            </div>
-
                         </div>
 
                         <div className='border-t border-gray-200 pt-3 mb-5'>
                            <div className='flex justify-between items-center'>
                               <span className='font-medium'>Tổng cộng</span>
-                              <span className='text-xl font-medium text-red-600'>{formatPrice(totalPrice)}</span>
+                              <span className='text-xl font-medium text-red-600'>
+                                 {formatPrice(totalPrice)}
+                              </span>
                            </div>
                         </div>
 
@@ -767,7 +860,10 @@ export default function CartPage() {
                            Tiến hành đặt hàng
                         </button>
 
-                        <Link href='/user/products' className='block text-center mt-4 text-orange-700 hover:underline'>
+                        <Link
+                           href='/user/products'
+                           className='block text-center mt-4 text-orange-700 hover:underline'
+                        >
                            Tiếp tục mua sắm
                         </Link>
                      </div>

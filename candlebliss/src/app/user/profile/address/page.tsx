@@ -399,9 +399,12 @@ export default function AddressPage() {
             const userIdNum = parseInt(storedUserId);
             setUserId(userIdNum);
 
-            await loadUserInfo(userIdNum);
-            await loadUserAddresses(userIdNum);
-            await fetchProvinces();
+            // Kiểm tra nếu đã có dữ liệu địa chỉ thì không cần tải lại
+            if (addresses.length === 0) {
+               await loadUserInfo(userIdNum);
+               await loadUserAddresses(userIdNum);
+               await fetchProvinces();
+            }
          } catch (err) {
             if (err instanceof Error && err.message === 'Unauthorized') {
                router.push('/user/signin?redirect=/user/profile/address');
@@ -415,7 +418,15 @@ export default function AddressPage() {
       };
 
       initialize();
-   }, [router, loadUserInfo, loadUserAddresses, fetchProvinces, showToastMessage]);
+      // Đảm bảo dependencies không gây render lại liên tục
+   }, [
+      router,
+      loadUserInfo,
+      loadUserAddresses,
+      fetchProvinces,
+      showToastMessage,
+      addresses.length,
+   ]);
 
    useEffect(() => {
       const token = localStorage.getItem('token');
@@ -469,70 +480,6 @@ export default function AddressPage() {
             { id: '2', name: 'Phường 2' },
             { id: '3', name: 'Phường 3' },
          ]);
-      }
-   };
-
-   const fetchAddressById = async (addressId: number) => {
-      try {
-         console.log(`Fetching address with ID: ${addressId}`);
-
-         const token = localStorage.getItem('token');
-         if (!token) {
-            throw new Error('No authentication token found');
-         }
-
-         const response = await fetch(`/api/v1/address/${addressId}`, {
-            headers: {
-               Authorization: `Bearer ${token}`,
-            },
-         });
-
-         if (!response.ok) {
-            if (response.status === 401) {
-               throw new Error('Unauthorized');
-            }
-            throw new Error(`Failed to fetch address: ${response.status}`);
-         }
-
-         const addressData = await response.json();
-
-         const addressUserId = addressData.user?.id || addressData.userId;
-         const currentUserId = userId || parseInt(localStorage.getItem('userId') || '0');
-
-         if (addressUserId === currentUserId) {
-            const receiverName =
-               addressData.fullName ||
-               (addressData.user
-                  ? `${addressData.user.firstName || ''} ${addressData.user.lastName || ''}`.trim()
-                  : userInfo
-                  ? `${userInfo.firstName || ''} ${userInfo.lastName || ''}`.trim()
-                  : '');
-
-            const receiverPhone =
-               addressData.phone ||
-               addressData.user?.phone?.toString() ||
-               userInfo?.phone?.toString() ||
-               '';
-
-            const formattedAddress: Address = {
-               id: addressData.id,
-               fullName: receiverName,
-               phone: receiverPhone,
-               province: addressData.province || '',
-               district: addressData.district || '',
-               ward: addressData.ward || '',
-               streetAddress: addressData.street || '',
-               isDefault: addressData.isDefault || false,
-               userId: currentUserId,
-            };
-
-            return formattedAddress;
-         }
-
-         return null;
-      } catch (error) {
-         console.error('Error fetching address by ID:', error);
-         throw error;
       }
    };
 
@@ -782,30 +729,56 @@ export default function AddressPage() {
       try {
          setIsLoading(true);
 
-         const addressData = await fetchAddressById(address.id!);
+         // Tạo một bản sao của địa chỉ hiện tại để chỉnh sửa
+         setCurrentAddress({ ...address });
+         setNewAddress({ ...address });
 
-         if (addressData) {
-            const matchedProvince = provinces.find(
-               (p) => p.name.toLowerCase() === addressData.province.toLowerCase(),
-            );
-            if (matchedProvince) {
-               await fetchDistricts(matchedProvince.id);
+         // Tìm và cập nhật provinces, districts, wards cho địa chỉ hiện tại
+         const matchedProvince = provinces.find(
+            (p) => p.name.toLowerCase() === address.province.toLowerCase(),
+         );
 
-               const matchedDistrict = districts.find(
-                  (d) => d.name.toLowerCase() === addressData.district.toLowerCase(),
+         if (matchedProvince) {
+            try {
+               // Lấy districts trước
+               const distResponse = await fetch(
+                  `https://provinces.open-api.vn/api/p/${matchedProvince.id}?depth=2`,
                );
-               if (matchedDistrict) {
-                  await fetchWards(matchedDistrict.id);
-               }
-            }
+               if (distResponse.ok) {
+                  const distData = await distResponse.json();
+                  const distList = distData.districts.map((d: { code: string; name: string }) => ({
+                     id: d.code,
+                     name: d.name,
+                  }));
+                  setDistricts(distList);
 
-            setCurrentAddress(addressData);
-            setNewAddress(addressData);
-            setShowAddAddressForm(true);
-         } else {
-            setError('Không thể tải thông tin địa chỉ');
-            showToastMessage('Không thể tải thông tin địa chỉ', 'error');
+                  // Tìm district phù hợp và lấy wards
+                  const matchedDistrict = distList.find(
+                     (d: { name: string; id: string }) =>
+                        d.name.toLowerCase() === address.district.toLowerCase(),
+                  );
+
+                  if (matchedDistrict) {
+                     const wardResponse = await fetch(
+                        `https://provinces.open-api.vn/api/d/${matchedDistrict.id}?depth=2`,
+                     );
+                     if (wardResponse.ok) {
+                        const wardData = await wardResponse.json();
+                        setWards(
+                           wardData.wards.map((w: { code: string; name: string }) => ({
+                              id: w.code,
+                              name: w.name,
+                           })),
+                        );
+                     }
+                  }
+               }
+            } catch (err) {
+               console.error('Error fetching location data:', err);
+            }
          }
+
+         setShowAddAddressForm(true);
       } catch (error) {
          console.error('Error in handleEditAddress:', error);
          setError('Đã xảy ra lỗi khi tải thông tin địa chỉ');

@@ -690,21 +690,8 @@ export default function CheckoutPage() {
             setLoading(false);
          }
       },
-      [
-         findAddressesByUserId,
-         calculateShippingFee,
-         showToastMessage,
-         subTotal,
-         discount,
-         setLoading,
-         setAddresses,
-         setShowAddAddressForm,
-         setNewAddress,
-         setSelectedAddressId,
-         setShippingFee,
-         setTotalPrice,
-      ],
-   );
+      [findAddressesByUserId, showToastMessage],
+   ); // Giảm số lượng phụ thuộc
 
    // Tải danh sách quận/huyện dựa trên tỉnh/thành phố
    const fetchDistricts = async (provinceId: string) => {
@@ -713,16 +700,24 @@ export default function CheckoutPage() {
          const response = await fetch(`https://provinces.open-api.vn/api/p/${provinceId}?depth=2`);
          if (response.ok) {
             const data = await response.json();
-            setDistricts(data.districts.map((d: ApiDistrict) => ({ id: d.code, name: d.name })));
+            const newDistricts = data.districts.map((d: ApiDistrict) => ({
+               id: d.code,
+               name: d.name,
+            }));
+            setDistricts(newDistricts);
+            return newDistricts; // Trả về danh sách quận/huyện mới
          }
+         return [];
       } catch (error) {
          console.error('Error fetching districts:', error);
          // Dữ liệu mẫu nếu API lỗi
-         setDistricts([
+         const fallbackDistricts = [
             { id: '1', name: 'Quận 1' },
             { id: '2', name: 'Quận 2' },
             { id: '3', name: 'Quận 3' },
-         ]);
+         ];
+         setDistricts(fallbackDistricts);
+         return fallbackDistricts;
       }
    };
 
@@ -733,16 +728,21 @@ export default function CheckoutPage() {
          const response = await fetch(`https://provinces.open-api.vn/api/d/${districtId}?depth=2`);
          if (response.ok) {
             const data = await response.json();
-            setWards(data.wards.map((w: ApiWard) => ({ id: w.code, name: w.name })));
+            const newWards = data.wards.map((w: ApiWard) => ({ id: w.code, name: w.name }));
+            setWards(newWards);
+            return newWards; // Trả về danh sách phường/xã mới
          }
+         return [];
       } catch (error) {
          console.error('Error fetching wards:', error);
          // Dữ liệu mẫu nếu API lỗi
-         setWards([
+         const fallbackWards = [
             { id: '1', name: 'Phường 1' },
             { id: '2', name: 'Phường 2' },
             { id: '3', name: 'Phường 3' },
-         ]);
+         ];
+         setWards(fallbackWards);
+         return fallbackWards;
       }
    };
 
@@ -825,30 +825,36 @@ export default function CheckoutPage() {
       try {
          setLoading(true);
 
-         // Lấy thông tin địa chỉ và kiểm tra quyền
-         const address = await fetchAddressById(addressId);
+         // Lấy thông tin địa chỉ trực tiếp từ danh sách hiện có
+         const address = addresses.find((addr) => addr.id === addressId);
 
          if (address) {
+            // Cập nhật form với địa chỉ hiện tại
+            setNewAddress({ ...address });
+
             // Tìm province trong danh sách để có thể hiển thị đúng trong select
             const matchedProvince = provinces.find(
                (p) => p.name.toLowerCase() === address.province.toLowerCase(),
             );
+
             if (matchedProvince) {
                // Load quận/huyện dựa trên tỉnh/thành phố
                await fetchDistricts(matchedProvince.id);
 
-               // Sau khi tải quận/huyện, tìm quận/huyện hiện tại
-               const matchedDistrict = districts.find(
-                  (d) => d.name.toLowerCase() === address.district.toLowerCase(),
-               );
-               if (matchedDistrict) {
-                  // Load phường/xã dựa trên quận/huyện
-                  await fetchWards(matchedDistrict.id);
-               }
+               // Để tránh race condition, đợi một chút để districts được cập nhật
+               setTimeout(async () => {
+                  // Sau khi tải quận/huyện, tìm quận/huyện hiện tại
+                  const matchedDistrict = districts.find(
+                     (d) => d.name.toLowerCase() === address.district.toLowerCase(),
+                  );
+
+                  if (matchedDistrict) {
+                     // Load phường/xã dựa trên quận/huyện
+                     await fetchWards(matchedDistrict.id);
+                  }
+               }, 100);
             }
 
-            // Cập nhật form địa chỉ
-            setNewAddress(address);
             setShowAddAddressForm(true);
          } else {
             showToastMessage('Không thể tải thông tin địa chỉ', 'error');
@@ -967,7 +973,7 @@ export default function CheckoutPage() {
       }
    };
 
-   // Cập nhật hàm lưu địa chỉ
+   // Cải tiến hàm lưu địa chỉ
    const handleSaveAddress = async (e: React.FormEvent) => {
       e.preventDefault();
 
@@ -998,38 +1004,25 @@ export default function CheckoutPage() {
          // Hiển thị loading state
          setLoading(true);
 
-         // Fix for line 865:46 - In updateAddress function
-         const addressData: {
-            id?: number;
-            fullName: string;
-            phone: string;
-            province: string;
-            district: string;
-            ward: string;
-            street: string;
-            userId: number;
-            isDefault: boolean;
-         } = {
-            id: newAddress.id, // Thêm ID nếu đang cập nhật, undefined nếu là địa chỉ mới
-            fullName: String(newAddress.fullName).trim(), // Đảm bảo tên được cắt khoảng trắng và là chuỗi
-            phone: String(newAddress.phone).trim(), // Đảm bảo số điện thoại là chuỗi và được cắt khoảng trắng
-            province: String(newAddress.province).toLowerCase(), // API lưu tên tỉnh/thành phố viết thường
-            district: String(newAddress.district).toLowerCase(), // API lưu tên quận/huyện viết thường
-            ward: String(newAddress.ward).toLowerCase(), // API lưu tên phường/xã viết thường
-            street: String(newAddress.streetAddress), // Đổi tên field để phù hợp với API
-            userId: userId as number, // Đảm bảo userId là number không phải null
-            isDefault: newAddress.isDefault || false, // Đảm bảo isDefault là boolean
+         // Chuẩn bị dữ liệu
+         const addressData = {
+            id: newAddress.id,
+            fullName: String(newAddress.fullName).trim(),
+            phone: String(newAddress.phone).trim(),
+            province: String(newAddress.province).toLowerCase(),
+            district: String(newAddress.district).toLowerCase(),
+            ward: String(newAddress.ward).toLowerCase(),
+            street: String(newAddress.streetAddress),
+            userId: userId as number,
+            isDefault: newAddress.isDefault || false,
          };
 
-         console.log('Sending address data:', addressData);
-
+         // Lưu địa chỉ
          const savedAddress = await updateAddress(addressData);
 
          if (!savedAddress) {
             throw new Error('Không nhận được phản hồi từ server');
          }
-
-         console.log('Saved address from API:', savedAddress);
 
          // Chuyển đổi dữ liệu trả về để phù hợp với interface Address
          const formattedAddress: Address = {
@@ -1039,7 +1032,7 @@ export default function CheckoutPage() {
             province: savedAddress.province,
             district: savedAddress.district,
             ward: savedAddress.ward,
-            streetAddress: savedAddress.street, // Chuyển đổi street thành streetAddress
+            streetAddress: savedAddress.street,
             isDefault: savedAddress.isDefault,
             userId: userId as number,
          };
@@ -1063,18 +1056,29 @@ export default function CheckoutPage() {
          // Cập nhật phí vận chuyển dựa trên địa chỉ mới
          const newShippingFee = calculateShippingFee(formattedAddress.province);
          setShippingFee(newShippingFee);
+
+         // Cập nhật tổng tiền
          setTotalPrice(subTotal + newShippingFee - discount);
 
          // Ẩn form thêm địa chỉ
          setShowAddAddressForm(false);
 
-         // Nếu đây là địa chỉ mặc định mới, cập nhật toàn bộ danh sách
-         if (formattedAddress.isDefault) {
-            // Cập nhật các địa chỉ khác thành không mặc định trong state
-            setAddresses((prev) =>
-               prev.map((addr) =>
-                  addr.id !== formattedAddress.id ? { ...addr, isDefault: false } : addr,
-               ),
+         // Lưu vào localStorage đầy đủ để tránh fetch lại
+         const userIdStr = (userId as number).toString();
+         const addressStorageKey = `user_${userIdStr}_addresses`;
+         const existingAddressesStr = localStorage.getItem(addressStorageKey);
+         const existingAddresses = existingAddressesStr ? JSON.parse(existingAddressesStr) : [];
+
+         // Cập nhật danh sách địa chỉ trong localStorage
+         if (newAddress.id) {
+            const updatedAddresses = existingAddresses.map((addr: Address) =>
+               addr.id === formattedAddress.id ? formattedAddress : addr,
+            );
+            localStorage.setItem(addressStorageKey, JSON.stringify(updatedAddresses));
+         } else {
+            localStorage.setItem(
+               addressStorageKey,
+               JSON.stringify([...existingAddresses, formattedAddress]),
             );
          }
 
@@ -1410,6 +1414,7 @@ export default function CheckoutPage() {
    };
 
    useEffect(() => {
+      // Chỉ thực hiện khởi tạo ban đầu
       const init = async () => {
          // Lấy thông tin userId từ localStorage
          const storedUserId = localStorage.getItem('userId');
@@ -1425,14 +1430,15 @@ export default function CheckoutPage() {
          try {
             setLoading(true);
 
-            // Lấy thông tin người dùng trước
-            await loadUserInfo(userId);
+            // Tạo biến để theo dõi xem có cần tải lại dữ liệu không
+            let needToLoadUser = true;
+            let needToLoadAddresses = addresses.length === 0;
+            let needToLoadProvinces = provinces.length === 0;
 
-            // Sau đó tải địa chỉ của họ
-            await loadUserAddresses(userId);
-
-            // Cuối cùng tải tỉnh thành để chuẩn bị cho form
-            await fetchProvinces();
+            // Chỉ tải dữ liệu nếu cần thiết
+            if (needToLoadUser) await loadUserInfo(userId);
+            if (needToLoadAddresses) await loadUserAddresses(userId);
+            if (needToLoadProvinces) await fetchProvinces();
          } catch (error) {
             console.error('Error initializing data:', error);
             showToastMessage('Có lỗi xảy ra khi tải dữ liệu', 'error');
@@ -1465,8 +1471,18 @@ export default function CheckoutPage() {
          setTotalPrice(subtotal + shippingFee);
       };
 
-      init();
-   }, [router, shippingFee, loadUserInfo, loadUserAddresses, fetchProvinces, showToastMessage]);
+      // Sử dụng biến kiểm soát để đảm bảo chỉ chạy khi cần thiết
+      const isInitialized = localStorage.getItem('checkout_initialized');
+      if (!isInitialized) {
+         init();
+         localStorage.setItem('checkout_initialized', 'true');
+      }
+
+      // Xóa biến này khi component unmount
+      return () => {
+         localStorage.removeItem('checkout_initialized');
+      };
+   }, [router]); // Chỉ phụ thuộc vào router
 
    // Thêm vào useEffect để load voucher đã áp dụng từ cart
    useEffect(() => {
@@ -1609,17 +1625,121 @@ export default function CheckoutPage() {
       const districtId = e.target.value;
       const districtName = e.target.options[e.target.selectedIndex].text;
 
-      setNewAddress((prev) => ({ ...prev, district: districtName }));
+      // Hợp nhất thành một lần cập nhật
+      setNewAddress((prev) => ({
+         ...prev,
+         district: districtName,
+         ward: '',
+      }));
+
       fetchWards(districtId);
-      setNewAddress((prev) => ({ ...prev, ward: '' }));
    };
 
-   // Thêm handler cho việc thay đổi phường/xã
+   // Cập nhật handler cho việc thay đổi phường/xã
    const handleWardChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
       const wardName = e.target.options[e.target.selectedIndex].text;
 
       setNewAddress((prev) => ({ ...prev, ward: wardName }));
    };
+
+   // useEffect cho việc khởi tạo (chỉ chạy một lần)
+   useEffect(() => {
+      const initData = async () => {
+         // Lấy thông tin userId từ localStorage
+         const storedUserId = localStorage.getItem('userId');
+         if (!storedUserId) {
+            // Nếu không có userId, chuyển về trang đăng nhập
+            router.push('/user/signin');
+            return;
+         }
+
+         const userId = parseInt(storedUserId);
+         setUserId(userId);
+
+         // Tải giỏ hàng từ localStorage
+         const localCart = JSON.parse(localStorage.getItem('cart') || '[]');
+         if (localCart.length === 0) {
+            // Nếu giỏ hàng trống, chuyển về trang giỏ hàng
+            router.push('/user/cart');
+            return;
+         }
+
+         // Đảm bảo tất cả detailId là số
+         const validatedCart = localCart.map((item: { detailId: number }) => ({
+            ...item,
+            detailId: Number(item.detailId),
+         }));
+
+         setCartItems(validatedCart);
+
+         // Tính toán giá trị đơn hàng
+         const subtotal = validatedCart.reduce(
+            (sum: number, item: CartItem) => sum + item.price * item.quantity,
+            0,
+         );
+         setSubTotal(subtotal);
+      };
+
+      initData();
+   }, [router]); // Chỉ phụ thuộc vào router
+
+   // useEffect cho việc tải dữ liệu người dùng (chỉ khi userId thay đổi)
+   useEffect(() => {
+      const loadUserData = async () => {
+         if (!userId) return;
+
+         try {
+            setLoading(true);
+            await loadUserInfo(userId);
+         } catch (error) {
+            console.error('Error loading user info:', error);
+            showToastMessage('Không thể tải thông tin người dùng', 'error');
+         } finally {
+            setLoading(false);
+         }
+      };
+
+      loadUserData();
+   }, [userId, loadUserInfo, showToastMessage]);
+
+   // useEffect cho việc tải địa chỉ (chỉ khi cần)
+   useEffect(() => {
+      const loadAddressData = async () => {
+         if (!userId || addresses.length > 0) return;
+
+         try {
+            setLoading(true);
+            await loadUserAddresses(userId);
+         } catch (error) {
+            console.error('Error loading addresses:', error);
+            showToastMessage('Không thể tải địa chỉ', 'error');
+         } finally {
+            setLoading(false);
+         }
+      };
+
+      loadAddressData();
+   }, [userId, loadUserAddresses, addresses.length, showToastMessage]);
+
+   // useEffect để tải tỉnh/thành phố (chỉ khi cần)
+   useEffect(() => {
+      const loadProvinceData = async () => {
+         if (provinces.length > 0) return;
+
+         try {
+            await fetchProvinces();
+         } catch (error) {
+            console.error('Error loading provinces:', error);
+         }
+      };
+
+      loadProvinceData();
+   }, [fetchProvinces, provinces.length]);
+
+   // useEffect riêng cho việc cập nhật tổng tiền
+   useEffect(() => {
+      setTotalPrice(subTotal + shippingFee - discount);
+   }, [subTotal, shippingFee, discount]);
 
    return (
       <div className='bg-[#F1EEE9] min-h-screen'>
