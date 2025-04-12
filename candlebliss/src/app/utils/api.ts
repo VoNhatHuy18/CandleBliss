@@ -31,7 +31,7 @@ export const calculateDiscountPercent = (basePrice: number, discountPrice: numbe
  * @param images - Image or array of images
  * @returns Array of images
  */
-export const normalizeImages = (images: any) => {
+export const normalizeImages = (images: unknown) => {
    if (!images) return [];
    return Array.isArray(images) ? images : [images];
 };

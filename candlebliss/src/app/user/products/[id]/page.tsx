@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
@@ -25,15 +25,6 @@ interface ProductDetail {
    productId?: number;
 }
 
-interface Price {
-   id: number;
-   base_price: number;
-   discount_price: number | null;
-   start_date: string;
-   end_date: string;
-   product_detail: ProductDetail;
-}
-
 interface Product {
    id: number;
    name: string;
@@ -43,22 +34,31 @@ interface Product {
    details?: ProductDetail[];
 }
 
+interface CartItem {
+   id: number;
+   detailId: number;
+   name: string;
+   price: number;
+   quantity: number;
+   image: string;
+   type: string;
+   options: {
+      name: string;
+      value: string;
+   }[];
+}
+
 const formatPrice = (price: number): string => {
    return new Intl.NumberFormat('vi-VN', {
       style: 'currency',
       currency: 'VND',
-      minimumFractionDigits: 0
+      minimumFractionDigits: 0,
    }).format(price);
-};
-
-const calculateDiscountPercentage = (basePrice: number, discountPercentage: number | null) => {
-   if (!discountPercentage || discountPercentage <= 0) return 0;
-   return discountPercentage; // already a percentage value
 };
 
 const calculateDiscountedPrice = (basePrice: number, discountPercentage: number | null) => {
    if (!discountPercentage || discountPercentage <= 0) return basePrice;
-   return basePrice - (basePrice * (discountPercentage / 100));
+   return basePrice - basePrice * (discountPercentage / 100);
 };
 
 export default function ProductDetailPage() {
@@ -75,179 +75,51 @@ export default function ProductDetailPage() {
    const [selectedSize, setSelectedSize] = useState<string>('');
    const [selectedType, setSelectedType] = useState<string>('');
    const [productDetails, setProductDetails] = useState<ProductDetail[]>([]);
-   const [detailPrices, setDetailPrices] = useState<Record<number, { base_price: number, discount_price: number | null, start_date?: string, end_date?: string }>>({});
+   const [detailPrices, setDetailPrices] = useState<
+      Record<
+         number,
+         {
+            base_price: number;
+            discount_price: number | null;
+            start_date?: string;
+            end_date?: string;
+         }
+      >
+   >({});
    const [selectedDetailId, setSelectedDetailId] = useState<number | null>(null);
    const [showCartNotification, setShowCartNotification] = useState(false);
 
    const selectedDetail = selectedDetailId
-      ? productDetails.find(detail => detail.id === selectedDetailId)
+      ? productDetails.find((detail) => detail.id === selectedDetailId)
       : null;
 
    useEffect(() => {
       setActiveThumbnail(0);
    }, [selectedDetailId]);
 
-   useEffect(() => {
-      const fetchProductDetail = async () => {
-         try {
-            setLoading(true);
-
-            if (!productId) {
-               setError("ID sản phẩm không hợp lệ");
-               setLoading(false);
-               return;
-            }
-
-            console.log("Đang lấy thông tin sản phẩm với ID:", productId);
-
-            try {
-               const productResponse = await fetch(`http://68.183.226.198:3000/api/products/${productId}`);
-
-               if (!productResponse.ok) {
-                  setError(`Không tìm thấy sản phẩm có ID ${productId}`);
-                  setLoading(false);
-                  return;
-               }
-
-               const productData: Product = await productResponse.json();
-               console.log("Dữ liệu sản phẩm:", productData);
-
-               processProductData(productData);
-            } catch (fetchErr) {
-               console.error('Lỗi khi lấy thông tin sản phẩm:', fetchErr);
-               setError(fetchErr instanceof Error ? fetchErr.message : 'Lỗi kết nối tới máy chủ');
-               setLoading(false);
-            }
-         } catch (err) {
-            console.error('Lỗi trong quá trình lấy chi tiết sản phẩm:', err);
-            setError(err instanceof Error ? err.message : 'Có lỗi xảy ra');
-            setLoading(false);
-         }
-      };
-
-      fetchProductDetail();
-   }, [productId]);
-
-   const processProductData = (productData: Product) => {
-      try {
-         console.log("Đang xử lý dữ liệu sản phẩm:", productData);
-
-         const normalizedImages = Array.isArray(productData.images)
-            ? productData.images
-            : productData.images ? [productData.images] : [];
-
-         console.log("Ảnh sản phẩm sau khi chuẩn hóa:", normalizedImages.length, "ảnh");
-
-         const updatedProduct = {
-            ...productData,
-            images: normalizedImages
-         };
-
-         setProduct(updatedProduct);
-
-         if (productData.details && productData.details.length > 0) {
-            console.log("Sản phẩm có", productData.details.length, "chi tiết");
-            setProductDetails(productData.details);
-
-            const activeDetails = productData.details.filter(detail => detail.isActive);
-            if (activeDetails.length > 0) {
-               const firstActiveDetail = activeDetails[0];
-               console.log("Chi tiết mặc định:", firstActiveDetail);
-               setSelectedDetailId(firstActiveDetail.id);
-               setSelectedSize(firstActiveDetail.size);
-               setSelectedType(firstActiveDetail.type);
-            }
-
-            fetchDetailPrices(productData.details);
-         } else {
-            console.log("Sản phẩm không có chi tiết, tạo chi tiết mặc định");
-            const defaultDetail = {
-               id: 0,
-               size: 'Standard',
-               type: 'Default',
-               values: '',
-               quantities: 100,
-               images: [],
-               isActive: true,
-               productId: productData.id
-            };
-
-            setProductDetails([defaultDetail]);
-            setSelectedDetailId(0);
-            setSelectedSize('Standard');
-            setSelectedType('Default');
-
-            setDetailPrices({
-               0: {
-                  base_price: 0,
-                  discount_price: null
-               }
-            });
-         }
-
-         setLoading(false);
-      } catch (error) {
-         console.error("Lỗi khi xử lý dữ liệu sản phẩm:", error);
-         setError("Lỗi khi xử lý dữ liệu sản phẩm");
-         setLoading(false);
-      }
-   };
-
-   useEffect(() => {
-      if (product && (!Array.isArray(product.images) || product.images.length === 0)) {
-         setProduct(prev => {
-            if (!prev) return null;
-            return {
-               ...prev,
-               images: [{
-                  id: '0',
-                  path: '/images/placeholder.jpg',
-                  public_id: 'placeholder'
-               }]
-            };
-         });
-      }
-   }, [product]);
-
-   useEffect(() => {
-      if (product && (!productDetails || productDetails.length === 0)) {
-         const defaultDetail = {
-            id: 0,
-            size: 'Standard',
-            type: 'Default',
-            values: '',
-            quantities: 100,
-            images: [],
-            isActive: true,
-            productId: product.id
-         };
-
-         setProductDetails([defaultDetail]);
-         setSelectedDetailId(0);
-         setSelectedSize('Standard');
-         setSelectedType('Default');
-
-         setDetailPrices({
-            0: {
-               base_price: 0,
-               discount_price: null
-            }
-         });
-      }
-   }, [product, productDetails]);
-
    const fetchDetailPrices = async (details: ProductDetail[]) => {
       try {
-         const pricesMap: Record<number, { base_price: number, discount_price: number | null, start_date?: string, end_date?: string }> = {};
+         const pricesMap: Record<
+            number,
+            {
+               base_price: number;
+               discount_price: number | null;
+               start_date?: string;
+               end_date?: string;
+            }
+         > = {};
 
          for (const detail of details) {
             if (detail && typeof detail.id === 'number') {
                try {
-                  const priceResponse = await fetch(`http://68.183.226.198:3000/api/v1/prices/product-detail/${detail.id}`, {
-                     headers: {
-                        Authorization: `Bearer ${localStorage.getItem('token') || ''}`
-                     }
-                  });
+                  const priceResponse = await fetch(
+                     `http://68.183.226.198:3000/api/v1/prices/product-detail/${detail.id}`,
+                     {
+                        headers: {
+                           Authorization: `Bearer ${localStorage.getItem('token') || ''}`,
+                        },
+                     },
+                  );
 
                   if (priceResponse.ok) {
                      const priceData = await priceResponse.json();
@@ -263,31 +135,32 @@ export default function ProductDetailPage() {
 
                         const priceInfo = priceData[0];
 
-                        // Store base price and the discount percentage
                         pricesMap[detail.id] = {
                            base_price: Number(priceInfo.base_price) || 0,
-                           discount_price: priceInfo.discount_price, // This is the percentage value
+                           discount_price: priceInfo.discount_price,
                            start_date: priceInfo.start_date,
-                           end_date: priceInfo.end_date
+                           end_date: priceInfo.end_date,
                         };
                      } else {
                         pricesMap[detail.id] = {
                            base_price: 0,
-                           discount_price: null
+                           discount_price: null,
                         };
                      }
                   } else {
-                     console.warn(`Không thể lấy giá cho chi tiết ${detail.id}, sử dụng giá mặc định`);
+                     console.warn(
+                        `Không thể lấy giá cho chi tiết ${detail.id}, sử dụng giá mặc định`,
+                     );
                      pricesMap[detail.id] = {
                         base_price: 0,
-                        discount_price: null
+                        discount_price: null,
                      };
                   }
                } catch (error) {
                   console.error(`Lỗi khi lấy giá cho chi tiết ${detail.id}:`, error);
                   pricesMap[detail.id] = {
                      base_price: 0,
-                     discount_price: null
+                     discount_price: null,
                   };
                }
             }
@@ -295,30 +168,185 @@ export default function ProductDetailPage() {
 
          console.log('Đã lấy thông tin giá cho tất cả chi tiết:', pricesMap);
          setDetailPrices(pricesMap);
-
       } catch (error) {
          console.error('Lỗi khi lấy giá chi tiết sản phẩm:', error);
       }
    };
 
+   const processProductData = useCallback((productData: Product) => {
+      try {
+         console.log('Đang xử lý dữ liệu sản phẩm:', productData);
+
+         const normalizedImages = Array.isArray(productData.images)
+            ? productData.images
+            : productData.images
+            ? [productData.images]
+            : [];
+
+         console.log('Ảnh sản phẩm sau khi chuẩn hóa:', normalizedImages.length, 'ảnh');
+
+         const updatedProduct = {
+            ...productData,
+            images: normalizedImages,
+         };
+
+         setProduct(updatedProduct);
+
+         if (productData.details && productData.details.length > 0) {
+            console.log('Sản phẩm có', productData.details.length, 'chi tiết');
+            setProductDetails(productData.details);
+
+            const activeDetails = productData.details.filter((detail) => detail.isActive);
+            if (activeDetails.length > 0) {
+               const firstActiveDetail = activeDetails[0];
+               console.log('Chi tiết mặc định:', firstActiveDetail);
+               setSelectedDetailId(firstActiveDetail.id);
+               setSelectedSize(firstActiveDetail.size);
+               setSelectedType(firstActiveDetail.type);
+            }
+
+            fetchDetailPrices(productData.details);
+         } else {
+            console.log('Sản phẩm không có chi tiết, tạo chi tiết mặc định');
+            const defaultDetail = {
+               id: 0,
+               size: 'Standard',
+               type: 'Default',
+               values: '',
+               quantities: 100,
+               images: [],
+               isActive: true,
+               productId: productData.id,
+            };
+
+            setProductDetails([defaultDetail]);
+            setSelectedDetailId(0);
+            setSelectedSize('Standard');
+            setSelectedType('Default');
+
+            setDetailPrices({
+               0: {
+                  base_price: 0,
+                  discount_price: null,
+               },
+            });
+         }
+
+         setLoading(false);
+      } catch (error) {
+         console.error('Lỗi khi xử lý dữ liệu sản phẩm:', error);
+         setError('Lỗi khi xử lý dữ liệu sản phẩm');
+         setLoading(false);
+      }
+   }, []);
+
+   useEffect(() => {
+      const fetchProductDetail = async () => {
+         try {
+            setLoading(true);
+
+            if (!productId) {
+               setError('ID sản phẩm không hợp lệ');
+               setLoading(false);
+               return;
+            }
+
+            console.log('Đang lấy thông tin sản phẩm với ID:', productId);
+
+            try {
+               const productResponse = await fetch(
+                  `http://68.183.226.198:3000/api/products/${productId}`,
+               );
+
+               if (!productResponse.ok) {
+                  setError(`Không tìm thấy sản phẩm có ID ${productId}`);
+                  setLoading(false);
+                  return;
+               }
+
+               const productData: Product = await productResponse.json();
+               console.log('Dữ liệu sản phẩm:', productData);
+
+               processProductData(productData);
+            } catch (fetchErr) {
+               console.error('Lỗi khi lấy thông tin sản phẩm:', fetchErr);
+               setError(fetchErr instanceof Error ? fetchErr.message : 'Lỗi kết nối tới máy chủ');
+               setLoading(false);
+            }
+         } catch (err) {
+            console.error('Lỗi trong quá trình lấy chi tiết sản phẩm:', err);
+            setError(err instanceof Error ? err.message : 'Có lỗi xảy ra');
+            setLoading(false);
+         }
+      };
+
+      fetchProductDetail();
+   }, [productId, processProductData]); // Include processProductData as a dependency
+
+   useEffect(() => {
+      if (product && (!Array.isArray(product.images) || product.images.length === 0)) {
+         setProduct((prev) => {
+            if (!prev) return null;
+            return {
+               ...prev,
+               images: [
+                  {
+                     id: '0',
+                     path: '/images/placeholder.jpg',
+                     public_id: 'placeholder',
+                  },
+               ],
+            };
+         });
+      }
+   }, [product]);
+
+   useEffect(() => {
+      if (product && (!productDetails || productDetails.length === 0)) {
+         const defaultDetail = {
+            id: 0,
+            size: 'Standard',
+            type: 'Default',
+            values: '',
+            quantities: 100,
+            images: [],
+            isActive: true,
+            productId: product.id,
+         };
+
+         setProductDetails([defaultDetail]);
+         setSelectedDetailId(0);
+         setSelectedSize('Standard');
+         setSelectedType('Default');
+
+         setDetailPrices({
+            0: {
+               base_price: 0,
+               discount_price: null,
+            },
+         });
+      }
+   }, [product, productDetails]);
+
    useEffect(() => {
       if (productDetails.length > 0) {
          const matchingDetail = productDetails.find(
-            detail => detail.size === selectedSize && detail.type === selectedType && detail.isActive
+            (detail) =>
+               detail.size === selectedSize && detail.type === selectedType && detail.isActive,
          );
 
          if (matchingDetail) {
             setSelectedDetailId(matchingDetail.id);
          } else {
             const sameSize = productDetails.find(
-               detail => detail.size === selectedSize && detail.isActive
+               (detail) => detail.size === selectedSize && detail.isActive,
             );
 
             if (sameSize) {
                setSelectedDetailId(sameSize.id);
                setSelectedType(sameSize.type);
             } else {
-               const firstActive = productDetails.find(detail => detail.isActive);
+               const firstActive = productDetails.find((detail) => detail.isActive);
                if (firstActive) {
                   setSelectedDetailId(firstActive.id);
                   setSelectedSize(firstActive.size);
@@ -332,9 +360,10 @@ export default function ProductDetailPage() {
    useEffect(() => {
       if (productDetails.length > 0 && selectedDetail?.values) {
          const matchingDetail = productDetails.find(
-            detail => detail.size === selectedSize &&
+            (detail) =>
+               detail.size === selectedSize &&
                detail.values === selectedDetail.values &&
-               detail.isActive
+               detail.isActive,
          );
 
          if (matchingDetail) {
@@ -342,14 +371,14 @@ export default function ProductDetailPage() {
             setSelectedType(matchingDetail.type);
          } else {
             const sameSize = productDetails.find(
-               detail => detail.size === selectedSize && detail.isActive
+               (detail) => detail.size === selectedSize && detail.isActive,
             );
 
             if (sameSize) {
                setSelectedDetailId(sameSize.id);
                setSelectedType(sameSize.type);
             } else {
-               const firstActive = productDetails.find(detail => detail.isActive);
+               const firstActive = productDetails.find((detail) => detail.isActive);
                if (firstActive) {
                   setSelectedDetailId(firstActive.id);
                   setSelectedSize(firstActive.size);
@@ -360,40 +389,26 @@ export default function ProductDetailPage() {
       }
    }, [selectedSize, productDetails, selectedDetail]);
 
-   const selectedPriceInfo = selectedDetailId && detailPrices[selectedDetailId]
-      ? detailPrices[selectedDetailId]
-      : { base_price: 0, discount_price: null };
+   const selectedPriceInfo =
+      selectedDetailId && detailPrices[selectedDetailId]
+         ? detailPrices[selectedDetailId]
+         : { base_price: 0, discount_price: null };
 
-   const availableSizes = [...new Set(
-      productDetails
-         .filter(detail => detail.isActive)
-         .map(detail => detail.size)
-   )];
+   const availableSizes = [
+      ...new Set(productDetails.filter((detail) => detail.isActive).map((detail) => detail.size)),
+   ];
 
-   const availableTypes = [...new Set(
-      productDetails
-         .filter(detail => detail.isActive && detail.size === selectedSize)
-         .map(detail => detail.type)
-   )];
-
-
-   const allValues = [...new Set(
-      productDetails
-         .filter(detail => detail.isActive && detail.values)
-         .map(detail => detail.values)
-   )];
-
-   const availableValuesForSize = [...new Set(
-      productDetails
-         .filter(detail => detail.isActive && detail.size === selectedSize && detail.values)
-         .map(detail => detail.values)
-   )];
+   const allValues = [
+      ...new Set(
+         productDetails
+            .filter((detail) => detail.isActive && detail.values)
+            .map((detail) => detail.values),
+      ),
+   ];
 
    const isValueAvailableForSize = (value: string) => {
       return productDetails.some(
-         detail => detail.size === selectedSize &&
-            detail.values === value &&
-            detail.isActive
+         (detail) => detail.size === selectedSize && detail.values === value && detail.isActive,
       );
    };
 
@@ -428,13 +443,11 @@ export default function ProductDetailPage() {
       }
 
       // Apply discount only if it's valid
-      let price = useDiscount ?
-         calculateDiscountedPrice(basePrice, discountPercentage) :
-         basePrice;
+      let price = useDiscount ? calculateDiscountedPrice(basePrice, discountPercentage) : basePrice;
 
       if (isNaN(price)) {
          price = 0;
-         console.warn("Invalid price detected, using 0 as default");
+         console.warn('Invalid price detected, using 0 as default');
       }
 
       const cartItem = {
@@ -443,24 +456,25 @@ export default function ProductDetailPage() {
          name: product.name,
          price: price,
          quantity: quantity,
-         image: selectedDetail.images && selectedDetail.images.length > 0
-            ? selectedDetail.images[0].path
-            : Array.isArray(product.images) && product.images.length > 0
+         image:
+            selectedDetail.images && selectedDetail.images.length > 0
+               ? selectedDetail.images[0].path
+               : Array.isArray(product.images) && product.images.length > 0
                ? product.images[0].path
                : '/images/placeholder.jpg',
          type: `Loại: ${selectedDetail.type}`,
          options: [
             { name: 'Kích thước', value: selectedDetail.size },
             { name: 'Loại', value: selectedDetail.type },
-            ...(selectedDetail.values ? [{ name: 'Giá trị', value: selectedDetail.values }] : [])
-         ]
+            ...(selectedDetail.values ? [{ name: 'Giá trị', value: selectedDetail.values }] : []),
+         ],
       };
 
       // ...rest of your cart logic
       const cartItems = JSON.parse(localStorage.getItem('cart') || '[]');
 
       const existingItemIndex = cartItems.findIndex(
-         (item: any) => item.id === cartItem.id && item.detailId === cartItem.detailId
+         (item: CartItem) => item.id === cartItem.id && item.detailId === cartItem.detailId,
       );
 
       if (existingItemIndex >= 0) {
@@ -542,10 +556,12 @@ export default function ProductDetailPage() {
                         src={(() => {
                            const combinedImages = [
                               ...(selectedDetail?.images || []),
-                              ...(Array.isArray(product.images) ? product.images : [])
+                              ...(Array.isArray(product.images) ? product.images : []),
                            ];
 
-                           return combinedImages[activeThumbnail]?.path || '/images/placeholder.jpg';
+                           return (
+                              combinedImages[activeThumbnail]?.path || '/images/placeholder.jpg'
+                           );
                         })()}
                         alt={product.name}
                         layout='fill'
@@ -555,7 +571,7 @@ export default function ProductDetailPage() {
 
                      {/* Image source indicator */}
                      {activeThumbnail >= 0 && (
-                        <div className="absolute bottom-3 right-3 bg-black bg-opacity-60 text-white text-xs px-2 py-1 rounded">
+                        <div className='absolute bottom-3 right-3 bg-black bg-opacity-60 text-white text-xs px-2 py-1 rounded'>
                            {activeThumbnail < (selectedDetail?.images?.length || 0)
                               ? ` ${selectedDetail?.size} - ${selectedDetail?.values}`
                               : 'Sản phẩm'}
@@ -566,81 +582,97 @@ export default function ProductDetailPage() {
                   {/* Thumbnails Gallery - Show all images in a single row */}
                   <div className='flex flex-wrap -mx-1 overflow-x-auto pb-2'>
                      {/* Map all images with their detail metadata */}
-                     {productDetails.map((detail) =>
-                        detail.isActive && detail.images && detail.images.map((img, detailImgIndex) => (
-                           <div
-                              key={`detail-${detail.id}-${detailImgIndex}`}
-                              className={`p-1 w-1/6 cursor-pointer ${selectedDetailId === detail.id && activeThumbnail === detailImgIndex
-                                 ? 'ring-2 ring-orange-500'
-                                 : ''
+                     {productDetails.map(
+                        (detail) =>
+                           detail.isActive &&
+                           detail.images &&
+                           detail.images.map((img, detailImgIndex) => (
+                              <div
+                                 key={`detail-${detail.id}-${detailImgIndex}`}
+                                 className={`p-1 w-1/6 cursor-pointer ${
+                                    selectedDetailId === detail.id &&
+                                    activeThumbnail === detailImgIndex
+                                       ? 'ring-2 ring-orange-500'
+                                       : ''
                                  }`}
+                                 onClick={() => {
+                                    setSelectedDetailId(detail.id);
+                                    setSelectedSize(detail.size);
+                                    setSelectedType(detail.type);
+                                    setActiveThumbnail(detailImgIndex);
+                                 }}
+                              >
+                                 <div className='relative bg-white h-16 rounded shadow-sm'>
+                                    <Image
+                                       src={img.path || '/images/placeholder.jpg'}
+                                       alt={`${product.name} - ${detail.size} ${detail.values}`}
+                                       layout='fill'
+                                       objectFit='contain'
+                                       className='p-1'
+                                    />
+                                    {/* Show detail info on thumbnail */}
+                                    <div className='absolute bottom-0 right-0 left-0 bg-black bg-opacity-30 text-white text-xs px-1 text-center truncate'>
+                                       {detail.size} - {detail.values || detail.type}
+                                    </div>
+                                 </div>
+                              </div>
+                           )),
+                     )}
+
+                     {/* Product generic images */}
+                     {Array.isArray(product.images) &&
+                        product.images.map((img, productImgIndex) => (
+                           <div
+                              key={`product-${productImgIndex}`}
+                              className={`p-1 w-1/6 cursor-pointer ${
+                                 activeThumbnail ===
+                                 (selectedDetail?.images?.length || 0) + productImgIndex
+                                    ? 'ring-2 ring-orange-500'
+                                    : ''
+                              }`}
                               onClick={() => {
-                                 setSelectedDetailId(detail.id);
-                                 setSelectedSize(detail.size);
-                                 setSelectedType(detail.type);
-                                 setActiveThumbnail(detailImgIndex);
+                                 const detailImagesLength = selectedDetail?.images?.length || 0;
+                                 setActiveThumbnail(detailImagesLength + productImgIndex);
                               }}
                            >
                               <div className='relative bg-white h-16 rounded shadow-sm'>
                                  <Image
                                     src={img.path || '/images/placeholder.jpg'}
-                                    alt={`${product.name} - ${detail.size} ${detail.values}`}
+                                    alt={`${product.name} image ${productImgIndex + 1}`}
                                     layout='fill'
                                     objectFit='contain'
                                     className='p-1'
                                  />
-                                 {/* Show detail info on thumbnail */}
-                                 <div className="absolute bottom-0 right-0 left-0 bg-black bg-opacity-30 text-white text-xs px-1 text-center truncate">
-                                    {detail.size} - {detail.values || detail.type}
+                                 <div className='absolute bottom-0 right-0 left-0 bg-black bg-opacity-30 text-white text-xs px-1 text-center'>
+                                    Sản phẩm
                                  </div>
                               </div>
                            </div>
-                        ))
-                     )}
-
-                     {/* Product generic images */}
-                     {Array.isArray(product.images) && product.images.map((img, productImgIndex) => (
-                        <div
-                           key={`product-${productImgIndex}`}
-                           className={`p-1 w-1/6 cursor-pointer ${activeThumbnail === ((selectedDetail?.images?.length || 0) + productImgIndex)
-                              ? 'ring-2 ring-orange-500'
-                              : ''
-                              }`}
-                           onClick={() => {
-                              const detailImagesLength = selectedDetail?.images?.length || 0;
-                              setActiveThumbnail(detailImagesLength + productImgIndex);
-                           }}
-                        >
-                           <div className='relative bg-white h-16 rounded shadow-sm'>
-                              <Image
-                                 src={img.path || '/images/placeholder.jpg'}
-                                 alt={`${product.name} image ${productImgIndex + 1}`}
-                                 layout='fill'
-                                 objectFit='contain'
-                                 className='p-1'
-                              />
-                              <div className="absolute bottom-0 right-0 left-0 bg-black bg-opacity-30 text-white text-xs px-1 text-center">
-                                 Sản phẩm
-                              </div>
-                           </div>
-                        </div>
-                     ))}
+                        ))}
                   </div>
                </div>
 
                {/* Product Details */}
-               <div className="md:w-1/2 px-4">
-                  <h1 className="text-3xl font-medium mb-2">{product.name}</h1>
-                  <div className="flex items-center mb-4">
-                     <div className="flex items-center">
-                        <span className="text-gray-500 text-sm mr-2">Mã SP: {product.id}</span>
-                        <span className="mx-2 text-gray-300">|</span>
-                        <div className="flex items-center text-sm">
-                           <span className={selectedDetail?.isActive && selectedDetail?.quantities > 0 ? 'text-green-600' : 'text-red-600'}>
-                              {selectedDetail?.isActive && selectedDetail?.quantities > 0 ? 'Còn hàng' : 'Hết hàng'}
+               <div className='md:w-1/2 px-4'>
+                  <h1 className='text-3xl font-medium mb-2'>{product.name}</h1>
+                  <div className='flex items-center mb-4'>
+                     <div className='flex items-center'>
+                        <span className='text-gray-500 text-sm mr-2'>Mã SP: {product.id}</span>
+                        <span className='mx-2 text-gray-300'>|</span>
+                        <div className='flex items-center text-sm'>
+                           <span
+                              className={
+                                 selectedDetail?.isActive && selectedDetail?.quantities > 0
+                                    ? 'text-green-600'
+                                    : 'text-red-600'
+                              }
+                           >
+                              {selectedDetail?.isActive && selectedDetail?.quantities > 0
+                                 ? 'Còn hàng'
+                                 : 'Hết hàng'}
                            </span>
                            {selectedDetail && (
-                              <span className="text-gray-500 ml-1">
+                              <span className='text-gray-500 ml-1'>
                                  ({selectedDetail.quantities} sản phẩm)
                               </span>
                            )}
@@ -648,15 +680,17 @@ export default function ProductDetailPage() {
                      </div>
                   </div>
 
-                  <div className="mb-6 bg-gray-50 p-4 rounded">
+                  <div className='mb-6 bg-gray-50 p-4 rounded'>
                      {selectedPriceInfo && (
-                        <div className="flex items-center">
+                        <div className='flex items-center'>
                            {(() => {
                               // Check if discount is valid
                               let isDiscountValid = false;
-                              if (selectedPriceInfo.discount_price &&
+                              if (
+                                 selectedPriceInfo.discount_price &&
                                  selectedPriceInfo.start_date &&
-                                 selectedPriceInfo.end_date) {
+                                 selectedPriceInfo.end_date
+                              ) {
                                  const now = new Date();
                                  const startDate = new Date(selectedPriceInfo.start_date);
                                  const endDate = new Date(selectedPriceInfo.end_date);
@@ -664,28 +698,32 @@ export default function ProductDetailPage() {
                               }
 
                               // Show discounted price only if discount is valid
-                              if (selectedPriceInfo.discount_price &&
+                              if (
+                                 selectedPriceInfo.discount_price &&
                                  Number(selectedPriceInfo.discount_price) > 0 &&
-                                 isDiscountValid) {
+                                 isDiscountValid
+                              ) {
                                  return (
                                     <>
-                                       <span className="text-red-600 text-2xl font-medium">
-                                          {formatPrice(calculateDiscountedPrice(
-                                             selectedPriceInfo.base_price,
-                                             selectedPriceInfo.discount_price
-                                          ))}
+                                       <span className='text-red-600 text-2xl font-medium'>
+                                          {formatPrice(
+                                             calculateDiscountedPrice(
+                                                selectedPriceInfo.base_price,
+                                                selectedPriceInfo.discount_price,
+                                             ),
+                                          )}
                                        </span>
-                                       <span className="ml-2 text-gray-500 line-through">
+                                       <span className='ml-2 text-gray-500 line-through'>
                                           {formatPrice(selectedPriceInfo.base_price)}
                                        </span>
-                                       <div className="bg-red-600 text-white text-xs px-2 py-1 rounded ml-2">
+                                       <div className='bg-red-600 text-white text-xs px-2 py-1 rounded ml-2'>
                                           Giảm {selectedPriceInfo.discount_price}%
                                        </div>
                                     </>
                                  );
                               } else {
                                  return (
-                                    <span className="text-red-600 text-2xl font-medium">
+                                    <span className='text-red-600 text-2xl font-medium'>
                                        {formatPrice(selectedPriceInfo.base_price)}
                                     </span>
                                  );
@@ -695,24 +733,25 @@ export default function ProductDetailPage() {
                      )}
                   </div>
 
-                  <div className="mb-6">
+                  <div className='mb-6'>
                      {/* Size Field */}
                      {availableSizes.length > 0 && (
-                        <div className="flex items-center mb-4">
-                           <span className="text-gray-700 w-24 font-medium">Kích thước:</span>
-                           <div className="flex gap-2">
+                        <div className='flex items-center mb-4'>
+                           <span className='text-gray-700 w-24 font-medium'>Kích thước:</span>
+                           <div className='flex gap-2'>
                               {availableSizes.map((size) => (
                                  <label
                                     key={size}
-                                    className={`flex items-center border ${selectedSize === size
-                                       ? 'border-orange-500 bg-orange-50'
-                                       : 'border-gray-300'
-                                       } rounded px-3 py-1.5 cursor-pointer`}
+                                    className={`flex items-center border ${
+                                       selectedSize === size
+                                          ? 'border-orange-500 bg-orange-50'
+                                          : 'border-gray-300'
+                                    } rounded px-3 py-1.5 cursor-pointer`}
                                  >
                                     <input
-                                       type="radio"
-                                       name="size"
-                                       className="mr-1.5"
+                                       type='radio'
+                                       name='size'
+                                       className='mr-1.5'
                                        checked={selectedSize === size}
                                        onChange={() => {
                                           setSelectedSize(size);
@@ -728,9 +767,11 @@ export default function ProductDetailPage() {
 
                      {/* Values Field - Show all values but disable those not available for selected size */}
                      {allValues.length > 0 && (
-                        <div className="flex items-center mb-4">
-                           <span className="text-gray-700 w-24 font-medium">{selectedDetail?.type}:</span>
-                           <div className="flex flex-wrap gap-2">
+                        <div className='flex items-center mb-4'>
+                           <span className='text-gray-700 w-24 font-medium'>
+                              {selectedDetail?.type}:
+                           </span>
+                           <div className='flex flex-wrap gap-2'>
                               {allValues.map((value) => {
                                  const isAvailable = isValueAvailableForSize(value);
                                  const isSelected = selectedDetail?.values === value;
@@ -738,24 +779,30 @@ export default function ProductDetailPage() {
                                  return (
                                     <label
                                        key={value}
-                                       className={`flex items-center border ${isSelected
-                                          ? 'border-orange-500 bg-orange-50'
-                                          : isAvailable
+                                       className={`flex items-center border ${
+                                          isSelected
+                                             ? 'border-orange-500 bg-orange-50'
+                                             : isAvailable
                                              ? 'border-gray-300 hover:bg-gray-50'
                                              : 'border-gray-200 bg-gray-100'
-                                          } rounded px-3 py-1.5 ${isAvailable ? 'cursor-pointer' : 'opacity-50 cursor-not-allowed'}`}
+                                       } rounded px-3 py-1.5 ${
+                                          isAvailable
+                                             ? 'cursor-pointer'
+                                             : 'opacity-50 cursor-not-allowed'
+                                       }`}
                                     >
                                        <input
-                                          type="radio"
-                                          name="values"
-                                          className="mr-1.5"
+                                          type='radio'
+                                          name='values'
+                                          className='mr-1.5'
                                           checked={isSelected}
                                           onChange={() => {
                                              if (isAvailable) {
                                                 const detailWithValue = productDetails.find(
-                                                   detail => detail.size === selectedSize &&
+                                                   (detail) =>
+                                                      detail.size === selectedSize &&
                                                       detail.values === value &&
-                                                      detail.isActive
+                                                      detail.isActive,
                                                 );
 
                                                 if (detailWithValue) {
@@ -776,26 +823,30 @@ export default function ProductDetailPage() {
                      )}
 
                      {/* Quantity */}
-                     <div className="flex items-center mb-4">
-                        <span className="text-gray-700 w-24 fưont-medium">Số lượng:</span>
-                        <div className="flex shadow-sm">
+                     <div className='flex items-center mb-4'>
+                        <span className='text-gray-700 w-24 fưont-medium'>Số lượng:</span>
+                        <div className='flex shadow-sm'>
                            <button
-                              className="border border-gray-300 px-3 py-1 rounded-l hover:bg-gray-100"
+                              className='border border-gray-300 px-3 py-1 rounded-l hover:bg-gray-100'
                               onClick={decreaseQuantity}
-                              disabled={!selectedDetail?.isActive || selectedDetail?.quantities <= 0}
+                              disabled={
+                                 !selectedDetail?.isActive || selectedDetail?.quantities <= 0
+                              }
                            >
                               -
                            </button>
                            <input
-                              type="text"
-                              className="border-t border-b border-gray-300 w-12 text-center"
+                              type='text'
+                              className='border-t border-b border-gray-300 w-12 text-center'
                               value={quantity}
                               readOnly
                            />
                            <button
-                              className="border border-gray-300 px-3 py-1 rounded-r hover:bg-gray-100"
+                              className='border border-gray-300 px-3 py-1 rounded-r hover:bg-gray-100'
                               onClick={increaseQuantity}
-                              disabled={!selectedDetail?.isActive || selectedDetail?.quantities <= 0}
+                              disabled={
+                                 !selectedDetail?.isActive || selectedDetail?.quantities <= 0
+                              }
                            >
                               +
                            </button>
@@ -803,58 +854,56 @@ export default function ProductDetailPage() {
                      </div>
 
                      {/* Action Buttons */}
-                     <div className="grid grid-cols-2 gap-3 mb-4">
+                     <div className='grid grid-cols-2 gap-3 mb-4'>
                         <button
-                           className="flex justify-center items-center bg-white border border-gray-300 py-2.5 text-sm text-gray-700 rounded hover:bg-gray-50 transition disabled:opacity-50"
+                           className='flex justify-center items-center bg-white border border-gray-300 py-2.5 text-sm text-gray-700 rounded hover:bg-gray-50 transition disabled:opacity-50'
                            onClick={handleAddToCart}
                            disabled={!selectedDetail?.isActive || selectedDetail?.quantities <= 0}
                         >
                            <svg
-                              xmlns="http://www.w3.org/2000/svg"
-                              className="h-4 w-4 mr-1"
-                              fill="none"
-                              viewBox="0 0 24 24"
-                              stroke="currentColor"
+                              xmlns='http://www.w3.org/2000/svg'
+                              className='h-4 w-4 mr-1'
+                              fill='none'
+                              viewBox='0 0 24 24'
+                              stroke='currentColor'
                            >
                               <path
-                                 strokeLinecap="round"
-                                 strokeLinejoin="round"
+                                 strokeLinecap='round'
+                                 strokeLinejoin='round'
                                  strokeWidth={2}
-                                 d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"
+                                 d='M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z'
                               />
                            </svg>
                            <span>Thêm vào giỏ hàng</span>
                         </button>
-                        <button
-                           className="flex justify-center items-center bg-white border border-gray-300 py-2.5 text-sm text-gray-700 rounded hover:bg-gray-50 transition"
-                        >
+                        <button className='flex justify-center items-center bg-white border border-gray-300 py-2.5 text-sm text-gray-700 rounded hover:bg-gray-50 transition'>
                            <svg
-                              xmlns="http://www.w3.org/2000/svg"
-                              className="h-4 w-4 mr-1"
-                              fill="none"
-                              viewBox="0 0 24 24"
-                              stroke="currentColor"
+                              xmlns='http://www.w3.org/2000/svg'
+                              className='h-4 w-4 mr-1'
+                              fill='none'
+                              viewBox='0 0 24 24'
+                              stroke='currentColor'
                            >
                               <path
-                                 strokeLinecap="round"
-                                 strokeLinejoin="round"
+                                 strokeLinecap='round'
+                                 strokeLinejoin='round'
                                  strokeWidth={2}
-                                 d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
+                                 d='M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z'
                               />
                            </svg>
                            <span>Thêm vào yêu thích</span>
                         </button>
                      </div>
 
-                     <div className="grid grid-cols-1 gap-3 mb-2">
+                     <div className='grid grid-cols-1 gap-3 mb-2'>
                         <button
-                           className="bg-orange-700 border border-orange-700 py-3 text-sm text-white rounded hover:bg-orange-800 transition font-medium disabled:opacity-50 disabled:hover:bg-orange-700"
+                           className='bg-orange-700 border border-orange-700 py-3 text-sm text-white rounded hover:bg-orange-800 transition font-medium disabled:opacity-50 disabled:hover:bg-orange-700'
                            onClick={handleBuyNow}
                            disabled={!selectedDetail?.isActive || selectedDetail?.quantities <= 0}
                         >
                            Mua ngay
                         </button>
-                        <button className="bg-orange-50 border border-orange-700 py-3 text-sm text-orange-700 rounded hover:bg-orange-100 transition font-medium">
+                        <button className='bg-orange-50 border border-orange-700 py-3 text-sm text-orange-700 rounded hover:bg-orange-100 transition font-medium'>
                            Nhắn tin với shop
                         </button>
                      </div>
@@ -868,28 +917,31 @@ export default function ProductDetailPage() {
                   <div className='container mx-auto px-4'>
                      <ul className='flex flex-wrap'>
                         <li
-                           className={`mr-8 py-4 cursor-pointer font-medium text-base transition-colors ${activeTab === 0
-                              ? 'border-b-2 border-orange-500 text-orange-700'
-                              : 'text-gray-600 hover:text-orange-700'
-                              }`}
+                           className={`mr-8 py-4 cursor-pointer font-medium text-base transition-colors ${
+                              activeTab === 0
+                                 ? 'border-b-2 border-orange-500 text-orange-700'
+                                 : 'text-gray-600 hover:text-orange-700'
+                           }`}
                            onClick={() => setActiveTab(0)}
                         >
                            Mô Tả Sản Phẩm
                         </li>
                         <li
-                           className={`mr-8 py-4 cursor-pointer font-medium text-base transition-colors ${activeTab === 1
-                              ? 'border-b-2 border-orange-500 text-orange-700'
-                              : 'text-gray-600 hover:text-orange-700'
-                              }`}
+                           className={`mr-8 py-4 cursor-pointer font-medium text-base transition-colors ${
+                              activeTab === 1
+                                 ? 'border-b-2 border-orange-500 text-orange-700'
+                                 : 'text-gray-600 hover:text-orange-700'
+                           }`}
                            onClick={() => setActiveTab(1)}
                         >
                            Thông Tin Chi Tiết
                         </li>
                         <li
-                           className={`mr-8 py-4 cursor-pointer font-medium text-base transition-colors ${activeTab === 2
-                              ? 'border-b-2 border-orange-500 text-orange-700'
-                              : 'text-gray-600 hover:text-orange-700'
-                              }`}
+                           className={`mr-8 py-4 cursor-pointer font-medium text-base transition-colors ${
+                              activeTab === 2
+                                 ? 'border-b-2 border-orange-500 text-orange-700'
+                                 : 'text-gray-600 hover:text-orange-700'
+                           }`}
                            onClick={() => setActiveTab(2)}
                         >
                            Đánh Giá từ Khách Hàng
@@ -908,29 +960,31 @@ export default function ProductDetailPage() {
                   )}
 
                   {activeTab === 1 && (
-                     <div className="bg-white">
-                        <table className="w-full border-collapse">
+                     <div className='bg-white'>
+                        <table className='w-full border-collapse'>
                            <tbody>
-                              <tr className="border-b">
-                                 <td className="py-3 font-medium w-1/3">Thương hiệu</td>
-                                 <td className="py-3">CandleBliss</td>
+                              <tr className='border-b'>
+                                 <td className='py-3 font-medium w-1/3'>Thương hiệu</td>
+                                 <td className='py-3'>CandleBliss</td>
                               </tr>
-                              <tr className="border-b">
-                                 <td className="py-3 font-medium">Xuất xứ</td>
-                                 <td className="py-3">Việt Nam</td>
+                              <tr className='border-b'>
+                                 <td className='py-3 font-medium'>Xuất xứ</td>
+                                 <td className='py-3'>Việt Nam</td>
                               </tr>
 
-                              <tr className="border-b">
-                                 <td className="py-3 font-medium">Kích thước</td>
-                                 <td className="py-3">{selectedDetail?.size || 'N/A'}</td>
+                              <tr className='border-b'>
+                                 <td className='py-3 font-medium'>Kích thước</td>
+                                 <td className='py-3'>{selectedDetail?.size || 'N/A'}</td>
                               </tr>
-                              <tr className="border-b">
-                                 <td className="py-3 font-medium">{selectedDetail?.type}</td>
-                                 <td className="py-3">{selectedDetail?.values || 'Không có thông tin'}</td>
+                              <tr className='border-b'>
+                                 <td className='py-3 font-medium'>{selectedDetail?.type}</td>
+                                 <td className='py-3'>
+                                    {selectedDetail?.values || 'Không có thông tin'}
+                                 </td>
                               </tr>
                               <tr>
-                                 <td className="py-3 font-medium">Hướng dẫn sử dụng</td>
-                                 <td className="py-3">
+                                 <td className='py-3 font-medium'>Hướng dẫn sử dụng</td>
+                                 <td className='py-3'>
                                     Thắp nến trong không gian thoáng mát, tránh xa vật dễ cháy
                                  </td>
                               </tr>
@@ -957,10 +1011,14 @@ export default function ProductDetailPage() {
          <Footer />
 
          {showCartNotification && (
-            <div className="fixed bottom-4 right-4 bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded shadow-lg z-50 animate-fade-in-out">
-               <div className="flex items-center">
-                  <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                     <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+            <div className='fixed bottom-4 right-4 bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded shadow-lg z-50 animate-fade-in-out'>
+               <div className='flex items-center'>
+                  <svg className='w-5 h-5 mr-2' fill='currentColor' viewBox='0 0 20 20'>
+                     <path
+                        fillRule='evenodd'
+                        d='M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z'
+                        clipRule='evenodd'
+                     />
                   </svg>
                   <span>Đã thêm sản phẩm vào giỏ hàng!</span>
                </div>

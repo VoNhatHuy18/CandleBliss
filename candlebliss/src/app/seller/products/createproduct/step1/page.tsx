@@ -28,7 +28,7 @@ export default function Step1() {
    const [name, setName] = useState(formData.name || '');
    const [description, setDescription] = useState(formData.description || '');
    const [selectedCategory, setSelectedCategory] = useState<Category | null>(
-      formData.selectedCategory || null
+      formData.selectedCategory || null,
    );
    // State cho dropdown
    const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false);
@@ -52,7 +52,6 @@ export default function Step1() {
 
    // Bổ sung thêm states cho việc loading
    const [imageUploading, setImageUploading] = useState(false);
-   const [videoUrlValidating, setVideoUrlValidating] = useState(false);
    const [imageProcessingCount, setImageProcessingCount] = useState(0);
 
    // Thêm kiểm tra token khi component mount
@@ -87,8 +86,8 @@ export default function Step1() {
          const response = await fetch('http://68.183.226.198:3000/api/categories', {
             headers: {
                Authorization: `Bearer ${token}`,
-               'Content-Type': 'application/json'
-            }
+               'Content-Type': 'application/json',
+            },
          });
 
          console.log('Categories API response status:', response.status);
@@ -117,7 +116,10 @@ export default function Step1() {
                      categoriesData = JSON.parse(jsonString);
                      console.log('Extracted categories from 302 response text:', categoriesData);
                   } catch (nestedError) {
-                     console.error('Failed to extract categories from 302 response text:', nestedError);
+                     console.error(
+                        'Failed to extract categories from 302 response text:',
+                        nestedError,
+                     );
                      throw new Error('Không thể xử lý dữ liệu danh mục từ máy chủ');
                   }
                } else {
@@ -139,10 +141,14 @@ export default function Step1() {
                   console.log('Extracted categories from error response:', categoriesData);
                } catch (parseError) {
                   console.error('Failed to extract categories from error response:', parseError);
-                  throw new Error(`Không thể tải danh mục sản phẩm (${response.status}): ${errorText}`);
+                  throw new Error(
+                     `Không thể tải danh mục sản phẩm (${response.status}): ${errorText}`,
+                  );
                }
             } else {
-               throw new Error(`Không thể tải danh mục sản phẩm (${response.status}): ${errorText}`);
+               throw new Error(
+                  `Không thể tải danh mục sản phẩm (${response.status}): ${errorText}`,
+               );
             }
          } else {
             // Normal case: API returns success status
@@ -200,15 +206,15 @@ export default function Step1() {
          setIsCategoryDetailLoading(true);
          console.log('Selected category:', category);
          setSelectedCategory(category); // Set the category immediately for better UX
-         setErrors(prev => ({ ...prev, category: '' }));
+         setErrors((prev) => ({ ...prev, category: '' }));
          setIsCategoryDropdownOpen(false);
 
          // Fetch detailed category information if needed
          const token = localStorage.getItem('token') || sessionStorage.getItem('token');
          const response = await fetch(`http://68.183.226.198:3000/api/categories/${category.id}`, {
             headers: {
-               Authorization: `Bearer ${token}`
-            }
+               Authorization: `Bearer ${token}`,
+            },
          });
 
          if (!response.ok) {
@@ -272,16 +278,16 @@ export default function Step1() {
                processedImages.push(objectUrl);
 
                // Artificial delay to show loading state (can be removed in production)
-               await new Promise(resolve => setTimeout(resolve, 300));
+               await new Promise((resolve) => setTimeout(resolve, 300));
 
-               setImageProcessingCount(prev => Math.max(0, prev - 1));
+               setImageProcessingCount((prev) => Math.max(0, prev - 1));
             } catch (error) {
                console.error('Error processing image:', error);
             }
          }
 
-         setProductImages(prev => [...prev, ...processedImages]);
-         setErrors(prev => ({ ...prev, images: '' }));
+         setProductImages((prev) => [...prev, ...processedImages]);
+         setErrors((prev) => ({ ...prev, images: '' }));
       } catch (error) {
          console.error('Error during image upload:', error);
          setImageError('Có lỗi xảy ra khi xử lý hình ảnh.');
@@ -381,7 +387,7 @@ export default function Step1() {
          for (const [index, blobUrl] of safeProductImages.entries()) {
             if (!blobUrl || !blobUrl.startsWith('blob:')) {
                console.log(`Bỏ qua hình ảnh không hợp lệ: ${blobUrl}`);
-               setImageProcessingCount(prev => Math.max(0, prev - 1));
+               setImageProcessingCount((prev) => Math.max(0, prev - 1));
                continue;
             }
 
@@ -389,14 +395,16 @@ export default function Step1() {
                console.log(`Đang xử lý hình ảnh ${index + 1}/${safeProductImages.length}...`);
                const response = await fetch(blobUrl);
                const blob = await response.blob();
-               const fileName = `image-${Date.now()}-${Math.random().toString(36).substring(2, 10)}.jpg`;
+               const fileName = `image-${Date.now()}-${Math.random()
+                  .toString(36)
+                  .substring(2, 10)}.jpg`;
                const file = new File([blob], fileName, { type: blob.type });
                productFormData.append('images', file);
                hasImages = true;
-               setImageProcessingCount(prev => Math.max(0, prev - 1));
+               setImageProcessingCount((prev) => Math.max(0, prev - 1));
             } catch (error) {
                console.error(`Lỗi xử lý hình ảnh ${index + 1}:`, error);
-               setImageProcessingCount(prev => Math.max(0, prev - 1));
+               setImageProcessingCount((prev) => Math.max(0, prev - 1));
             }
          }
 
@@ -414,10 +422,10 @@ export default function Step1() {
          const productResponse = await fetch('http://68.183.226.198:3000/api/products', {
             method: 'POST',
             headers: {
-               'Authorization': `Bearer ${token}`
+               Authorization: `Bearer ${token}`,
                // Không set Content-Type khi dùng FormData, trình duyệt sẽ tự thêm với boundary
             },
-            body: productFormData
+            body: productFormData,
          });
 
          console.log('Phản hồi từ máy chủ:', productResponse.status);
@@ -470,14 +478,18 @@ export default function Step1() {
             {/* Main Content */}
             <main className='flex-1 p-6 overflow-auto'>
                {categoryError && categoryError.includes('Phiên làm việc đã hết hạn') && (
-                  <div className="mb-4 p-4 bg-red-50 border-l-4 border-red-400 text-red-700">
-                     <div className="flex items-center">
-                        <svg className="h-5 w-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                           <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                  <div className='mb-4 p-4 bg-red-50 border-l-4 border-red-400 text-red-700'>
+                     <div className='flex items-center'>
+                        <svg className='h-5 w-5 mr-2' fill='currentColor' viewBox='0 0 20 20'>
+                           <path
+                              fillRule='evenodd'
+                              d='M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z'
+                              clipRule='evenodd'
+                           />
                         </svg>
                         <p>{categoryError}</p>
                      </div>
-                     <p className="mt-2 text-sm">Đang chuyển hướng đến trang đăng nhập...</p>
+                     <p className='mt-2 text-sm'>Đang chuyển hướng đến trang đăng nhập...</p>
                   </div>
                )}
                {/* Breadcrumb */}
@@ -580,8 +592,9 @@ export default function Step1() {
                                  setErrors((prev) => ({ ...prev, name: '' }));
                               }}
                               placeholder='Tên sản phẩm '
-                              className={`w-full px-3 py-2 border ${errors.name ? 'border-red-500' : 'border-gray-300'
-                                 } rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500`}
+                              className={`w-full px-3 py-2 border ${
+                                 errors.name ? 'border-red-500' : 'border-gray-300'
+                              } rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500`}
                            />
                            {errors.name && (
                               <p className='text-red-500 text-xs mt-1'>{errors.name}</p>
@@ -595,32 +608,37 @@ export default function Step1() {
                            </label>
                            <div className='relative'>
                               <button
-                                 type="button"
+                                 type='button'
                                  onClick={handleOpenCategoryDropdown}
-                                 className={`w-full px-3 py-2 text-left border ${errors.category ? 'border-red-500' : 'border-gray-300'
-                                    } rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white flex justify-between items-center`}
+                                 className={`w-full px-3 py-2 text-left border ${
+                                    errors.category ? 'border-red-500' : 'border-gray-300'
+                                 } rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white flex justify-between items-center`}
                               >
-                                 <span className={selectedCategory ? 'text-gray-900' : 'text-gray-400'}>
-                                    {selectedCategory ? (selectedCategory.name || `Danh mục ${selectedCategory.id}`) : 'Chọn danh mục sản phẩm'}
+                                 <span
+                                    className={selectedCategory ? 'text-gray-900' : 'text-gray-400'}
+                                 >
+                                    {selectedCategory
+                                       ? selectedCategory.name || `Danh mục ${selectedCategory.id}`
+                                       : 'Chọn danh mục sản phẩm'}
                                  </span>
-                                 <ChevronDown className="h-4 w-4 text-gray-500" />
+                                 <ChevronDown className='h-4 w-4 text-gray-500' />
                               </button>
 
                               {isCategoryDropdownOpen && (
-                                 <div className="absolute z-10 mt-1 w-full bg-white shadow-lg rounded-md border border-gray-200 py-1 max-h-60 overflow-auto">
+                                 <div className='absolute z-10 mt-1 w-full bg-white shadow-lg rounded-md border border-gray-200 py-1 max-h-60 overflow-auto'>
                                     {isCategoriesLoading ? (
-                                       <div className="px-4 py-2 text-sm text-gray-500">
-                                          <div className="flex items-center">
-                                             <Loader2 className="h-4 w-4 mr-2 animate-spin text-amber-500" />
+                                       <div className='px-4 py-2 text-sm text-gray-500'>
+                                          <div className='flex items-center'>
+                                             <Loader2 className='h-4 w-4 mr-2 animate-spin text-amber-500' />
                                              Đang tải danh mục...
                                           </div>
                                        </div>
                                     ) : categories.length === 0 ? (
-                                       <div className="px-4 py-2 text-sm text-gray-500">
+                                       <div className='px-4 py-2 text-sm text-gray-500'>
                                           {categoryError ? (
-                                             <div className="text-red-500">{categoryError}</div>
+                                             <div className='text-red-500'>{categoryError}</div>
                                           ) : (
-                                             "Không có danh mục nào. Bạn có thể thêm danh mục mới."
+                                             'Không có danh mục nào. Bạn có thể thêm danh mục mới.'
                                           )}
                                        </div>
                                     ) : (
@@ -628,10 +646,13 @@ export default function Step1() {
                                           {categories.map((category) => (
                                              <button
                                                 key={category.id}
-                                                type="button"
+                                                type='button'
                                                 onClick={() => handleCategorySelect(category)}
-                                                className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-100 ${selectedCategory?.id === category.id ? 'bg-amber-50 text-amber-700' : 'text-gray-700'
-                                                   }`}
+                                                className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-100 ${
+                                                   selectedCategory?.id === category.id
+                                                      ? 'bg-amber-50 text-amber-700'
+                                                      : 'text-gray-700'
+                                                }`}
                                              >
                                                 {category.name || `Danh mục ${category.id}`}
                                              </button>
@@ -654,8 +675,9 @@ export default function Step1() {
                               <span className='text-red-500'>*</span> Hình ảnh chi tiết sản phẩm:
                            </label>
                            <div
-                              className={`border border-dashed ${errors.images ? 'border-red-500' : 'border-gray-300'
-                                 } rounded-md p-6`}
+                              className={`border border-dashed ${
+                                 errors.images ? 'border-red-500' : 'border-gray-300'
+                              } rounded-md p-6`}
                            >
                               {/* Image Preview Grid */}
                               {productImages.length > 0 && (
@@ -667,8 +689,8 @@ export default function Step1() {
                                              <Image
                                                 src={image}
                                                 alt={`Product image ${index + 1}`}
-                                                fill={true} 
-                                                style={{ objectFit: 'cover' }} 
+                                                fill={true}
+                                                style={{ objectFit: 'cover' }}
                                                 className='transition-all duration-200'
                                              />
                                           </div>
@@ -728,9 +750,7 @@ export default function Step1() {
                            {errors.images && (
                               <p className='text-red-500 text-xs mt-1'>{errors.images}</p>
                            )}
-                           {imageError && (
-                              <p className='text-red-500 text-xs mt-1'>{imageError}</p>
-                           )}
+                           {imageError && <p className='text-red-500 text-xs mt-1'>{imageError}</p>}
                         </div>
 
                         {/* Video URL */}
@@ -763,8 +783,9 @@ export default function Step1() {
                                  setErrors((prev) => ({ ...prev, description: '' }));
                               }}
                               placeholder='Mô tả chi tiết về sản phẩm, tính năng, đặc điểm nổi bật...'
-                              className={`w-full px-3 py-2 border ${errors.description ? 'border-red-500' : 'border-gray-300'
-                                 } rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500`}
+                              className={`w-full px-3 py-2 border ${
+                                 errors.description ? 'border-red-500' : 'border-gray-300'
+                              } rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500`}
                            />
                            {errors.description && (
                               <p className='text-red-500 text-xs mt-1'>{errors.description}</p>
@@ -775,7 +796,10 @@ export default function Step1() {
 
                   {/* Next/Cancel Buttons */}
                   <div className='flex justify-end space-x-4'>
-                     <Link href='/seller/products' className='px-6 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50'>
+                     <Link
+                        href='/seller/products'
+                        className='px-6 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50'
+                     >
                         Hủy
                      </Link>
                      <button
@@ -785,7 +809,7 @@ export default function Step1() {
                      >
                         {isLoading ? (
                            <>
-                              <Loader2 className="animate-spin h-4 w-4 mr-2" />
+                              <Loader2 className='animate-spin h-4 w-4 mr-2' />
                               Đang xử lý...
                            </>
                         ) : (

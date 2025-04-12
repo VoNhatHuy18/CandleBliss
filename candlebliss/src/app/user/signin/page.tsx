@@ -23,7 +23,6 @@ export default function SignInPage() {
    const [passwordError, setPasswordError] = useState<string>('');
    const [isLoading, setIsLoading] = useState<boolean>(false);
    const [apiError, setApiError] = useState<string>('');
-   const [loginSuccess, setLoginSuccess] = useState<boolean>(false);
    const [toast, setToast] = useState<{
       show: boolean;
       message: string;
@@ -173,14 +172,14 @@ export default function SignInPage() {
                // Đảm bảo lưu userId
                const userInfo = {
                   ...data.user,
-                  id: data.user.id // Đảm bảo userId được lưu
+                  id: data.user.id, // Đảm bảo userId được lưu
                };
                AuthService.saveUserInfo(userInfo);
 
                // Lưu userId vào localStorage để dễ dàng truy cập
                localStorage.setItem('userId', data.user.id.toString());
 
-               console.log("User authenticated successfully with ID:", data.user.id);
+               console.log('User authenticated successfully with ID:', data.user.id);
             } else {
                // Nếu API không trả về thông tin user, thực hiện request bổ sung để lấy thông tin
                try {
@@ -188,9 +187,9 @@ export default function SignInPage() {
                   const userResponse = await fetch('/api/v1/auth/me', {
                      method: 'GET',
                      headers: {
-                        'Authorization': `Bearer ${data.token}`,
+                        Authorization: `Bearer ${data.token}`,
                         'Content-Type': 'application/json',
-                     }
+                     },
                   });
 
                   if (userResponse.ok) {
@@ -202,16 +201,15 @@ export default function SignInPage() {
                      // Lưu userId vào localStorage để dễ dàng truy cập
                      localStorage.setItem('userId', userData.id.toString());
 
-                     console.log("User information retrieved with ID:", userData.id);
+                     console.log('User information retrieved with ID:', userData.id);
                   } else {
-                     console.warn("Failed to fetch additional user information");
+                     console.warn('Failed to fetch additional user information');
                   }
                } catch (error) {
-                  console.error("Error fetching user details:", error);
+                  console.error('Error fetching user details:', error);
                }
             }
 
-            setLoginSuccess(true);
             showToastMessage('Đăng nhập thành công!', 'success');
 
             // Reset form sau khi đăng nhập thành công
@@ -241,25 +239,28 @@ export default function SignInPage() {
                throw new Error('Token không hợp lệ từ server');
             }
          }
-      } catch (error: any) {
+      } catch (error: unknown) {
+         const errorMessage =
+            error instanceof Error ? error.message : 'Có lỗi xảy ra, vui lòng thử lại sau.';
+
          console.error('Login error:', error);
 
          // Kiểm tra lỗi CORS cụ thể
          if (
-            error.message &&
-            (error.message.includes('Failed to fetch') ||
-               error.message.includes('NetworkError') ||
-               error.message.includes('CORS'))
+            errorMessage &&
+            (errorMessage.includes('Failed to fetch') ||
+               errorMessage.includes('NetworkError') ||
+               errorMessage.includes('CORS'))
          ) {
             showToastMessage(
                'Lỗi kết nối đến server. Vui lòng kiểm tra kết nối mạng hoặc liên hệ quản trị viên.',
                'error',
             );
          } else {
-            showToastMessage(error.message || 'Có lỗi xảy ra, vui lòng thử lại sau.', 'error');
+            showToastMessage(errorMessage, 'error');
          }
 
-         setApiError(error.message || 'Có lỗi xảy ra, vui lòng thử lại sau.');
+         setApiError(errorMessage);
       } finally {
          setIsLoading(false);
       }
@@ -315,8 +316,9 @@ export default function SignInPage() {
                         <input
                            type='email'
                            id='email'
-                           className={`w-full px-3 py-2 border rounded-lg ${emailError ? 'border-red-500' : 'border-[#553C26]'
-                              }`}
+                           className={`w-full px-3 py-2 border rounded-lg ${
+                              emailError ? 'border-red-500' : 'border-[#553C26]'
+                           }`}
                            placeholder='Nhập Email hoặc số điện thoại'
                            value={email}
                            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
@@ -340,8 +342,9 @@ export default function SignInPage() {
                            <input
                               type={showPassword ? 'text' : 'password'}
                               id='password'
-                              className={`w-full px-3 py-2 border rounded-lg ${passwordError ? 'border-red-500' : 'border-[#553C26]'
-                                 }`}
+                              className={`w-full px-3 py-2 border rounded-lg ${
+                                 passwordError ? 'border-red-500' : 'border-[#553C26]'
+                              }`}
                               placeholder='Nhập mật khẩu'
                               value={password}
                               onChange={(e: React.ChangeEvent<HTMLInputElement>) =>

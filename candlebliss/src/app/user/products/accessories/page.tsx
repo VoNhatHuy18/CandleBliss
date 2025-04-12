@@ -5,7 +5,6 @@ import { Star, StarHalf, Eye, Menu, X, ShoppingCart } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import NavBar from '@/app/components/user/nav/page';
-import MenuSidebar from '@/app/components/user/menusidebar/page';
 import Footer from '@/app/components/user/footer/page';
 
 interface ProductImage {

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, use } from 'react';
+import React, { useState, useEffect, use, useCallback } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -92,7 +92,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
    });
 
    // Thêm hàm hiện toast message
-   const showToastMessage = (message: string, type: 'success' | 'error' | 'info') => {
+   const showToastMessage = useCallback((message: string, type: 'success' | 'error' | 'info') => {
       setToast({
          show: true,
          message,
@@ -103,8 +103,56 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
       setTimeout(() => {
          setToast((prev) => ({ ...prev, show: false }));
       }, 3000);
-   };
+   }, []);
 
+   // First, wrap loadOrderDetail with useCallback
+   const loadOrderDetail = useCallback(
+      async (orderId: string) => {
+         try {
+            const token = localStorage.getItem('token');
+            if (!token) {
+               showToastMessage('Phiên đăng nhập hết hạn, vui lòng đăng nhập lại', 'error');
+               router.push('/user/signin');
+               return;
+            }
+
+            // Sửa URL API theo định dạng mới
+            const response = await fetch(
+               `http://68.183.226.198:3000/api/orders/${orderId}?id=${orderId}`,
+               {
+                  headers: {
+                     Authorization: `Bearer ${token}`,
+                  },
+               },
+            );
+
+            if (!response.ok) {
+               if (response.status === 404) {
+                  showToastMessage('Đơn hàng không tồn tại hoặc đã bị xóa', 'error');
+                  router.push('/user/order');
+                  return;
+               }
+               throw new Error('Không thể tải chi tiết đơn hàng');
+            }
+
+            const data = await response.json();
+            setOrder(data);
+
+            // Add this check
+            if (userId !== data.user_id) {
+               showToastMessage('Bạn không có quyền xem đơn hàng này', 'error');
+               router.push('/user/order');
+               return;
+            }
+         } catch (error) {
+            console.error('Error loading order detail:', error);
+            showToastMessage('Không thể tải chi tiết đơn hàng', 'error');
+         }
+      },
+      [router, showToastMessage, userId],
+   );
+
+   // Then update your useEffect
    useEffect(() => {
       const init = async () => {
          // Lấy thông tin userId từ localStorage
@@ -130,44 +178,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
       };
 
       init();
-   }, [orderId]);
-
-   // Hàm tải chi tiết đơn hàng
-   const loadOrderDetail = async (orderId: string) => {
-      try {
-         const token = localStorage.getItem('token');
-         if (!token) {
-            showToastMessage('Phiên đăng nhập hết hạn, vui lòng đăng nhập lại', 'error');
-            router.push('/user/signin');
-            return;
-         }
-
-         // Sửa URL API theo định dạng mới
-         const response = await fetch(
-            `http://68.183.226.198:3000/api/orders/${orderId}?id=${orderId}`,
-            {
-               headers: {
-                  Authorization: `Bearer ${token}`,
-               },
-            },
-         );
-
-         if (!response.ok) {
-            if (response.status === 404) {
-               showToastMessage('Đơn hàng không tồn tại hoặc đã bị xóa', 'error');
-               router.push('/user/order');
-               return;
-            }
-            throw new Error('Không thể tải chi tiết đơn hàng');
-         }
-
-         const data = await response.json();
-         setOrder(data);
-      } catch (error) {
-         console.error('Error loading order detail:', error);
-         showToastMessage('Không thể tải chi tiết đơn hàng', 'error');
-      }
-   };
+   }, [orderId, router, loadOrderDetail, showToastMessage]);
 
    // Hàm xử lý hủy đơn hàng
    const handleCancelOrder = async () => {
@@ -207,9 +218,18 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
          // Cập nhật trạng thái trong state
          setOrder({ ...order, status: 'Đã hủy' });
          showToastMessage('Đơn hàng đã được hủy thành công', 'success');
-      } catch (error: any) {
+      } catch (error: unknown) {
          console.error('Error canceling order:', error);
-         showToastMessage(error.message || 'Không thể hủy đơn hàng', 'error');
+
+         // Safely extract error message
+         let errorMessage = 'Không thể hủy đơn hàng';
+         if (error instanceof Error) {
+            errorMessage = error.message;
+         } else if (typeof error === 'object' && error && 'message' in error) {
+            errorMessage = String((error as { message: unknown }).message);
+         }
+
+         showToastMessage(errorMessage, 'error');
       } finally {
          setLoading(false);
       }

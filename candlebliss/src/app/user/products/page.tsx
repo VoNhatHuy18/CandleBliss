@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Star, StarHalf, Eye, Menu, X, ShoppingCart } from 'lucide-react';
+import { Star, StarHalf, Eye, Menu, X } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
@@ -74,8 +74,39 @@ const ProductCard = ({
    variants,
    onViewDetail,
 }: ProductCardProps & { id: number }) => {
-   const [selectedVariant, setSelectedVariant] = useState(variants && variants.length > 0 ? variants[0].detailId : null);
+   const [selectedVariant, setSelectedVariant] = useState(
+      variants && variants.length > 0 ? variants[0].detailId : null,
+   );
    const [showVariantOptions, setShowVariantOptions] = useState(false);
+
+   // Add this function to use setSelectedVariant
+   const handleVariantChange = (variantId: number) => {
+      setSelectedVariant(variantId);
+      setShowVariantOptions(false);
+   };
+
+   const renderVariantOptions = () => {
+      if (showVariantOptions && variants) {
+         return (
+            <div className='mt-1 space-y-1'>
+               {variants.map((variant) => (
+                  <button
+                     key={variant.detailId}
+                     className={`text-xs px-2 py-1 border rounded ${
+                        selectedVariant === variant.detailId
+                           ? 'border-orange-500 bg-orange-50'
+                           : 'border-gray-300'
+                     }`}
+                     onClick={() => handleVariantChange(variant.detailId)}
+                  >
+                     {variant.size} - {variant.type}
+                  </button>
+               ))}
+            </div>
+         );
+      }
+      return null;
+   };
 
    const renderStars = () => {
       const stars = [];
@@ -122,7 +153,7 @@ const ProductCard = ({
       if (variants && variants.length > 0) {
          // Sử dụng variant được chọn nếu có, ngược lại sử dụng variant đầu tiên
          const activeVariant = selectedVariant
-            ? variants.find(v => v.detailId === selectedVariant)
+            ? variants.find((v) => v.detailId === selectedVariant)
             : variants[0];
 
          if (activeVariant) {
@@ -133,7 +164,7 @@ const ProductCard = ({
             return {
                basePrice: activeVariant.basePrice,
                discountPrice: actualDiscountPrice,
-               discountPercent: activeVariant.discountPrice
+               discountPercent: activeVariant.discountPrice,
             };
          }
       }
@@ -146,20 +177,12 @@ const ProductCard = ({
       return {
          basePrice: price,
          discountPrice: actualDiscountPrice,
-         discountPercent: discountPrice
+         discountPercent: discountPrice,
       };
    };
 
+   // Get the display price values
    const { basePrice, discountPrice: calculatedDiscountPrice, discountPercent } = getDisplayPrice();
-
-   // Get unique size and type combinations for filtering
-   const uniqueSizes = variants ? [...new Set(variants.map(v => v.size))] : [];
-   const uniqueTypes = variants && selectedVariant ?
-      [...new Set(variants.filter(v => {
-         const selected = variants.find(sv => sv.detailId === selectedVariant);
-         return selected && v.size === selected.size;
-      }).map(v => v.type))]
-      : [];
 
    return (
       <div className='rounded-lg bg-white p-3 shadow-lg hover:shadow-md transition-shadow'>
@@ -199,17 +222,13 @@ const ProductCard = ({
 
             {/* Hiển thị tùy chọn variants */}
             {variants && variants.length > 0 && (
-               <div className="mt-2">
+               <div className='mt-2'>
                   {/* Toggle button to show/hide variant options */}
                   <button
-                     className="text-xs text-gray-600 hover:text-orange-700 mb-1 flex items-center"
+                     className='text-xs text-gray-600 hover:text-orange-700 mb-1 flex items-center'
                      onClick={() => setShowVariantOptions(!showVariantOptions)}
-                  >
-
-                  </button>
-
-
-
+                  ></button>
+                  {renderVariantOptions()}
                </div>
             )}
 
@@ -217,20 +236,20 @@ const ProductCard = ({
             <div className='mt-1.5'>
                {(() => {
                   // Nếu có giảm giá
-                  if (discountPercent && parseInt(discountPercent) > 0) {
-                     const actualBasePrice = parseFloat(basePrice);
-                     const discountPercentValue = parseFloat(discountPercent);
-                     const discountedPrice = actualBasePrice * (1 - discountPercentValue / 100);
-
+                  if (
+                     discountPercent &&
+                     parseInt(discountPercent) > 0 &&
+                     calculatedDiscountPrice !== null
+                  ) {
                      return (
-                        <div className="flex items-center">
-                           <span className="text-red-600 text-sm font-medium">
-                              {formatPrice(discountedPrice)}đ
+                        <div className='flex items-center'>
+                           <span className='text-red-600 text-sm font-medium'>
+                              {formatPrice(calculatedDiscountPrice)}đ
                            </span>
-                           <span className="ml-1.5 text-gray-500 text-xs line-through">
+                           <span className='ml-1.5 text-gray-500 text-xs line-through'>
                               {formatPrice(basePrice)}đ
                            </span>
-                           <div className="bg-red-600 text-white text-xs px-1.5 py-0.5 rounded ml-1.5">
+                           <div className='bg-red-600 text-white text-xs px-1.5 py-0.5 rounded ml-1.5'>
                               -{discountPercent}%
                            </div>
                         </div>
@@ -239,7 +258,7 @@ const ProductCard = ({
                   // Không có giảm giá
                   else {
                      return (
-                        <span className="text-red-600 text-sm font-medium">
+                        <span className='text-red-600 text-sm font-medium'>
                            {formatPrice(basePrice)}đ
                         </span>
                      );
@@ -335,22 +354,22 @@ export default function ProductPage() {
                }
 
                const pricesData: Price[] = await pricesResponse.json();
-               console.log("Tổng số giá được tìm thấy:", pricesData.length);
+               console.log('Tổng số giá được tìm thấy:', pricesData.length);
 
                // Lấy thông tin chi tiết sản phẩm (product details) trực tiếp để biết chúng thuộc về sản phẩm nào
                // Nếu API không có sẵn, chúng ta sẽ thử phương pháp khác
-               let productDetailMapping: { [key: number]: number } = {};
+               const productDetailMapping: { [key: number]: number } = {};
 
                // Phương pháp 1: Lấy mapping từ product.details nếu có
-               normalizedProducts.forEach(product => {
+               normalizedProducts.forEach((product) => {
                   if (product.details && product.details.length > 0) {
-                     product.details.forEach(detail => {
+                     product.details.forEach((detail) => {
                         productDetailMapping[detail.id] = product.id;
                      });
                   }
                });
 
-               console.log("Mapped product details:", Object.keys(productDetailMapping).length);
+               console.log('Mapped product details:', Object.keys(productDetailMapping).length);
 
                // Tạo danh sách sản phẩm hiển thị
                const mappedProducts = normalizedProducts.map((product) => {
@@ -364,12 +383,12 @@ export default function ProductPage() {
 
                   // Cách 1: Nếu sản phẩm có danh sách details
                   if (product.details && product.details.length > 0) {
-                     const detailIds = product.details.map(detail => detail.id);
+                     const detailIds = product.details.map((detail) => detail.id);
 
                      // Tìm giá cho từng chi tiết sản phẩm
-                     detailIds.forEach(detailId => {
+                     detailIds.forEach((detailId) => {
                         const matchingPrices = pricesData.filter(
-                           price => price.product_detail && price.product_detail.id === detailId
+                           (price) => price.product_detail && price.product_detail.id === detailId,
                         );
                         relatedPrices.push(...matchingPrices);
                      });
@@ -381,8 +400,11 @@ export default function ProductPage() {
                      const potentialDetailIds = Array.from({ length: 5 }, (_, i) => product.id + i);
                      potentialDetailIds.push(product.id, product.id * 2, product.id * 3); // Thêm một vài phỏng đoán
 
-                     pricesData.forEach(price => {
-                        if (price.product_detail && potentialDetailIds.includes(price.product_detail.id)) {
+                     pricesData.forEach((price) => {
+                        if (
+                           price.product_detail &&
+                           potentialDetailIds.includes(price.product_detail.id)
+                        ) {
                            relatedPrices.push(price);
                         }
                      });
@@ -413,7 +435,7 @@ export default function ProductPage() {
 
                      // Tìm giá khuyến mãi thấp nhất
                      const discountPrices = relatedPrices.filter(
-                        price => price.discount_price && Number(price.discount_price) > 0
+                        (price) => price.discount_price && Number(price.discount_price) > 0,
                      );
 
                      if (discountPrices.length > 0) {
@@ -423,15 +445,17 @@ export default function ProductPage() {
                   }
 
                   // Tạo danh sách biến thể (variants)
-                  const variants = relatedPrices.map(price => {
+                  const variants = relatedPrices.map((price) => {
                      const detail = price.product_detail;
                      return {
                         detailId: detail.id,
                         size: detail.size || 'Default',
                         type: detail.type || 'Standard',
                         basePrice: price.base_price.toString(),
-                        discountPrice: price.discount_price ? price.discount_price.toString() : undefined,
-                        inStock: detail.quantities > 0 && detail.isActive
+                        discountPrice: price.discount_price
+                           ? price.discount_price.toString()
+                           : undefined,
+                        inStock: detail.quantities > 0 && detail.isActive,
                      };
                   });
 
@@ -443,7 +467,7 @@ export default function ProductPage() {
                      discountPrice: discountPrice,
                      rating: 4.5,
                      imageUrl: imageUrl || '/images/placeholder.jpg',
-                     variants: variants.length > 0 ? variants : undefined
+                     variants: variants.length > 0 ? variants : undefined,
                   };
                });
 
@@ -470,7 +494,7 @@ export default function ProductPage() {
          return;
       }
 
-      const filtered = products.filter(product => {
+      const filtered = products.filter((product) => {
          const searchLower = searchQuery.toLowerCase();
          return (
             product.title.toLowerCase().includes(searchLower) ||
@@ -492,7 +516,7 @@ export default function ProductPage() {
             <p className='text-center text-[#555659] text-lg font-mont'>S Ả N P H Ẩ M</p>
             {searchQuery ? (
                <p className='text-center font-mont font-semibold text-xl lg:text-3xl pb-4'>
-                  KẾT QUẢ TÌM KIẾM: "{searchQuery}"
+                  KẾT QUẢ TÌM KIẾM: &ldquo;{searchQuery}&rdquo;
                </p>
             ) : (
                <p className='text-center font-mont font-semibold text-xl lg:text-3xl pb-4'>
@@ -526,7 +550,9 @@ export default function ProductPage() {
                   <div className='text-center py-10'>
                      {searchQuery ? (
                         <div>
-                           <p className='text-gray-600 mb-4'>Không tìm thấy sản phẩm phù hợp với "{searchQuery}"</p>
+                           <p className='text-gray-600 mb-4'>
+                              Không tìm thấy sản phẩm phù hợp với &ldquo;{searchQuery}&rdquo;
+                           </p>
                            <Link href='/user/products'>
                               <button className='px-6 py-2 bg-amber-100 hover:bg-amber-200 text-[#553C26] rounded-md transition-colors'>
                                  Xem tất cả sản phẩm
@@ -561,10 +587,9 @@ export default function ProductPage() {
                      {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
                         <button
                            key={page}
-                           className={`px-3 py-1 ${currentPage === page
-                              ? 'bg-gray-200 font-medium'
-                              : 'hover:bg-gray-100'
-                              } rounded-md text-gray-700`}
+                           className={`px-3 py-1 ${
+                              currentPage === page ? 'bg-gray-200 font-medium' : 'hover:bg-gray-100'
+                           } rounded-md text-gray-700`}
                            onClick={() => setCurrentPage(page)}
                         >
                            {page}

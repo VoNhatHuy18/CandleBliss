@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { MagnifyingGlassIcon } from '@heroicons/react/20/solid';
 import { UserIcon, ShoppingBagIcon, Bars3Icon, XMarkIcon } from '@heroicons/react/24/outline';
 import Image from 'next/image';
@@ -13,13 +13,25 @@ interface DecodedToken {
    name: string;
    exp: number;
    id?: number;
-   [key: string]: any;
+   // Replace [key: string]: any with a more specific index signature
+   [key: string]: string | number | undefined;
 }
 
+// First, define interfaces for your cart data structures
 interface CartItem {
-   id: number;
    productDetailId: number;
    quantity: number;
+   // Add other properties that might be in cart items with specific types
+   name?: string;
+   price?: number;
+   image?: string;
+}
+
+interface Cart {
+   items: CartItem[];
+   // Add other properties that might be in the cart
+   total?: number;
+   userId?: number;
 }
 
 export default function NavBar() {
@@ -46,30 +58,21 @@ export default function NavBar() {
       setShowUserMenu(!showUserMenu);
    };
 
-   useEffect(() => {
-      checkAuthStatus();
-   }, [pathname]);
+   const handleLogout = useCallback(() => {
+      localStorage.removeItem('userToken');
+      localStorage.removeItem('token');
+      localStorage.removeItem('refreshToken');
+      localStorage.removeItem('userId');
 
-   useEffect(() => {
-      if (isLoggedIn && userId) {
-         fetchCartItemCount();
-      } else {
-         setCartItemCount(0);
-         setProductDetailCounts({});
-      }
-   }, [isLoggedIn, userId, pathname]);
+      setIsLoggedIn(false);
+      setUserName(null);
+      setUserId(null);
+      setShowUserMenu(false);
 
-   useEffect(() => {
-      const pdIdParam = searchParams.get('productDetailId');
-      if (pdIdParam) {
-         const pdId = parseInt(pdIdParam);
-         setCurrentProductDetailId(isNaN(pdId) ? null : pdId);
-      } else {
-         setCurrentProductDetailId(null);
-      }
-   }, [searchParams]);
+      router.push('/user/home');
+   }, [router]);
 
-   const checkAuthStatus = () => {
+   const checkAuthStatus = useCallback(() => {
       const token = localStorage.getItem('token');
 
       if (token) {
@@ -102,22 +105,29 @@ export default function NavBar() {
             router.push('/user/signin');
          }
       }
-   };
+   }, [pathname, router, handleLogout]);
 
-   const fetchCartItemCount = async () => {
+   useEffect(() => {
+      checkAuthStatus();
+   }, [checkAuthStatus]);
+
+   const fetchCartItemCount = useCallback(async () => {
       if (!userId) return;
 
       try {
          const response = await fetch(`http://68.183.226.198:3000/api/cart/user/${userId}`);
 
          if (response.ok) {
-            const cartData = await response.json();
+            const cartData = (await response.json()) as Cart;
             if (cartData && cartData.items) {
-               const count = cartData.items.reduce((total: number, item: any) => total + (item.quantity || 0), 0);
+               const count = cartData.items.reduce(
+                  (total: number, item: CartItem) => total + (item.quantity || 0),
+                  0,
+               );
                setCartItemCount(count);
 
                const detailCounts: { [key: number]: number } = {};
-               cartData.items.forEach((item: any) => {
+               cartData.items.forEach((item: CartItem) => {
                   if (item.productDetailId) {
                      detailCounts[item.productDetailId] = item.quantity || 0;
                   }
@@ -136,7 +146,26 @@ export default function NavBar() {
          setCartItemCount(0);
          setProductDetailCounts({});
       }
-   };
+   }, [userId]);
+
+   useEffect(() => {
+      if (isLoggedIn && userId) {
+         fetchCartItemCount();
+      } else {
+         setCartItemCount(0);
+         setProductDetailCounts({});
+      }
+   }, [isLoggedIn, userId, pathname, fetchCartItemCount]);
+
+   useEffect(() => {
+      const pdIdParam = searchParams.get('productDetailId');
+      if (pdIdParam) {
+         const pdId = parseInt(pdIdParam);
+         setCurrentProductDetailId(isNaN(pdId) ? null : pdId);
+      } else {
+         setCurrentProductDetailId(null);
+      }
+   }, [searchParams]);
 
    const getProductDetailCount = (productDetailId: number | null): number => {
       if (!productDetailId) return 0;
@@ -159,20 +188,6 @@ export default function NavBar() {
       }
    };
 
-   const handleLogout = () => {
-      localStorage.removeItem('userToken');
-      localStorage.removeItem('token');
-      localStorage.removeItem('refreshToken');
-      localStorage.removeItem('userId');
-
-      setIsLoggedIn(false);
-      setUserName(null);
-      setUserId(null);
-      setShowUserMenu(false);
-
-      router.push('/user/home');
-   };
-
    const handleCartClick = async (e: React.MouseEvent) => {
       e.preventDefault();
 
@@ -187,9 +202,9 @@ export default function NavBar() {
                   method: 'POST',
                   headers: {
                      'Content-Type': 'application/json',
-                     'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
+                     Authorization: `Bearer ${localStorage.getItem('token') || ''}`,
                   },
-                  body: JSON.stringify({ userId })
+                  body: JSON.stringify({ userId }),
                });
 
                if (createCartResponse.ok) {
@@ -251,23 +266,20 @@ export default function NavBar() {
                >
                   <MagnifyingGlassIcon className='size-5' />
                </button>
-               <button onClick={handleCartClick} className="text-[#553C26] relative">
-                  <ShoppingBagIcon className="size-5" />
-                  {isLoggedIn && (
-                     currentProductDetailId ? (
-                        getProductDetailCount(currentProductDetailId) > 0 && (
-                           <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
-                              {getProductDetailCount(currentProductDetailId)}
-                           </span>
-                        )
-                     ) : (
-                        cartItemCount > 0 && (
-                           <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
-                              {cartItemCount}
-                           </span>
-                        )
-                     )
-                  )}
+               <button onClick={handleCartClick} className='text-[#553C26] relative'>
+                  <ShoppingBagIcon className='size-5' />
+                  {isLoggedIn &&
+                     (currentProductDetailId
+                        ? getProductDetailCount(currentProductDetailId) > 0 && (
+                             <span className='absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center'>
+                                {getProductDetailCount(currentProductDetailId)}
+                             </span>
+                          )
+                        : cartItemCount > 0 && (
+                             <span className='absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center'>
+                                {cartItemCount}
+                             </span>
+                          ))}
                </button>
                <button onClick={toggleMobileMenu} className='text-[#553C26]'>
                   {mobileMenuOpen ? (
@@ -352,29 +364,28 @@ export default function NavBar() {
                      </button>
                   )}
                </div>
-               <button onClick={handleCartClick} className="text-[#553C26] relative">
-                  <ShoppingBagIcon className="size-5" />
-                  {isLoggedIn && (
-                     currentProductDetailId ? (
-                        getProductDetailCount(currentProductDetailId) > 0 && (
-                           <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
-                              {getProductDetailCount(currentProductDetailId)}
-                           </span>
-                        )
-                     ) : (
-                        cartItemCount > 0 && (
-                           <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
-                              {cartItemCount}
-                           </span>
-                        )
-                     )
-                  )}
+               <button onClick={handleCartClick} className='text-[#553C26] relative'>
+                  <ShoppingBagIcon className='size-5' />
+                  {isLoggedIn &&
+                     (currentProductDetailId
+                        ? getProductDetailCount(currentProductDetailId) > 0 && (
+                             <span className='absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center'>
+                                {getProductDetailCount(currentProductDetailId)}
+                             </span>
+                          )
+                        : cartItemCount > 0 && (
+                             <span className='absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center'>
+                                {cartItemCount}
+                             </span>
+                          ))}
                </button>
 
                <div className='relative'>
                   <button
                      onClick={handleUserIconClick}
-                     className={`text-[#553C26] p-2 rounded-full ${isLoggedIn ? 'bg-amber-100' : ''}`}
+                     className={`text-[#553C26] p-2 rounded-full ${
+                        isLoggedIn ? 'bg-amber-100' : ''
+                     }`}
                   >
                      <UserIcon className='size-5' />
                   </button>
@@ -418,7 +429,10 @@ export default function NavBar() {
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                      />
-                     <button type='submit' className='ml-2 p-2 bg-amber-100 rounded-lg text-[#553C26]'>
+                     <button
+                        type='submit'
+                        className='ml-2 p-2 bg-amber-100 rounded-lg text-[#553C26]'
+                     >
                         <MagnifyingGlassIcon className='size-5' />
                      </button>
                   </form>

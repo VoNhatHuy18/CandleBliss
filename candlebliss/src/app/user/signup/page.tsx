@@ -327,10 +327,13 @@ export default function SignUpPage() {
          setFirstName('');
          setLastName('');
          setPhone('');
-      } catch (error: any) {
+      } catch (error: unknown) {
          console.error('Registration error:', error);
-         showToastMessage(error.message || 'Có lỗi xảy ra, vui lòng thử lại sau.', 'error');
-         setApiError(error.message || 'Có lỗi xảy ra, vui lòng thử lại sau.');
+         const errorMessage =
+            error instanceof Error ? error.message : 'Có lỗi xảy ra, vui lòng thử lại sau.';
+
+         showToastMessage(errorMessage, 'error');
+         setApiError(errorMessage);
       } finally {
          setIsLoading(false);
       }
@@ -379,8 +382,9 @@ export default function SignUpPage() {
                            <input
                               type='text'
                               id='lastName'
-                              className={`w-full px-3 py-2 border rounded-lg text-sm md:text-base ${lastNameError ? 'border-red-500' : 'border-[#553C26]'
-                                 }`}
+                              className={`w-full px-3 py-2 border rounded-lg text-sm md:text-base ${
+                                 lastNameError ? 'border-red-500' : 'border-[#553C26]'
+                              }`}
                               placeholder='Nhập họ'
                               value={lastName}
                               onChange={(e) => validateLastName(e.target.value)}
@@ -402,8 +406,9 @@ export default function SignUpPage() {
                            <input
                               type='text'
                               id='firstName'
-                              className={`w-full px-3 py-2 border rounded-lg text-sm md:text-base ${firstNameError ? 'border-red-500' : 'border-[#553C26]'
-                                 }`}
+                              className={`w-full px-3 py-2 border rounded-lg text-sm md:text-base ${
+                                 firstNameError ? 'border-red-500' : 'border-[#553C26]'
+                              }`}
                               placeholder='Nhập tên'
                               value={firstName}
                               onChange={(e) => validateFirstName(e.target.value)}
@@ -427,8 +432,9 @@ export default function SignUpPage() {
                         <input
                            type='text'
                            id='phone'
-                           className={`w-full px-3 py-2 border rounded-lg text-sm md:text-base ${phoneError ? 'border-red-500' : 'border-[#553C26]'
-                              }`}
+                           className={`w-full px-3 py-2 border rounded-lg text-sm md:text-base ${
+                              phoneError ? 'border-red-500' : 'border-[#553C26]'
+                           }`}
                            placeholder='Nhập số điện thoại của bạn'
                            value={phone}
                            onChange={(e) => validatePhone(e.target.value)}
@@ -449,8 +455,9 @@ export default function SignUpPage() {
                         <input
                            type='email'
                            id='email'
-                           className={`w-full px-3 py-2 border rounded-lg text-sm md:text-base ${emailError ? 'border-red-500' : 'border-[#553C26]'
-                              }`}
+                           className={`w-full px-3 py-2 border rounded-lg text-sm md:text-base ${
+                              emailError ? 'border-red-500' : 'border-[#553C26]'
+                           }`}
                            placeholder='Nhập Email'
                            value={email}
                            onChange={(e) => validateEmail(e.target.value)}
@@ -472,8 +479,9 @@ export default function SignUpPage() {
                            <input
                               type={showPassword ? 'text' : 'password'}
                               id='password'
-                              className={`w-full px-3 py-2 border rounded-lg text-sm md:text-base ${passwordError ? 'border-red-500' : 'border-[#553C26]'
-                                 }`}
+                              className={`w-full px-3 py-2 border rounded-lg text-sm md:text-base ${
+                                 passwordError ? 'border-red-500' : 'border-[#553C26]'
+                              }`}
                               placeholder='Nhập mật khẩu'
                               value={password}
                               onChange={(e) => validatePassword(e.target.value)}
@@ -507,8 +515,9 @@ export default function SignUpPage() {
                            <input
                               type={showRePassword ? 'text' : 'password'}
                               id='repassword'
-                              className={`w-full px-3 py-2 border rounded-lg text-sm md:text-base ${rePasswordError ? 'border-red-500' : 'border-[#553C26]'
-                                 }`}
+                              className={`w-full px-3 py-2 border rounded-lg text-sm md:text-base ${
+                                 rePasswordError ? 'border-red-500' : 'border-[#553C26]'
+                              }`}
                               placeholder='Xác nhận mật khẩu'
                               value={rePassword}
                               onChange={(e) => validateRePassword(e.target.value)}

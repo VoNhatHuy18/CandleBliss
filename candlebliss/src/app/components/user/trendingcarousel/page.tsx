@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useEffect, useState } from 'react';
+import { useRef, useEffect, useState, useCallback } from 'react';
 import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
 import { ShoppingBagIcon } from '@heroicons/react/24/outline';
 import Image from 'next/image';
@@ -83,27 +83,7 @@ export default function GlideSlide() {
    const visibleItems = 4; // Number of items visible at once
    const totalItems = products.length;
 
-   useEffect(() => {
-      if (isHovering) return; // Don't auto-scroll when user is hovering
-
-      const interval = setInterval(() => {
-         handleNext();
-      }, 4000);
-      return () => clearInterval(interval);
-   }, [isHovering, currentIndex]);
-
-   const handlePrev = () => {
-      if (sliderRef.current) {
-         const newIndex = Math.max(currentIndex - 1, 0);
-         setCurrentIndex(newIndex);
-
-         const cardWidth = sliderRef.current.querySelector('div')?.clientWidth || 0;
-         const gap = 16; // gap-4 = 16px
-         sliderRef.current.scrollLeft = newIndex * (cardWidth + gap);
-      }
-   };
-
-   const handleNext = () => {
+   const handleNext = useCallback(() => {
       if (sliderRef.current) {
          const newIndex =
             currentIndex + 1 >= Math.ceil(totalItems - visibleItems + 1) ? 0 : currentIndex + 1;
@@ -117,7 +97,27 @@ export default function GlideSlide() {
             sliderRef.current.scrollLeft = newIndex * (cardWidth + gap);
          }
       }
-   };
+   }, [currentIndex, totalItems, visibleItems]);
+
+   const handlePrev = useCallback(() => {
+      if (sliderRef.current) {
+         const newIndex = Math.max(currentIndex - 1, 0);
+         setCurrentIndex(newIndex);
+
+         const cardWidth = sliderRef.current.querySelector('div')?.clientWidth || 0;
+         const gap = 16; // gap-4 = 16px
+         sliderRef.current.scrollLeft = newIndex * (cardWidth + gap);
+      }
+   }, [currentIndex]);
+
+   useEffect(() => {
+      if (isHovering) return; // Don't auto-scroll when user is hovering
+
+      const interval = setInterval(() => {
+         handleNext();
+      }, 4000);
+      return () => clearInterval(interval);
+   }, [isHovering, handleNext]);
 
    // Generate star rating UI
    const renderRating = (rating: number) => {

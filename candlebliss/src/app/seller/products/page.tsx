@@ -80,13 +80,6 @@ const formatPrice = (price: number): string => {
    }).format(price);
 };
 
-// Sửa hàm calculateDiscountPercent vì không cần tính phần trăm từ giá nữa
-const calculateDiscountPercent = (basePrice: number, discountPercentage: number | null): number => {
-   if (!basePrice || !discountPercentage || discountPercentage <= 0) return 0;
-   // Đã là phần trăm khuyến mãi, không cần tính toán
-   return discountPercentage;
-};
-
 // Thêm hàm tính giá sau khi đã giảm
 const calculateDiscountedPrice = (basePrice: number, discountPercentage: number | null): number => {
    if (!basePrice || !discountPercentage || discountPercentage <= 0) return basePrice;
@@ -167,7 +160,6 @@ const ProductTable = ({
    handleEditProduct,
    handleDeleteProduct,
    getCategoryNameById,
-   showToast,
 }: {
    products: ProductViewModel[];
    loading: boolean;

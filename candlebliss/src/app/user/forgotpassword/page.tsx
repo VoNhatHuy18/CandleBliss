@@ -114,11 +114,19 @@ export default function ForgotPasswordPage() {
                   });
                }
             }
-         } catch (error: any) {
+         } catch (error: unknown) {
             console.error('OTP send error:', error);
+            let errorMessage = 'Không thể kết nối đến máy chủ. Vui lòng thử lại sau.';
+
+            if (error instanceof Error) {
+               errorMessage = error.message;
+            } else if (typeof error === 'object' && error && 'message' in error) {
+               errorMessage = String((error as { message: unknown }).message);
+            }
+
             setToast({
                show: true,
-               message: error.message || 'Không thể kết nối đến máy chủ. Vui lòng thử lại sau.',
+               message: errorMessage,
                type: 'error',
             });
          } finally {
@@ -223,11 +231,19 @@ export default function ForgotPasswordPage() {
          setTimeout(() => {
             window.location.href = '/user/signin';
          }, 2000);
-      } catch (error: any) {
+      } catch (error: unknown) {
          console.error('Password reset error:', error);
+         let errorMessage = 'Không thể đặt lại mật khẩu, vui lòng thử lại sau';
+
+         if (error instanceof Error) {
+            errorMessage = error.message;
+         } else if (typeof error === 'object' && error && 'message' in error) {
+            errorMessage = String((error as { message: unknown }).message);
+         }
+
          setToast({
             show: true,
-            message: error.message || 'Không thể đặt lại mật khẩu, vui lòng thử lại sau',
+            message: errorMessage,
             type: 'error',
          });
       } finally {

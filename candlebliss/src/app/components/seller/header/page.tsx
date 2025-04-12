@@ -6,12 +6,22 @@ import { useState, useEffect } from 'react';
 import { Calendar, Search, Bell } from 'lucide-react';
 import { FaSpinner } from 'react-icons/fa';
 
+// Define an interface for user data
+interface UserData {
+   firstName: string;
+   lastName: string;
+   photo?: {
+      data?: string;
+   };
+   // Add other properties you might use
+}
+
 export default function Header() {
    const [showDropdown, setShowDropdown] = useState(false);
    const [currentDateTime, setCurrentDateTime] = useState(new Date());
    const [isMounted, setIsMounted] = useState(false);
-   const [userData, setUserData] = useState<any>(null);
-   const [avatarUrl, setAvatarUrl] = useState<string>("/images/logo.png");
+   const [userData, setUserData] = useState<UserData | null>(null);
+   const [avatarUrl, setAvatarUrl] = useState<string>('/images/logo.png');
    const [isLoading, setIsLoading] = useState(true);
 
    useEffect(() => {
@@ -38,8 +48,8 @@ export default function Header() {
                if (token) {
                   const response = await fetch('/api/v1/auth/me', {
                      headers: {
-                        'Authorization': `Bearer ${token}`,
-                     }
+                        Authorization: `Bearer ${token}`,
+                     },
                   });
 
                   if (response.ok) {
@@ -57,7 +67,7 @@ export default function Header() {
                }
             }
          } catch (error) {
-            console.error("Error loading user data:", error);
+            console.error('Error loading user data:', error);
          } finally {
             setIsLoading(false);
          }
@@ -76,14 +86,9 @@ export default function Header() {
    // Format the date and time for display - simplified to avoid locale issues
    const formatDate = () => {
       const days = ['Chủ Nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy'];
-      const months = [
-         'Tháng 1', 'Tháng 2', 'Tháng 3', 'Tháng 4', 'Tháng 5', 'Tháng 6',
-         'Tháng 7', 'Tháng 8', 'Tháng 9', 'Tháng 10', 'Tháng 11', 'Tháng 12',
-      ];
-
       const day = days[currentDateTime.getDay()];
       const date = currentDateTime.getDate();
-      const month = months[currentDateTime.getMonth()];
+      const month = currentDateTime.getMonth();
       const year = currentDateTime.getFullYear();
 
       return `${day}, ${date} ${month} ${year}`;
@@ -141,17 +146,17 @@ export default function Header() {
                      >
                         <div className='relative w-10 h-10'>
                            {isLoading ? (
-                              <div className="w-10 h-10 rounded-full flex items-center justify-center bg-gray-100">
-                                 <FaSpinner className="animate-spin text-amber-600" size={16} />
+                              <div className='w-10 h-10 rounded-full flex items-center justify-center bg-gray-100'>
+                                 <FaSpinner className='animate-spin text-amber-600' size={16} />
                               </div>
                            ) : (
                               <Image
                                  src={avatarUrl}
-                                 alt="Avatar"
+                                 alt='Avatar'
                                  width={40}
                                  height={40}
-                                 className="rounded-full object-cover"
-                                 onError={() => setAvatarUrl("/images/logo.png")}
+                                 className='rounded-full object-cover'
+                                 onError={() => setAvatarUrl('/images/logo.png')}
                               />
                            )}
                         </div>
@@ -182,13 +187,13 @@ export default function Header() {
                               </a>
                               <a
                                  href='/'
-                                 target="_blank"
-                                 rel="noopener noreferrer"
+                                 target='_blank'
+                                 rel='noopener noreferrer'
                                  className='block px-4 py-2 text-sm text-emerald-600 hover:bg-gray-100'
                               >
                                  Xem cửa hàng
                               </a>
-                              <hr className="my-1" />
+                              <hr className='my-1' />
                               <a
                                  href='#'
                                  onClick={(e) => {

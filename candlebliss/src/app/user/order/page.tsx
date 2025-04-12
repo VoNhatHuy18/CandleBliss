@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react'; // Add useCallback
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -76,15 +76,14 @@ export default function OrderPage() {
    const router = useRouter();
    const [loading, setLoading] = useState(true);
    const [orders, setOrders] = useState<Order[]>([]);
-   const [userId, setUserId] = useState<number | null>(null);
    const [toast, setToast] = useState({
       show: false,
       message: '',
       type: 'info' as 'success' | 'error' | 'info',
    });
 
-   // Thêm hàm hiện toast message
-   const showToastMessage = (message: string, type: 'success' | 'error' | 'info') => {
+   // Wrap with useCallback
+   const showToastMessage = useCallback((message: string, type: 'success' | 'error' | 'info') => {
       setToast({
          show: true,
          message,
@@ -95,8 +94,53 @@ export default function OrderPage() {
       setTimeout(() => {
          setToast((prev) => ({ ...prev, show: false }));
       }, 3000);
-   };
+   }, []);
 
+   // Wrap with useCallback and add dependencies
+   const loadOrders = useCallback(
+      async (userId: number) => {
+         try {
+            const token = localStorage.getItem('token');
+            if (!token) {
+               showToastMessage('Phiên đăng nhập hết hạn, vui lòng đăng nhập lại', 'error');
+               router.push('/user/signin');
+               return;
+            }
+
+            const response = await fetch(
+               `http://68.183.226.198:3000/api/orders?user_id=${userId}`,
+               {
+                  headers: {
+                     Authorization: `Bearer ${token}`,
+                  },
+               },
+            );
+
+            if (!response.ok) {
+               throw new Error('Không thể tải danh sách đơn hàng');
+            }
+
+            const data = await response.json();
+
+            // Sort orders by createdAt date (newest first)
+            const sortedOrders = data.sort((a: Order, b: Order) => {
+               return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+            });
+
+            setOrders(sortedOrders);
+
+            if (sortedOrders.length === 0) {
+               showToastMessage('Bạn chưa có đơn hàng nào', 'info');
+            }
+         } catch (error) {
+            console.error('Error loading orders:', error);
+            showToastMessage('Không thể tải danh sách đơn hàng', 'error');
+         }
+      },
+      [router, showToastMessage],
+   );
+
+   // Update useEffect with all dependencies
    useEffect(() => {
       const init = async () => {
          // Lấy thông tin userId từ localStorage
@@ -108,7 +152,6 @@ export default function OrderPage() {
          }
 
          const userId = parseInt(storedUserId);
-         setUserId(userId);
 
          try {
             setLoading(true);
@@ -122,47 +165,9 @@ export default function OrderPage() {
       };
 
       init();
-   }, []);
+   }, [router, loadOrders, showToastMessage]);
 
-   // Hàm tải danh sách đơn hàng
-   const loadOrders = async (userId: number) => {
-      try {
-         const token = localStorage.getItem('token');
-         if (!token) {
-            showToastMessage('Phiên đăng nhập hết hạn, vui lòng đăng nhập lại', 'error');
-            router.push('/user/signin');
-            return;
-         }
-
-         const response = await fetch(`http://68.183.226.198:3000/api/orders?user_id=${userId}`, {
-            headers: {
-               Authorization: `Bearer ${token}`,
-            },
-         });
-
-         if (!response.ok) {
-            throw new Error('Không thể tải danh sách đơn hàng');
-         }
-
-         const data = await response.json();
-
-         // Sort orders by createdAt date (newest first)
-         const sortedOrders = data.sort((a: Order, b: Order) => {
-            return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-         });
-
-         setOrders(sortedOrders);
-
-         if (sortedOrders.length === 0) {
-            showToastMessage('Bạn chưa có đơn hàng nào', 'info');
-         }
-      } catch (error) {
-         console.error('Error loading orders:', error);
-         showToastMessage('Không thể tải danh sách đơn hàng', 'error');
-      }
-   };
-
-   // Hàm xử lý hủy đơn hàng
+   // Update handleCancelOrder with proper error typing
    const handleCancelOrder = async (orderId: number) => {
       if (!confirm('Bạn có chắc chắn muốn hủy đơn hàng này không?')) {
          return;
@@ -200,9 +205,17 @@ export default function OrderPage() {
          );
 
          showToastMessage('Đơn hàng đã được hủy thành công', 'success');
-      } catch (error: any) {
+      } catch (error: unknown) {
          console.error('Error canceling order:', error);
-         showToastMessage(error.message || 'Không thể hủy đơn hàng', 'error');
+
+         let errorMessage = 'Không thể hủy đơn hàng';
+         if (error instanceof Error) {
+            errorMessage = error.message;
+         } else if (typeof error === 'object' && error && 'message' in error) {
+            errorMessage = String((error as { message: unknown }).message);
+         }
+
+         showToastMessage(errorMessage, 'error');
       } finally {
          setLoading(false);
       }

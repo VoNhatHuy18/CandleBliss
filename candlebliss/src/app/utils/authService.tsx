@@ -4,7 +4,7 @@ interface UserInfo {
    firstName?: string;
    lastName?: string;
    phone?: string;
-   [key: string]: any;
+   [key: string]: string | number | boolean | null | undefined;
 }
 
 const AuthService = {

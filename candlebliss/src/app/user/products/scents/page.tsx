@@ -5,7 +5,6 @@ import { Star, StarHalf, Eye, Menu, X, ShoppingCart } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import NavBar from '@/app/components/user/nav/page';
-import MenuSidebar from '@/app/components/user/menusidebar/page';
 import Footer from '@/app/components/user/footer/page';
 
 interface ProductImage {
@@ -187,18 +186,18 @@ export default function ScentsPage() {
       const fetchCategories = async () => {
          try {
             const response = await fetch('http://68.183.226.198:3000/api/categories');
-            
+
             let categoriesData;
-            
+
             if (response.status === 302) {
                // Handle 302 redirect - extract data from the response if possible
                const responseText = await response.text();
-               
+
                if (responseText.includes('[') && responseText.includes(']')) {
                   const jsonStart = responseText.indexOf('[');
                   const jsonEnd = responseText.lastIndexOf(']') + 1;
                   const jsonString = responseText.substring(jsonStart, jsonEnd);
-                  
+
                   try {
                      categoriesData = JSON.parse(jsonString);
                      console.log('Extracted categories from 302 response text:', categoriesData);
@@ -209,12 +208,12 @@ export default function ScentsPage() {
                }
             } else if (!response.ok) {
                const errorText = await response.text();
-               
+
                if (errorText.includes('[') && errorText.includes(']')) {
                   const jsonStart = errorText.indexOf('[');
                   const jsonEnd = errorText.lastIndexOf(']') + 1;
                   const jsonString = errorText.substring(jsonStart, jsonEnd);
-                  
+
                   try {
                      categoriesData = JSON.parse(jsonString);
                   } catch (error) {
@@ -227,39 +226,41 @@ export default function ScentsPage() {
             } else {
                categoriesData = await response.json();
             }
-            
+
             if (Array.isArray(categoriesData)) {
-               console.log('All categories:', categoriesData.map(c => c.name).join(', '));
-               
+               console.log('All categories:', categoriesData.map((c) => c.name).join(', '));
+
                // First, try to find an exact match for accessories
                // Using popular variations of "Phụ Kiện Nến" in Vietnamese
-               const accessoriesKeywords = [
-                  'Tinh dầu', 
-                  
-               ];
-               
+               const accessoriesKeywords = ['Tinh dầu'];
+
                let accessoriesCategory = null;
-               
+
                // Look for exact matches first
                for (const keyword of accessoriesKeywords) {
-                  accessoriesCategory = categoriesData.find(cat => 
-                     cat.name && cat.name.trim().toLowerCase() === keyword
+                  accessoriesCategory = categoriesData.find(
+                     (cat) => cat.name && cat.name.trim().toLowerCase() === keyword,
                   );
                   if (accessoriesCategory) break;
                }
-               
+
                // If no exact match, look for categories containing these keywords
                if (!accessoriesCategory) {
                   for (const keyword of accessoriesKeywords) {
-                     accessoriesCategory = categoriesData.find(cat => 
-                        cat.name && cat.name.toLowerCase().includes(keyword)
+                     accessoriesCategory = categoriesData.find(
+                        (cat) => cat.name && cat.name.toLowerCase().includes(keyword),
                      );
                      if (accessoriesCategory) break;
                   }
                }
-               
+
                if (accessoriesCategory) {
-                  console.log('Found accessories category:', accessoriesCategory.name, 'with ID:', accessoriesCategory.id);
+                  console.log(
+                     'Found accessories category:',
+                     accessoriesCategory.name,
+                     'with ID:',
+                     accessoriesCategory.id,
+                  );
                   setCategoryId(accessoriesCategory.id);
                   setCategoryName(accessoriesCategory.name);
                } else {
@@ -272,7 +273,7 @@ export default function ScentsPage() {
             // Continue with default category name
          }
       };
-      
+
       fetchCategories();
    }, []);
 
@@ -294,51 +295,58 @@ export default function ScentsPage() {
 
             // Filter products specifically for accessories category
             let filteredProducts = normalizedProducts;
-            
+
             if (categoryId) {
                // Filter by exact category ID match (primary filtering)
-               filteredProducts = normalizedProducts.filter(product => 
-                  product.category_id === categoryId ||
-                  product.categories?.some(cat => cat.id === categoryId)
+               filteredProducts = normalizedProducts.filter(
+                  (product) =>
+                     product.category_id === categoryId ||
+                     product.categories?.some((cat) => cat.id === categoryId),
                );
             } else {
                // Fallback filtering by name if no category ID is found
                const accessoriesKeywords = [
-                  'phụ kiện', 
-                  'accessories', 
-                  'đế nến', 
-                  'giá đỡ', 
-                  'holder', 
-                  'stand', 
+                  'phụ kiện',
+                  'accessories',
+                  'đế nến',
+                  'giá đỡ',
+                  'holder',
+                  'stand',
                   'đèn nến',
-                  'dụng cụ'
+                  'dụng cụ',
                ];
-               
-               filteredProducts = normalizedProducts.filter(product => {
+
+               filteredProducts = normalizedProducts.filter((product) => {
                   // Check if product name or description contains keywords related to accessories
-                  const nameMatches = product.name && 
-                     accessoriesKeywords.some(keyword => 
-                        product.name.toLowerCase().includes(keyword.toLowerCase())
+                  const nameMatches =
+                     product.name &&
+                     accessoriesKeywords.some((keyword) =>
+                        product.name.toLowerCase().includes(keyword.toLowerCase()),
                      );
-                  
+
                   // Check if product description contains keywords related to accessories
-                  const descMatches = product.description && 
-                     accessoriesKeywords.some(keyword => 
-                        product.description.toLowerCase().includes(keyword.toLowerCase())
+                  const descMatches =
+                     product.description &&
+                     accessoriesKeywords.some((keyword) =>
+                        product.description.toLowerCase().includes(keyword.toLowerCase()),
                      );
-                  
+
                   // Check if product belongs to a category with accessories-related name
-                  const categoryMatches = product.categories?.some(cat => 
-                     cat.name && accessoriesKeywords.some(keyword => 
-                        cat.name.toLowerCase().includes(keyword.toLowerCase())
-                     )
+                  const categoryMatches = product.categories?.some(
+                     (cat) =>
+                        cat.name &&
+                        accessoriesKeywords.some((keyword) =>
+                           cat.name.toLowerCase().includes(keyword.toLowerCase()),
+                        ),
                   );
-                  
+
                   return nameMatches || descMatches || categoryMatches;
                });
             }
 
-            console.log(`Found ${filteredProducts.length} accessories products in category ${categoryName}`);
+            console.log(
+               `Found ${filteredProducts.length} accessories products in category ${categoryName}`,
+            );
 
             try {
                const pricesResponse = await fetch('http://68.183.226.198:3000/api/v1/prices', {
@@ -346,7 +354,7 @@ export default function ScentsPage() {
                      Authorization: 'Bearer ' + (localStorage.getItem('token') || ''),
                   },
                });
-               
+
                if (!pricesResponse.ok) {
                   console.warn('Could not fetch prices, using default values');
                   const mappedProducts = filteredProducts.map((product) => {
@@ -386,7 +394,7 @@ export default function ScentsPage() {
                      basePrice = productPrices[0].base_price.toString();
 
                      const discountPrices = productPrices
-                        .filter(price => price.discount_price && Number(price.discount_price) > 0)
+                        .filter((price) => price.discount_price && Number(price.discount_price) > 0)
                         .sort((a, b) => Number(a.discount_price) - Number(b.discount_price));
 
                      if (discountPrices.length > 0) {
@@ -394,15 +402,17 @@ export default function ScentsPage() {
                      }
                   }
 
-                  const variants = productPrices.map(price => {
+                  const variants = productPrices.map((price) => {
                      const detail = price.product_detail;
                      return {
                         detailId: detail.id,
                         size: detail.size,
                         type: detail.type,
                         basePrice: price.base_price.toString(),
-                        discountPrice: price.discount_price ? price.discount_price.toString() : undefined,
-                        inStock: detail.quantities > 0 && detail.isActive
+                        discountPrice: price.discount_price
+                           ? price.discount_price.toString()
+                           : undefined,
+                        inStock: detail.quantities > 0 && detail.isActive,
                      };
                   });
 
@@ -414,7 +424,7 @@ export default function ScentsPage() {
                      discountPrice: discountPrice,
                      rating: 4.5,
                      imageUrl: imageUrl || '/images/placeholder.jpg',
-                     variants: variants
+                     variants: variants,
                   };
                });
 
@@ -450,12 +460,12 @@ export default function ScentsPage() {
       console.log('Add to cart clicked for product ID:', productId, 'Detail ID:', detailId);
 
       // Find the product in the list
-      const product = products.find(p => p.id === productId);
+      const product = products.find((p) => p.id === productId);
       if (!product) return;
 
       // Find either the specified variant or use the first one
       const variant = detailId
-         ? product.variants?.find(v => v.detailId === detailId)
+         ? product.variants?.find((v) => v.detailId === detailId)
          : product.variants?.[0];
 
       if (!variant) {
@@ -465,7 +475,7 @@ export default function ScentsPage() {
             name: product.title,
             price: product.discountPrice || product.price,
             quantity: 1,
-            imageUrl: product.imageUrl
+            imageUrl: product.imageUrl,
          };
 
          // Add to localStorage or your cart logic
@@ -484,7 +494,7 @@ export default function ScentsPage() {
             type: variant.type,
             price: variant.discountPrice || variant.basePrice,
             quantity: 1,
-            imageUrl: product.imageUrl
+            imageUrl: product.imageUrl,
          };
 
          // Add to localStorage or your cart logic
@@ -501,7 +511,9 @@ export default function ScentsPage() {
          <NavBar />
          <div className='px-4 lg:px-0 py-8'>
             <p className='text-center text-[#555659] text-lg font-mont'>S Ả N P H Ẩ M</p>
-            <p className='text-center font-mont font-semibold text-xl lg:text-3xl pb-4'>{categoryName}</p>
+            <p className='text-center font-mont font-semibold text-xl lg:text-3xl pb-4'>
+               {categoryName}
+            </p>
          </div>
 
          {/* Mobile menu button */}
@@ -513,7 +525,6 @@ export default function ScentsPage() {
          </button>
 
          <div className='flex flex-col lg:flex-row max-w-7xl mx-auto'>
-
             {/* Main content */}
             <div className='flex-1 px-4 lg:px-8'>
                {loading && (
@@ -530,7 +541,9 @@ export default function ScentsPage() {
 
                {!loading && !error && products.length === 0 && (
                   <div className='text-center py-10'>
-                     <p className='text-gray-500 mb-2'>Không tìm thấy phụ kiện nến nào trong danh mục này</p>
+                     <p className='text-gray-500 mb-2'>
+                        Không tìm thấy phụ kiện nến nào trong danh mục này
+                     </p>
                      <p className='text-sm text-gray-400'>Các sản phẩm mới sẽ sớm được cập nhật</p>
                   </div>
                )}
