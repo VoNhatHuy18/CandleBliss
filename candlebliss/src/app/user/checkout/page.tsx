@@ -63,62 +63,6 @@ interface UserInfo {
    phone?: string;
 }
 
-// Define interfaces for API responses
-interface ApiProvince {
-   code: string;
-   name: string;
-   districts?: ApiDistrict[];
-}
-
-interface ApiDistrict {
-   code: string;
-   name: string;
-   wards?: ApiWard[];
-}
-
-interface ApiWard {
-   code: string;
-   name: string;
-}
-interface AddressResponseData {
-   id: number;
-   fullName?: string;
-   phone?: string;
-   province?: string;
-   district?: string;
-   ward?: string;
-   street?: string;
-   isDefault?: boolean;
-   userId?: number;
-   user?: {
-      id: number;
-      firstName?: string;
-      lastName?: string;
-      phone?: string;
-   };
-}
-
-interface VoucherResponseData {
-   id: number;
-   code: string;
-   description: string;
-   amount_off: string;
-   percent_off: string;
-   min_order_value: string;
-   max_voucher_amount: string;
-   usage_limit: number;
-   usage_per_customer: number;
-   start_date: string;
-   end_date: string;
-   applicable_categories: string | null;
-   new_customers_only: boolean;
-   isActive: boolean;
-   createdAt: string;
-   updatedAt: string;
-   deletedAt: string | null;
-   isDeleted: boolean;
-}
-
 // Format price helper function
 const formatPrice = (price: number): string => {
    return new Intl.NumberFormat('vi-VN', {
@@ -250,7 +194,7 @@ export default function CheckoutPage() {
    const [processingPayment, setProcessingPayment] = useState(false);
 
    // Thêm hàm hiện toast message
-   const showToastMessage = useCallback((message: string, type: 'success' | 'error' | 'info') => {
+   const showToastMessage = (message: string, type: 'success' | 'error' | 'info') => {
       setToast({
          show: true,
          message,
@@ -261,7 +205,7 @@ export default function CheckoutPage() {
       setTimeout(() => {
          setToast((prev) => ({ ...prev, show: false }));
       }, 3000);
-   }, []);
+   };
 
    // Thêm hàm xóa địa chỉ
    const deleteAddress = async (addressId: number) => {
@@ -287,10 +231,7 @@ export default function CheckoutPage() {
             const errorMessage = errorData.message || 'Không thể xóa địa chỉ';
             throw new Error(errorMessage);
          }
-      } catch (error: unknown) {
-         console.error('Error deleting address:', error);
-         const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-         showToastMessage(errorMessage, 'error');
+      } catch (error) {
          throw error;
       }
    };
@@ -324,7 +265,7 @@ export default function CheckoutPage() {
                   if (existingAddressesStr) {
                      const existingAddresses = JSON.parse(existingAddressesStr);
                      const updatedAddresses = existingAddresses.filter(
-                        (addr: Address) => addr.id !== addressId,
+                        (addr: any) => addr.id !== addressId,
                      );
                      localStorage.setItem(addressStorageKey, JSON.stringify(updatedAddresses));
                      console.log(
@@ -347,10 +288,9 @@ export default function CheckoutPage() {
 
                showToastMessage('Đã xóa địa chỉ thành công', 'success');
             }
-         } catch (error: unknown) {
+         } catch (error: any) {
             console.error('Error deleting address:', error);
-            const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-            showToastMessage(errorMessage, 'error');
+            showToastMessage(error.message || 'Không thể xóa địa chỉ', 'error');
          } finally {
             setLoading(false);
          }
@@ -398,8 +338,8 @@ export default function CheckoutPage() {
       setWards([]);
    };
 
-   // Wrap calculateShippingFee in useCallback to prevent it from recreating on each render
-   const calculateShippingFee = useCallback((province: string): number => {
+   // Cập nhật hàm tính phí vận chuyển dựa trên địa chỉ
+   const calculateShippingFee = (province: string): number => {
       // Kiểm tra nếu tỉnh/thành phố là TP.HCM (với nhiều cách viết khác nhau)
       const hcmVariations = [
          'hồ chí minh',
@@ -416,219 +356,371 @@ export default function CheckoutPage() {
 
       // Nếu là TP.HCM thì phí ship là 20.000đ, ngược lại là 30.000đ
       return hcmVariations.includes(normalizedProvince) ? 20000 : 30000;
-   }, []);
+   };
 
-   // Load thông tin người dùng
-   const loadUserInfo = useCallback(
-      async (userId: number) => {
-         try {
-            const response = await fetch(`http://68.183.226.198:3000/api/v1/users/${userId}`, {
-               headers: {
-                  Authorization: `Bearer ${localStorage.getItem('token') || ''}`,
-               },
-            });
-
-            if (response.ok) {
-               const user = await response.json();
-               setUserInfo({
-                  id: user.id,
-                  email: user.email,
-                  firstName: user.firstName,
-                  lastName: user.lastName,
-                  phone: user.phone,
-               });
-
-               // Pre-fill new address form with user info
-               setNewAddress((prev) => ({
-                  ...prev,
-                  fullName: `${user.firstName} ${user.lastName}`,
-                  phone: user.phone || '',
-               }));
-            }
-         } catch (error) {
-            console.error('Error loading user info:', error);
-            showToastMessage('Không thể tải thông tin người dùng', 'error');
+   useEffect(() => {
+      const init = async () => {
+         // Lấy thông tin userId từ localStorage
+         const storedUserId = localStorage.getItem('userId');
+         if (!storedUserId) {
+            // Nếu không có userId, chuyển về trang đăng nhập
+            router.push('/user/signin');
+            return;
          }
-      },
-      [showToastMessage],
-   ); // Add showToastMessage as a dependency
 
-   // Tải danh sách tỉnh/thành phố từ API
-   const fetchProvinces = useCallback(async () => {
-      try {
-         // Thay thế bằng API thực tế
-         const response = await fetch('https://provinces.open-api.vn/api/p/');
-         if (response.ok) {
-            const data = await response.json();
-            setProvinces(data.map((p: ApiProvince) => ({ id: p.code, name: p.name })));
-         }
-      } catch (error) {
-         console.error('Error fetching provinces:', error);
-         // Dữ liệu mẫu nếu API lỗi
-         setProvinces([
-            { id: '1', name: 'Hà Nội' },
-            { id: '2', name: 'TP. Hồ Chí Minh' },
-            { id: '3', name: 'Đà Nẵng' },
-         ]);
-      }
-   }, []); // Empty dependency array means this function won't change between renders
+         const userId = parseInt(storedUserId);
+         setUserId(userId);
 
-   // Cập nhật hàm findAddressesByUserId để sử dụng thông tin đầy đủ từ localStorage
-   const findAddressesByUserId = useCallback(
-      async (userId: number) => {
          try {
             setLoading(true);
 
-            const token = localStorage.getItem('token');
-            if (!token) return [];
+            // Lấy thông tin người dùng trước
+            await loadUserInfo(userId);
 
-            // Thử lấy địa chỉ đầy đủ từ localStorage trước
-            const addressStorageKey = `user_${userId}_addresses`;
-            const storedAddressesStr = localStorage.getItem(addressStorageKey);
+            // Sau đó tải địa chỉ của họ
+            await loadUserAddresses(userId);
 
-            if (storedAddressesStr) {
-               const storedAddresses = JSON.parse(storedAddressesStr);
-               console.log(`Found ${storedAddresses.length} complete addresses in localStorage`);
-
-               if (storedAddresses.length > 0) {
-                  // Kiểm tra nhanh một địa chỉ đầu tiên để xác nhận vẫn còn tồn tại trên server
-                  try {
-                     const firstAddress = storedAddresses[0];
-                     const checkResponse = await fetch(
-                        `http://68.183.226.198:3000/api/v1/address/${firstAddress.id}`,
-                        {
-                           headers: { Authorization: `Bearer ${token}` },
-                        },
-                     );
-
-                     // Nếu địa chỉ đầu tiên vẫn tồn tại, giả định các địa chỉ khác cũng vậy
-                     if (checkResponse.ok) {
-                        console.log('Verified addresses from localStorage are valid');
-                        // Sử dụng thông tin đầy đủ từ localStorage
-                        return storedAddresses;
-                     } else {
-                        console.log(
-                           'Addresses in localStorage may be outdated, fetching from server',
-                        );
-                     }
-                  } catch (e) {
-                     console.log('Error checking address validity:', e);
-                  }
-               }
-            }
-
-            // Nếu không có trong localStorage hoặc dữ liệu không còn hợp lệ, tiếp tục với logic hiện tại
-            console.log('Using ID-based approach to fetch addresses');
-
-            // Lấy danh sách các ID địa chỉ đã biết từ localStorage
-            const userAddressIdsString = localStorage.getItem(`user_${userId}_addressIds`);
-            const userAddressIds = userAddressIdsString ? JSON.parse(userAddressIdsString) : [];
-
-            console.log(`Found ${userAddressIds.length} saved address IDs for user ${userId}`);
-
-            // Nếu không có địa chỉ nào trong localStorage, thử tìm kiếm các địa chỉ từ API
-            if (userAddressIds.length === 0) {
-               console.log('No saved address IDs found, trying to retrieve addresses from API');
-               // Thử tìm địa chỉ trong một khoảng ID nhỏ (1-10) để tìm địa chỉ đầu tiên
-               const addressPromises = [];
-               const maxAddressIdToTry = 10; // Giới hạn số lượng địa chỉ cần kiểm tra ban đầu
-
-               for (let id = 1; id <= maxAddressIdToTry; id++) {
-                  addressPromises.push(
-                     fetch(`http://68.183.226.198:3000/api/v1/address/${id}`, {
-                        headers: { Authorization: `Bearer ${token}` },
-                     })
-                        .then((response) => {
-                           if (response.ok) {
-                              return response.json();
-                           }
-                           return null;
-                        })
-                        .catch(() => null),
-                  );
-               }
-
-               const results = await Promise.all(addressPromises);
-               const foundAddressIds = [];
-
-               // Lọc và tìm các địa chỉ thuộc về userId
-               for (const data of results) {
-                  if (data && (data.userId === userId || data.user?.id === userId)) {
-                     foundAddressIds.push(data.id);
-                  }
-               }
-
-               // Lưu danh sách ID vào localStorage để sử dụng trong tương lai
-               if (foundAddressIds.length > 0) {
-                  localStorage.setItem(
-                     `user_${userId}_addressIds`,
-                     JSON.stringify(foundAddressIds),
-                  );
-                  console.log(`Found and saved ${foundAddressIds.length} address IDs`);
-                  // Cập nhật lại danh sách ID
-                  userAddressIds.push(...foundAddressIds);
-               }
-            }
-
-            // Lấy chi tiết của từng địa chỉ đã biết ID
-            const addressPromises = userAddressIds.map((id: number) =>
-               fetch(`http://68.183.226.198:3000/api/v1/address/${id}`, {
-                  headers: { Authorization: `Bearer ${token}` },
-               })
-                  .then((response) => {
-                     if (response.ok) {
-                        return response.json();
-                     }
-                     return null;
-                  })
-                  .catch(() => null),
-            );
-
-            const addressesData = await Promise.all(addressPromises);
-
-            // Lọc ra các địa chỉ còn tồn tại và thuộc về userId
-            const validAddresses = addressesData
-               .filter(
-                  (data: AddressResponseData | null) =>
-                     data && (data.userId === userId || data.user?.id === userId),
-               )
-               .map((data: AddressResponseData) => ({
-                  id: data.id,
-                  fullName:
-                     data.fullName ||
-                     `${userInfo?.firstName || ''} ${userInfo?.lastName || ''}`.trim(),
-                  phone: data.phone || userInfo?.phone?.toString() || '',
-                  province: data.province || '',
-                  district: data.district || '',
-                  ward: data.ward || '',
-                  streetAddress: data.street || '',
-                  isDefault: data.isDefault || false,
-                  userId: userId,
-               }));
-
-            // Lưu đầy đủ thông tin địa chỉ vào localStorage
-            if (validAddresses.length > 0) {
-               localStorage.setItem(addressStorageKey, JSON.stringify(validAddresses));
-               console.log(`Saved ${validAddresses.length} complete addresses to localStorage`);
-            }
-
-            // Cập nhật lại danh sách ID địa chỉ hợp lệ trong localStorage
-            if (validAddresses.length !== userAddressIds.length) {
-               const validIds = validAddresses.map((addr) => addr.id);
-               localStorage.setItem(`user_${userId}_addressIds`, JSON.stringify(validIds));
-               console.log(`Updated valid address IDs: ${validIds.length} addresses`);
-            }
-
-            return validAddresses;
+            // Cuối cùng tải tỉnh thành để chuẩn bị cho form
+            await fetchProvinces();
          } catch (error) {
-            console.error('Error fetching user addresses:', error);
-            return [];
+            console.error('Error initializing data:', error);
+            showToastMessage('Có lỗi xảy ra khi tải dữ liệu', 'error');
          } finally {
             setLoading(false);
          }
-      },
-      [userInfo, setLoading],
-   ); // Add dependencies used inside the function
+
+         // Tải giỏ hàng từ localStorage
+         const localCart = JSON.parse(localStorage.getItem('cart') || '[]');
+         if (localCart.length === 0) {
+            // Nếu giỏ hàng trống, chuyển về trang giỏ hàng
+            router.push('/user/cart');
+            return;
+         }
+
+         // Đảm bảo tất cả detailId là số
+         const validatedCart = localCart.map((item: { detailId: any }) => ({
+            ...item,
+            detailId: Number(item.detailId),
+         }));
+
+         setCartItems(validatedCart);
+
+         // Tính toán giá trị đơn hàng
+         const subtotal = validatedCart.reduce(
+            (sum: number, item: CartItem) => sum + item.price * item.quantity,
+            0,
+         );
+         setSubTotal(subtotal);
+         setTotalPrice(subtotal + shippingFee);
+      };
+
+      init();
+   }, []);
+
+   // Thêm vào useEffect để load voucher đã áp dụng từ cart
+   useEffect(() => {
+      // Lấy voucher đã áp dụng từ localStorage nếu có
+      const savedVoucher = localStorage.getItem('appliedVoucher');
+      if (savedVoucher) {
+         try {
+            const voucherData = JSON.parse(savedVoucher);
+
+            // Kiểm tra voucher còn hợp lệ không
+            const now = new Date();
+            const startDate = new Date(voucherData.start_date);
+            const endDate = new Date(voucherData.end_date);
+
+            if (now < startDate || now > endDate || !voucherData.isActive) {
+               // Voucher hết hạn hoặc vô hiệu, xóa khỏi localStorage
+               localStorage.removeItem('appliedVoucher');
+               showToastMessage('Mã giảm giá đã hết hạn hoặc không còn hiệu lực', 'error');
+               return;
+            }
+
+            // Kiểm tra giá trị đơn hàng tối thiểu
+            const minOrderValue = parseFloat(voucherData.min_order_value);
+            if (minOrderValue > subTotal) {
+               localStorage.removeItem('appliedVoucher');
+               showToastMessage(
+                  `Đơn hàng tối thiểu ${formatPrice(minOrderValue)} để áp dụng mã này`,
+                  'error',
+               );
+               return;
+            }
+
+            // Tính lại số tiền giảm giá dựa trên giá trị đơn hàng hiện tại
+            const recalculatedDiscount = calculateDiscountAmount(voucherData, subTotal);
+
+            // Làm tròn và cập nhật state
+            setAppliedVoucher(voucherData);
+            setVoucherCode(voucherData.code);
+            setDiscount(recalculatedDiscount);
+
+            // Cập nhật lại localStorage với số tiền giảm giá mới
+            localStorage.setItem(
+               'appliedVoucher',
+               JSON.stringify({
+                  ...voucherData,
+                  discountAmount: recalculatedDiscount,
+               }),
+            );
+         } catch (error) {
+            console.error('Error parsing saved voucher:', error);
+            localStorage.removeItem('appliedVoucher');
+         }
+      }
+   }, [subTotal]);
+
+   // Thêm useEffect để cập nhật tổng tiền khi có discount
+   useEffect(() => {
+      // Tính tổng tiền = subtotal + shippingFee - discount
+      setTotalPrice(subTotal + shippingFee - discount);
+   }, [subTotal, shippingFee, discount]);
+
+   // Add this useEffect to verify MOMO payment when user returns from payment page
+   useEffect(() => {
+      const checkMomoPayment = async () => {
+         // Check if there's a pending order ID in localStorage
+         const pendingOrderId = localStorage.getItem('pendingOrderId');
+
+         // Check if there are URL parameters indicating payment return
+         const urlParams = new URLSearchParams(window.location.search);
+         const paymentStatus = urlParams.get('status');
+
+         if (pendingOrderId && paymentStatus) {
+            try {
+               // TODO: Add API call to verify payment status with your backend if needed
+
+               // Clear the pending order ID
+               localStorage.removeItem('pendingOrderId');
+
+               if (paymentStatus === 'success') {
+                  showToastMessage('Thanh toán thành công!', 'success');
+                  router.push(`/user/order`);
+               } else {
+                  showToastMessage(
+                     'Thanh toán thất bại. Vui lòng thử lại hoặc chọn phương thức khác',
+                     'error',
+                  );
+               }
+            } catch (error) {
+               console.error('Error verifying MOMO payment:', error);
+            }
+         }
+      };
+
+      checkMomoPayment();
+   }, [router]);
+
+   // Load thông tin người dùng
+   const loadUserInfo = useCallback(async (userId: number) => {
+      try {
+         const response = await fetch(`http://68.183.226.198:3000/api/v1/users/${userId}`, {
+            headers: {
+               Authorization: `Bearer ${localStorage.getItem('token') || ''}`,
+            },
+         });
+
+         if (response.ok) {
+            const user = await response.json();
+            setUserInfo({
+               id: user.id,
+               email: user.email,
+               firstName: user.firstName,
+               lastName: user.lastName,
+               phone: user.phone,
+            });
+
+            // Pre-fill new address form with user info
+            setNewAddress((prev) => ({
+               ...prev,
+               fullName: `${user.firstName} ${user.lastName}`,
+               phone: user.phone || '',
+            }));
+         }
+      } catch (error) {
+         console.error('Error loading user info:', error);
+         showToastMessage('Không thể tải thông tin người dùng', 'error');
+      }
+   }, []);
+
+   // Thêm hàm này vào phần các hàm tiện ích của bạn
+   const getUserNameAndPhone = async (userId: number) => {
+      try {
+         const token = localStorage.getItem('token');
+         if (!token) return { fullName: '', phone: '' };
+
+         const response = await fetch(`http://68.183.226.198:3000/api/v1/users/${userId}`, {
+            headers: { Authorization: `Bearer ${token}` },
+         });
+
+         if (response.ok) {
+            const user = await response.json();
+
+            // Tạo tên đầy đủ từ firstName và lastName
+            const fullName = `${user.firstName || ''} ${user.lastName || ''}`.trim();
+
+            // Lấy số điện thoại nếu có
+            const phone = user.phone?.toString() || '';
+
+            return { fullName, phone };
+         }
+
+         return { fullName: '', phone: '' };
+      } catch (error) {
+         console.error('Error fetching user info:', error);
+         return { fullName: '', phone: '' };
+      }
+   };
+
+   // Cập nhật hàm findAddressesByUserId để sử dụng thông tin đầy đủ từ localStorage
+   const findAddressesByUserId = useCallback(async (userId: number) => {
+      try {
+         setLoading(true);
+
+         const token = localStorage.getItem('token');
+         if (!token) return [];
+
+         // Thử lấy địa chỉ đầy đủ từ localStorage trước
+         const addressStorageKey = `user_${userId}_addresses`;
+         const storedAddressesStr = localStorage.getItem(addressStorageKey);
+
+         if (storedAddressesStr) {
+            const storedAddresses = JSON.parse(storedAddressesStr);
+            console.log(`Found ${storedAddresses.length} complete addresses in localStorage`);
+
+            if (storedAddresses.length > 0) {
+               // Kiểm tra nhanh một địa chỉ đầu tiên để xác nhận vẫn còn tồn tại trên server
+               try {
+                  const firstAddress = storedAddresses[0];
+                  const checkResponse = await fetch(
+                     `http://68.183.226.198:3000/api/v1/address/${firstAddress.id}`,
+                     {
+                        headers: { Authorization: `Bearer ${token}` },
+                     },
+                  );
+
+                  // Nếu địa chỉ đầu tiên vẫn tồn tại, giả định các địa chỉ khác cũng vậy
+                  if (checkResponse.ok) {
+                     console.log('Verified addresses from localStorage are valid');
+                     // Sử dụng thông tin đầy đủ từ localStorage
+                     return storedAddresses;
+                  } else {
+                     console.log('Addresses in localStorage may be outdated, fetching from server');
+                  }
+               } catch (e) {
+                  console.log('Error checking address validity:', e);
+               }
+            }
+         }
+
+         // Nếu không có trong localStorage hoặc dữ liệu không còn hợp lệ, tiếp tục với logic hiện tại
+         console.log('Using ID-based approach to fetch addresses');
+
+         // Lấy danh sách các ID địa chỉ đã biết từ localStorage
+         const userAddressIdsString = localStorage.getItem(`user_${userId}_addressIds`);
+         const userAddressIds = userAddressIdsString ? JSON.parse(userAddressIdsString) : [];
+
+         console.log(`Found ${userAddressIds.length} saved address IDs for user ${userId}`);
+
+         // Còn lại là logic hiện tại để tìm và lấy địa chỉ
+         // ...
+
+         // Nếu không có địa chỉ nào trong localStorage, thử tìm kiếm các địa chỉ từ API
+         if (userAddressIds.length === 0) {
+            console.log('No saved address IDs found, trying to retrieve addresses from API');
+            // Thử tìm địa chỉ trong một khoảng ID nhỏ (1-10) để tìm địa chỉ đầu tiên
+            const addressPromises = [];
+            const maxAddressIdToTry = 10; // Giới hạn số lượng địa chỉ cần kiểm tra ban đầu
+
+            for (let id = 1; id <= maxAddressIdToTry; id++) {
+               addressPromises.push(
+                  fetch(`http://68.183.226.198:3000/api/v1/address/${id}`, {
+                     headers: { Authorization: `Bearer ${token}` },
+                  })
+                     .then((response) => {
+                        if (response.ok) {
+                           return response.json();
+                        }
+                        return null;
+                     })
+                     .catch(() => null),
+               );
+            }
+
+            const results = await Promise.all(addressPromises);
+            const foundAddressIds = [];
+
+            // Lọc và tìm các địa chỉ thuộc về userId
+            for (const data of results) {
+               if (data && (data.userId === userId || data.user?.id === userId)) {
+                  foundAddressIds.push(data.id);
+               }
+            }
+
+            // Lưu danh sách ID vào localStorage để sử dụng trong tương lai
+            if (foundAddressIds.length > 0) {
+               localStorage.setItem(`user_${userId}_addressIds`, JSON.stringify(foundAddressIds));
+               console.log(`Found and saved ${foundAddressIds.length} address IDs`);
+               // Cập nhật lại danh sách ID
+               userAddressIds.push(...foundAddressIds);
+            }
+         }
+
+         // Lấy chi tiết của từng địa chỉ đã biết ID
+         const addressPromises = userAddressIds.map((id: any) =>
+            fetch(`http://68.183.226.198:3000/api/v1/address/${id}`, {
+               headers: { Authorization: `Bearer ${token}` },
+            })
+               .then((response) => {
+                  if (response.ok) {
+                     return response.json();
+                  }
+                  return null;
+               })
+               .catch(() => null),
+         );
+
+         const addressesData = await Promise.all(addressPromises);
+
+         // Lọc ra các địa chỉ còn tồn tại và thuộc về userId
+         const validAddresses = addressesData
+            .filter((data) => data && (data.userId === userId || data.user?.id === userId))
+            .map((data) => ({
+               id: data.id,
+               fullName:
+                  data.fullName ||
+                  `${userInfo?.firstName || ''} ${userInfo?.lastName || ''}`.trim(),
+               phone: data.phone || userInfo?.phone?.toString() || '',
+               province: data.province || '',
+               district: data.district || '',
+               ward: data.ward || '',
+               streetAddress: data.street || '',
+               isDefault: data.isDefault || false,
+               userId: userId,
+            }));
+
+         // Lưu đầy đủ thông tin địa chỉ vào localStorage
+         if (validAddresses.length > 0) {
+            localStorage.setItem(addressStorageKey, JSON.stringify(validAddresses));
+            console.log(`Saved ${validAddresses.length} complete addresses to localStorage`);
+         }
+
+         // Cập nhật lại danh sách ID địa chỉ hợp lệ trong localStorage
+         if (validAddresses.length !== userAddressIds.length) {
+            const validIds = validAddresses.map((addr) => addr.id);
+            localStorage.setItem(`user_${userId}_addressIds`, JSON.stringify(validIds));
+            console.log(`Updated valid address IDs: ${validIds.length} addresses`);
+         }
+
+         return validAddresses;
+      } catch (error) {
+         console.error('Error fetching user addresses:', error);
+         return [];
+      } finally {
+         setLoading(false);
+      }
+   }, []);
 
    // Sử dụng hàm này trong loadUserAddresses
    const loadUserAddresses = useCallback(
@@ -648,7 +740,9 @@ export default function CheckoutPage() {
                showToastMessage(`Đã tìm thấy ${validAddresses.length} địa chỉ giao hàng`, 'info');
 
                // Nếu có địa chỉ mặc định, chọn địa chỉ đó
-               const defaultAddress = validAddresses.find((addr: Address) => addr.isDefault);
+               const defaultAddress = validAddresses.find(
+                  (addr: { isDefault: any }) => addr.isDefault,
+               );
                if (defaultAddress) {
                   setSelectedAddressId(defaultAddress.id ?? null);
                   // Cập nhật phí vận chuyển dựa trên địa chỉ mặc định
@@ -690,8 +784,28 @@ export default function CheckoutPage() {
             setLoading(false);
          }
       },
-      [findAddressesByUserId, showToastMessage],
-   ); // Giảm số lượng phụ thuộc
+      [findAddressesByUserId],
+   );
+
+   // Tải danh sách tỉnh/thành phố từ API
+   const fetchProvinces = useCallback(async () => {
+      try {
+         // Thay thế bằng API thực tế
+         const response = await fetch('https://provinces.open-api.vn/api/p/');
+         if (response.ok) {
+            const data = await response.json();
+            setProvinces(data.map((p: any) => ({ id: p.code, name: p.name })));
+         }
+      } catch (error) {
+         console.error('Error fetching provinces:', error);
+         // Dữ liệu mẫu nếu API lỗi
+         setProvinces([
+            { id: '1', name: 'Hà Nội' },
+            { id: '2', name: 'TP. Hồ Chí Minh' },
+            { id: '3', name: 'Đà Nẵng' },
+         ]);
+      }
+   }, []);
 
    // Tải danh sách quận/huyện dựa trên tỉnh/thành phố
    const fetchDistricts = async (provinceId: string) => {
@@ -700,24 +814,16 @@ export default function CheckoutPage() {
          const response = await fetch(`https://provinces.open-api.vn/api/p/${provinceId}?depth=2`);
          if (response.ok) {
             const data = await response.json();
-            const newDistricts = data.districts.map((d: ApiDistrict) => ({
-               id: d.code,
-               name: d.name,
-            }));
-            setDistricts(newDistricts);
-            return newDistricts; // Trả về danh sách quận/huyện mới
+            setDistricts(data.districts.map((d: any) => ({ id: d.code, name: d.name })));
          }
-         return [];
       } catch (error) {
          console.error('Error fetching districts:', error);
          // Dữ liệu mẫu nếu API lỗi
-         const fallbackDistricts = [
+         setDistricts([
             { id: '1', name: 'Quận 1' },
             { id: '2', name: 'Quận 2' },
             { id: '3', name: 'Quận 3' },
-         ];
-         setDistricts(fallbackDistricts);
-         return fallbackDistricts;
+         ]);
       }
    };
 
@@ -728,21 +834,16 @@ export default function CheckoutPage() {
          const response = await fetch(`https://provinces.open-api.vn/api/d/${districtId}?depth=2`);
          if (response.ok) {
             const data = await response.json();
-            const newWards = data.wards.map((w: ApiWard) => ({ id: w.code, name: w.name }));
-            setWards(newWards);
-            return newWards; // Trả về danh sách phường/xã mới
+            setWards(data.wards.map((w: any) => ({ id: w.code, name: w.name })));
          }
-         return [];
       } catch (error) {
          console.error('Error fetching wards:', error);
          // Dữ liệu mẫu nếu API lỗi
-         const fallbackWards = [
+         setWards([
             { id: '1', name: 'Phường 1' },
             { id: '2', name: 'Phường 2' },
             { id: '3', name: 'Phường 3' },
-         ];
-         setWards(fallbackWards);
-         return fallbackWards;
+         ]);
       }
    };
 
@@ -825,36 +926,30 @@ export default function CheckoutPage() {
       try {
          setLoading(true);
 
-         // Lấy thông tin địa chỉ trực tiếp từ danh sách hiện có
-         const address = addresses.find((addr) => addr.id === addressId);
+         // Lấy thông tin địa chỉ và kiểm tra quyền
+         const address = await fetchAddressById(addressId);
 
          if (address) {
-            // Cập nhật form với địa chỉ hiện tại
-            setNewAddress({ ...address });
-
             // Tìm province trong danh sách để có thể hiển thị đúng trong select
             const matchedProvince = provinces.find(
                (p) => p.name.toLowerCase() === address.province.toLowerCase(),
             );
-
             if (matchedProvince) {
                // Load quận/huyện dựa trên tỉnh/thành phố
                await fetchDistricts(matchedProvince.id);
 
-               // Để tránh race condition, đợi một chút để districts được cập nhật
-               setTimeout(async () => {
-                  // Sau khi tải quận/huyện, tìm quận/huyện hiện tại
-                  const matchedDistrict = districts.find(
-                     (d) => d.name.toLowerCase() === address.district.toLowerCase(),
-                  );
-
-                  if (matchedDistrict) {
-                     // Load phường/xã dựa trên quận/huyện
-                     await fetchWards(matchedDistrict.id);
-                  }
-               }, 100);
+               // Sau khi tải quận/huyện, tìm quận/huyện hiện tại
+               const matchedDistrict = districts.find(
+                  (d) => d.name.toLowerCase() === address.district.toLowerCase(),
+               );
+               if (matchedDistrict) {
+                  // Load phường/xã dựa trên quận/huyện
+                  await fetchWards(matchedDistrict.id);
+               }
             }
 
+            // Cập nhật form địa chỉ
+            setNewAddress(address);
             setShowAddAddressForm(true);
          } else {
             showToastMessage('Không thể tải thông tin địa chỉ', 'error');
@@ -868,17 +963,7 @@ export default function CheckoutPage() {
    };
 
    // Cập nhật hàm updateAddress để lưu thông tin đầy đủ về địa chỉ vào localStorage
-   const updateAddress = async (addressData: {
-      id?: number;
-      fullName: string;
-      phone: string;
-      province: string;
-      district: string;
-      ward: string;
-      street: string;
-      userId: number;
-      isDefault: boolean;
-   }) => {
+   const updateAddress = async (addressData: any) => {
       try {
          const token = localStorage.getItem('token');
          if (!token) {
@@ -931,7 +1016,7 @@ export default function CheckoutPage() {
             if (isUpdate) {
                // Nếu là cập nhật, thay thế địa chỉ cũ trong mảng
                const addressIndex = existingAddresses.findIndex(
-                  (addr: Address) => addr.id === savedAddress.id,
+                  (addr: any) => addr.id === savedAddress.id,
                );
                if (addressIndex >= 0) {
                   existingAddresses[addressIndex] = fullAddressData;
@@ -965,15 +1050,12 @@ export default function CheckoutPage() {
                errorData.message || `Không thể ${isUpdate ? 'cập nhật' : 'tạo'} địa chỉ`;
             throw new Error(errorMessage);
          }
-      } catch (error: unknown) {
-         console.error('Error updating address:', error);
-         const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-         showToastMessage(errorMessage, 'error');
+      } catch (error: any) {
          throw error;
       }
    };
 
-   // Cải tiến hàm lưu địa chỉ
+   // Cập nhật hàm lưu địa chỉ
    const handleSaveAddress = async (e: React.FormEvent) => {
       e.preventDefault();
 
@@ -1004,25 +1086,28 @@ export default function CheckoutPage() {
          // Hiển thị loading state
          setLoading(true);
 
-         // Chuẩn bị dữ liệu
+         // Chuẩn bị dữ liệu để gửi lên API
          const addressData = {
-            id: newAddress.id,
-            fullName: String(newAddress.fullName).trim(),
-            phone: String(newAddress.phone).trim(),
-            province: String(newAddress.province).toLowerCase(),
-            district: String(newAddress.district).toLowerCase(),
-            ward: String(newAddress.ward).toLowerCase(),
-            street: String(newAddress.streetAddress),
-            userId: userId as number,
-            isDefault: newAddress.isDefault || false,
+            id: newAddress.id, // Thêm ID nếu đang cập nhật, undefined nếu là địa chỉ mới
+            fullName: String(newAddress.fullName).trim(), // Đảm bảo tên được cắt khoảng trắng và là chuỗi
+            phone: String(newAddress.phone).trim(), // Đảm bảo số điện thoại là chuỗi và được cắt khoảng trắng
+            province: String(newAddress.province).toLowerCase(), // API lưu tên tỉnh/thành phố viết thường
+            district: String(newAddress.district).toLowerCase(), // API lưu tên quận/huyện viết thường
+            ward: String(newAddress.ward).toLowerCase(), // API lưu tên phường/xã viết thường
+            street: String(newAddress.streetAddress), // Đổi tên field để phù hợp với API
+            userId: userId as number, // Đảm bảo userId là number không phải null
+            isDefault: newAddress.isDefault,
          };
 
-         // Lưu địa chỉ
+         console.log('Sending address data:', addressData);
+
          const savedAddress = await updateAddress(addressData);
 
          if (!savedAddress) {
             throw new Error('Không nhận được phản hồi từ server');
          }
+
+         console.log('Saved address from API:', savedAddress);
 
          // Chuyển đổi dữ liệu trả về để phù hợp với interface Address
          const formattedAddress: Address = {
@@ -1032,7 +1117,7 @@ export default function CheckoutPage() {
             province: savedAddress.province,
             district: savedAddress.district,
             ward: savedAddress.ward,
-            streetAddress: savedAddress.street,
+            streetAddress: savedAddress.street, // Chuyển đổi street thành streetAddress
             isDefault: savedAddress.isDefault,
             userId: userId as number,
          };
@@ -1056,29 +1141,18 @@ export default function CheckoutPage() {
          // Cập nhật phí vận chuyển dựa trên địa chỉ mới
          const newShippingFee = calculateShippingFee(formattedAddress.province);
          setShippingFee(newShippingFee);
-
-         // Cập nhật tổng tiền
          setTotalPrice(subTotal + newShippingFee - discount);
 
          // Ẩn form thêm địa chỉ
          setShowAddAddressForm(false);
 
-         // Lưu vào localStorage đầy đủ để tránh fetch lại
-         const userIdStr = (userId as number).toString();
-         const addressStorageKey = `user_${userIdStr}_addresses`;
-         const existingAddressesStr = localStorage.getItem(addressStorageKey);
-         const existingAddresses = existingAddressesStr ? JSON.parse(existingAddressesStr) : [];
-
-         // Cập nhật danh sách địa chỉ trong localStorage
-         if (newAddress.id) {
-            const updatedAddresses = existingAddresses.map((addr: Address) =>
-               addr.id === formattedAddress.id ? formattedAddress : addr,
-            );
-            localStorage.setItem(addressStorageKey, JSON.stringify(updatedAddresses));
-         } else {
-            localStorage.setItem(
-               addressStorageKey,
-               JSON.stringify([...existingAddresses, formattedAddress]),
+         // Nếu đây là địa chỉ mặc định mới, cập nhật toàn bộ danh sách
+         if (formattedAddress.isDefault) {
+            // Cập nhật các địa chỉ khác thành không mặc định trong state
+            setAddresses((prev) =>
+               prev.map((addr) =>
+                  addr.id !== formattedAddress.id ? { ...addr, isDefault: false } : addr,
+               ),
             );
          }
 
@@ -1092,10 +1166,9 @@ export default function CheckoutPage() {
             streetAddress: '',
             isDefault: addresses.length === 0,
          });
-      } catch (error: unknown) {
+      } catch (error: any) {
          console.error('Error saving address:', error);
-         const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-         showToastMessage(errorMessage, 'error');
+         showToastMessage(error.message || 'Không thể lưu địa chỉ', 'error');
       } finally {
          setLoading(false);
       }
@@ -1127,7 +1200,7 @@ export default function CheckoutPage() {
 
          // Tìm ID của voucher theo mã code
          const matchingVoucher = allVouchers.find(
-            (v: VoucherResponseData) => v.code.toLowerCase() === voucherCode.trim().toLowerCase(),
+            (v: any) => v.code.toLowerCase() === voucherCode.trim().toLowerCase(),
          );
 
          if (!matchingVoucher) {
@@ -1175,10 +1248,9 @@ export default function CheckoutPage() {
 
          // Hiển thị thông báo thành công
          showToastMessage(`Đã áp dụng mã giảm giá: ${voucher.code}`, 'success');
-      } catch (error: unknown) {
+      } catch (error: any) {
          console.error('Error applying voucher:', error);
-         const errorMessage = error instanceof Error ? error.message : 'Unable to apply voucher';
-         setVoucherError(errorMessage);
+         setVoucherError(error.message || 'Không thể áp dụng mã giảm giá');
          setAppliedVoucher(null);
          setDiscount(0);
          localStorage.removeItem('appliedVoucher');
@@ -1227,10 +1299,9 @@ export default function CheckoutPage() {
          } else {
             throw new Error(momoData.message || 'Không thể tạo thanh toán MoMo');
          }
-      } catch (error: unknown) {
+      } catch (error: any) {
          console.error('Error creating MOMO payment:', error);
-         const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-         showToastMessage(errorMessage, 'error');
+         showToastMessage(error.message || 'Không thể tạo thanh toán MoMo', 'error');
          setProcessingPayment(false);
       }
    };
@@ -1341,16 +1412,11 @@ export default function CheckoutPage() {
                // Xử lý lỗi validation
                let errorMessage = 'Dữ liệu đơn hàng không hợp lệ: ';
 
-               // Fix for the error in handlePlaceOrder function
                if (errorData.errors?.item) {
                   const itemErrors = Object.values(errorData.errors.item)
-                     .map((err: unknown) => {
-                        // First check if err is an object we can work with
-                        if (err && typeof err === 'object') {
-                           // Then safely get values
-                           return Object.values(err as Record<string, string>).join(', ');
-                        }
-                        return String(err); // Fallback case
+                     .map((err: any) => {
+                        const errorMessages = Object.values(err).join(', ');
+                        return errorMessages;
                      })
                      .join('; ');
 
@@ -1364,10 +1430,9 @@ export default function CheckoutPage() {
                throw new Error(errorData.message || 'Không thể tạo đơn hàng. Vui lòng thử lại sau');
             }
          }
-      } catch (error: unknown) {
+      } catch (error: any) {
          console.error('Error creating new order:', error);
-         const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-         showToastMessage(errorMessage, 'error');
+         showToastMessage(error.message || 'Đặt hàng thất bại. Vui lòng thử lại', 'error');
       } finally {
          // Only set loading to false if we're not processing MOMO payment
          if (paymentMethod !== 'MOMO') {
@@ -1413,202 +1478,6 @@ export default function CheckoutPage() {
       }
    };
 
-   useEffect(() => {
-      // Chỉ thực hiện khởi tạo ban đầu
-      const init = async () => {
-         // Lấy thông tin userId từ localStorage
-         const storedUserId = localStorage.getItem('userId');
-         if (!storedUserId) {
-            // Nếu không có userId, chuyển về trang đăng nhập
-            router.push('/user/signin');
-            return;
-         }
-
-         const userId = parseInt(storedUserId);
-         setUserId(userId);
-
-         try {
-            setLoading(true);
-
-            // Tạo biến để theo dõi xem có cần tải lại dữ liệu không
-            let needToLoadUser = true;
-            let needToLoadAddresses = addresses.length === 0;
-            let needToLoadProvinces = provinces.length === 0;
-
-            // Chỉ tải dữ liệu nếu cần thiết
-            if (needToLoadUser) await loadUserInfo(userId);
-            if (needToLoadAddresses) await loadUserAddresses(userId);
-            if (needToLoadProvinces) await fetchProvinces();
-         } catch (error) {
-            console.error('Error initializing data:', error);
-            showToastMessage('Có lỗi xảy ra khi tải dữ liệu', 'error');
-         } finally {
-            setLoading(false);
-         }
-
-         // Tải giỏ hàng từ localStorage
-         const localCart = JSON.parse(localStorage.getItem('cart') || '[]');
-         if (localCart.length === 0) {
-            // Nếu giỏ hàng trống, chuyển về trang giỏ hàng
-            router.push('/user/cart');
-            return;
-         }
-
-         // Đảm bảo tất cả detailId là số
-         const validatedCart = localCart.map((item: { detailId: number }) => ({
-            ...item,
-            detailId: Number(item.detailId),
-         }));
-
-         setCartItems(validatedCart);
-
-         // Tính toán giá trị đơn hàng
-         const subtotal = validatedCart.reduce(
-            (sum: number, item: CartItem) => sum + item.price * item.quantity,
-            0,
-         );
-         setSubTotal(subtotal);
-         setTotalPrice(subtotal + shippingFee);
-      };
-
-      // Sử dụng biến kiểm soát để đảm bảo chỉ chạy khi cần thiết
-      const isInitialized = localStorage.getItem('checkout_initialized');
-      if (!isInitialized) {
-         init();
-         localStorage.setItem('checkout_initialized', 'true');
-      }
-
-      // Xóa biến này khi component unmount
-      return () => {
-         localStorage.removeItem('checkout_initialized');
-      };
-   }, [router]); // Chỉ phụ thuộc vào router
-
-   // Thêm vào useEffect để load voucher đã áp dụng từ cart
-   useEffect(() => {
-      // Lấy voucher đã áp dụng từ localStorage nếu có
-      const savedVoucher = localStorage.getItem('appliedVoucher');
-      if (savedVoucher) {
-         try {
-            const voucherData = JSON.parse(savedVoucher);
-
-            // Kiểm tra voucher còn hợp lệ không
-            const now = new Date();
-            const startDate = new Date(voucherData.start_date);
-            const endDate = new Date(voucherData.end_date);
-
-            if (now < startDate || now > endDate || !voucherData.isActive) {
-               // Voucher hết hạn hoặc vô hiệu, xóa khỏi localStorage
-               localStorage.removeItem('appliedVoucher');
-               showToastMessage('Mã giảm giá đã hết hạn hoặc không còn hiệu lực', 'error');
-               return;
-            }
-
-            // Kiểm tra giá trị đơn hàng tối thiểu
-            const minOrderValue = parseFloat(voucherData.min_order_value);
-            if (minOrderValue > subTotal) {
-               localStorage.removeItem('appliedVoucher');
-               showToastMessage(
-                  `Đơn hàng tối thiểu ${formatPrice(minOrderValue)} để áp dụng mã này`,
-                  'error',
-               );
-               return;
-            }
-
-            // Tính lại số tiền giảm giá dựa trên giá trị đơn hàng hiện tại
-            const recalculatedDiscount = calculateDiscountAmount(voucherData, subTotal);
-
-            // Làm tròn và cập nhật state
-            setAppliedVoucher(voucherData);
-            setVoucherCode(voucherData.code);
-            setDiscount(recalculatedDiscount);
-
-            // Cập nhật lại localStorage với số tiền giảm giá mới
-            localStorage.setItem(
-               'appliedVoucher',
-               JSON.stringify({
-                  ...voucherData,
-                  discountAmount: recalculatedDiscount,
-               }),
-            );
-         } catch (error) {
-            console.error('Error parsing saved voucher:', error);
-            localStorage.removeItem('appliedVoucher');
-         }
-      }
-   }, [subTotal, showToastMessage]);
-
-   // Thêm useEffect để cập nhật tổng tiền khi có discount
-   useEffect(() => {
-      // Tính tổng tiền = subtotal + shippingFee - discount
-      setTotalPrice(subTotal + shippingFee - discount);
-   }, [subTotal, shippingFee, discount]);
-
-   // Add this useEffect to verify MOMO payment when user returns from payment page
-   useEffect(() => {
-      const checkMomoPayment = async () => {
-         // Check if there's a pending order ID in localStorage
-         const pendingOrderId = localStorage.getItem('pendingOrderId');
-
-         // Check if there are URL parameters indicating payment return
-         const urlParams = new URLSearchParams(window.location.search);
-         const paymentStatus = urlParams.get('status');
-
-         if (pendingOrderId && paymentStatus) {
-            try {
-               // TODO: Add API call to verify payment status with your backend if needed
-
-               // Clear the pending order ID
-               localStorage.removeItem('pendingOrderId');
-
-               if (paymentStatus === 'success') {
-                  showToastMessage('Thanh toán thành công!', 'success');
-                  router.push(`/user/order`);
-               } else {
-                  showToastMessage(
-                     'Thanh toán thất bại. Vui lòng thử lại hoặc chọn phương thức khác',
-                     'error',
-                  );
-               }
-            } catch (error: unknown) {
-               console.error('Error verifying MOMO payment:', error);
-               showToastMessage('Không thể xác minh thanh toán', 'error');
-            }
-         }
-      };
-
-      checkMomoPayment();
-   }, [router, showToastMessage]); // Add showToastMessage to the dependency array
-
-   // Thêm hàm này vào phần các hàm tiện ích của bạn
-   const getUserNameAndPhone = async (userId: number) => {
-      try {
-         const token = localStorage.getItem('token');
-         if (!token) return { fullName: '', phone: '' };
-
-         const response = await fetch(`http://68.183.226.198:3000/api/v1/users/${userId}`, {
-            headers: { Authorization: `Bearer ${token}` },
-         });
-
-         if (response.ok) {
-            const user = await response.json();
-
-            // Tạo tên đầy đủ từ firstName và lastName
-            const fullName = `${user.firstName || ''} ${user.lastName || ''}`.trim();
-
-            // Lấy số điện thoại nếu có
-            const phone = user.phone?.toString() || '';
-
-            return { fullName, phone };
-         }
-
-         return { fullName: '', phone: '' };
-      } catch (error) {
-         console.error('Error fetching user info:', error);
-         return { fullName: '', phone: '' };
-      }
-   };
-
    if (loading) {
       return (
          <div className='bg-[#F1EEE9] min-h-screen'>
@@ -1625,121 +1494,17 @@ export default function CheckoutPage() {
       const districtId = e.target.value;
       const districtName = e.target.options[e.target.selectedIndex].text;
 
-      // Hợp nhất thành một lần cập nhật
-      setNewAddress((prev) => ({
-         ...prev,
-         district: districtName,
-         ward: '',
-      }));
-
+      setNewAddress((prev) => ({ ...prev, district: districtName }));
       fetchWards(districtId);
+      setNewAddress((prev) => ({ ...prev, ward: '' }));
    };
 
-   // Cập nhật handler cho việc thay đổi phường/xã
+   // Thêm handler cho việc thay đổi phường/xã
    const handleWardChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
       const wardName = e.target.options[e.target.selectedIndex].text;
 
       setNewAddress((prev) => ({ ...prev, ward: wardName }));
    };
-
-   // useEffect cho việc khởi tạo (chỉ chạy một lần)
-   useEffect(() => {
-      const initData = async () => {
-         // Lấy thông tin userId từ localStorage
-         const storedUserId = localStorage.getItem('userId');
-         if (!storedUserId) {
-            // Nếu không có userId, chuyển về trang đăng nhập
-            router.push('/user/signin');
-            return;
-         }
-
-         const userId = parseInt(storedUserId);
-         setUserId(userId);
-
-         // Tải giỏ hàng từ localStorage
-         const localCart = JSON.parse(localStorage.getItem('cart') || '[]');
-         if (localCart.length === 0) {
-            // Nếu giỏ hàng trống, chuyển về trang giỏ hàng
-            router.push('/user/cart');
-            return;
-         }
-
-         // Đảm bảo tất cả detailId là số
-         const validatedCart = localCart.map((item: { detailId: number }) => ({
-            ...item,
-            detailId: Number(item.detailId),
-         }));
-
-         setCartItems(validatedCart);
-
-         // Tính toán giá trị đơn hàng
-         const subtotal = validatedCart.reduce(
-            (sum: number, item: CartItem) => sum + item.price * item.quantity,
-            0,
-         );
-         setSubTotal(subtotal);
-      };
-
-      initData();
-   }, [router]); // Chỉ phụ thuộc vào router
-
-   // useEffect cho việc tải dữ liệu người dùng (chỉ khi userId thay đổi)
-   useEffect(() => {
-      const loadUserData = async () => {
-         if (!userId) return;
-
-         try {
-            setLoading(true);
-            await loadUserInfo(userId);
-         } catch (error) {
-            console.error('Error loading user info:', error);
-            showToastMessage('Không thể tải thông tin người dùng', 'error');
-         } finally {
-            setLoading(false);
-         }
-      };
-
-      loadUserData();
-   }, [userId, loadUserInfo, showToastMessage]);
-
-   // useEffect cho việc tải địa chỉ (chỉ khi cần)
-   useEffect(() => {
-      const loadAddressData = async () => {
-         if (!userId || addresses.length > 0) return;
-
-         try {
-            setLoading(true);
-            await loadUserAddresses(userId);
-         } catch (error) {
-            console.error('Error loading addresses:', error);
-            showToastMessage('Không thể tải địa chỉ', 'error');
-         } finally {
-            setLoading(false);
-         }
-      };
-
-      loadAddressData();
-   }, [userId, loadUserAddresses, addresses.length, showToastMessage]);
-
-   // useEffect để tải tỉnh/thành phố (chỉ khi cần)
-   useEffect(() => {
-      const loadProvinceData = async () => {
-         if (provinces.length > 0) return;
-
-         try {
-            await fetchProvinces();
-         } catch (error) {
-            console.error('Error loading provinces:', error);
-         }
-      };
-
-      loadProvinceData();
-   }, [fetchProvinces, provinces.length]);
-
-   // useEffect riêng cho việc cập nhật tổng tiền
-   useEffect(() => {
-      setTotalPrice(subTotal + shippingFee - discount);
-   }, [subTotal, shippingFee, discount]);
 
    return (
       <div className='bg-[#F1EEE9] min-h-screen'>
