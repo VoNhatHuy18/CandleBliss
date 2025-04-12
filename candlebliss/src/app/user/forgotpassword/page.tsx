@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { EyeIcon } from 'lucide-react';
 import NavBar from '@/app/components/user/nav/page';
 import Footer from '@/app/components/user/footer/page';
-import Toast from '@/app/components/ui/toast/page';
+import Toast from '@/app/components/ui/toast/Toast';
 
 export default function ForgotPasswordPage() {
    // Existing form state

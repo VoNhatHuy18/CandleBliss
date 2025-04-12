@@ -1,12 +1,12 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react'; // Add useCallback
+import React, { useState, useEffect, useCallback, Suspense } from 'react'; // Add Suspense
 import Image from 'next/image';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation'; // Add useSearchParams
 import Header from '@/app/components/user/nav/page';
 import Footer from '@/app/components/user/footer/page';
-import Toast from '@/app/components/ui/toast/page';
+import Toast from '@/app/components/ui/toast/Toast';
 
 // Interfaces
 interface OrderItem {
@@ -72,10 +72,24 @@ const orderStatusColors: Record<string, { bg: string; text: string; border: stri
    'Đã hủy': { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200' },
 };
 
+// Create a client component that uses searchParams
+function OrderFilter({ onFilterChange }: { onFilterChange: (filterId: string | null) => void }) {
+   const searchParams = useSearchParams();
+   const filterStatus = searchParams.get('status');
+
+   useEffect(() => {
+      onFilterChange(filterStatus);
+   }, [searchParams, onFilterChange]);
+
+   return null; // This component doesn't render anything, just processes the search params
+}
+
 export default function OrderPage() {
    const router = useRouter();
    const [loading, setLoading] = useState(true);
    const [orders, setOrders] = useState<Order[]>([]);
+   const [filteredOrders, setFilteredOrders] = useState<Order[]>([]);
+   const [statusFilter, setStatusFilter] = useState<string | null>(null);
    const [toast, setToast] = useState({
       show: false,
       message: '',
@@ -221,6 +235,20 @@ export default function OrderPage() {
       }
    };
 
+   // Handle filter change
+   const handleFilterChange = useCallback((filterStatus: string | null) => {
+      setStatusFilter(filterStatus);
+   }, []);
+
+   // Filter orders when statusFilter or orders change
+   useEffect(() => {
+      if (!statusFilter) {
+         setFilteredOrders(orders);
+      } else {
+         setFilteredOrders(orders.filter((order) => order.status === statusFilter));
+      }
+   }, [statusFilter, orders]);
+
    // Hàm render trạng thái đơn hàng
    const renderOrderStatus = (status: string) => {
       const colorSet = orderStatusColors[status] || {
@@ -268,6 +296,11 @@ export default function OrderPage() {
       <div className='bg-[#F1EEE9] min-h-screen'>
          <Header />
 
+         {/* Wrap the search params usage in Suspense */}
+         <Suspense fallback={<div>Loading filters...</div>}>
+            <OrderFilter onFilterChange={handleFilterChange} />
+         </Suspense>
+
          {/* Toast notification */}
          <div className='fixed top-4 right-4 z-50'>
             <Toast
@@ -281,7 +314,34 @@ export default function OrderPage() {
          <div className='container mx-auto px-4 py-8'>
             <h1 className='text-3xl font-medium mb-6'>Đơn hàng của tôi</h1>
 
-            {orders.length === 0 ? (
+            {/* Add filter tabs */}
+            <div className='flex overflow-x-auto mb-6 gap-2'>
+               <Link
+                  href='/user/order'
+                  className={`px-4 py-2 whitespace-nowrap rounded-md ${
+                     !statusFilter
+                        ? 'bg-orange-100 text-orange-700 font-medium'
+                        : 'bg-white hover:bg-gray-100'
+                  }`}
+               >
+                  Tất cả
+               </Link>
+               {Object.keys(orderStatusColors).map((status) => (
+                  <Link
+                     key={status}
+                     href={`/user/order?status=${encodeURIComponent(status)}`}
+                     className={`px-4 py-2 whitespace-nowrap rounded-md ${
+                        statusFilter === status
+                           ? 'bg-orange-100 text-orange-700 font-medium'
+                           : 'bg-white hover:bg-gray-100'
+                     }`}
+                  >
+                     {status}
+                  </Link>
+               ))}
+            </div>
+
+            {filteredOrders.length === 0 ? (
                <div className='bg-white rounded-lg shadow p-8 text-center'>
                   <div className='flex flex-col items-center'>
                      <div className='mb-4'>
@@ -306,7 +366,7 @@ export default function OrderPage() {
                </div>
             ) : (
                <div className='space-y-6'>
-                  {orders.map((order) => (
+                  {filteredOrders.map((order) => (
                      <div key={order.id} className='bg-white rounded-lg shadow overflow-hidden'>
                         {/* Order header */}
                         <div className='p-4 border-b border-gray-100 flex justify-between items-center flex-wrap gap-2'>

@@ -6,7 +6,7 @@ import NavBar from '@/app/components/user/nav/page';
 import Footer from '@/app/components/user/footer/page';
 import { EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
 import Image from 'next/image';
-import Toast from '@/app/components/ui/toast/page';
+import Toast from '@/app/components/ui/toast/Toast';
 import AuthService from '@/app/utils/authService';
 
 export default function SignUpPage() {

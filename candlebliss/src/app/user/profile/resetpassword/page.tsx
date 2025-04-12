@@ -7,7 +7,7 @@ import { FaSpinner, FaExclamationTriangle, FaEye, FaEyeSlash, FaCheckCircle } fr
 import Header from '@/app/components/user/nav/page';
 import Footer from '@/app/components/user/footer/page';
 import ViewedCarousel from '@/app/components/user/viewedcarousel/page';
-import MenuProfile from '@/app/components/user/menuprofile/page';
+import MenuProfile from '@/app/components/user/menuprofile/MenuProfile';
 
 const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
 

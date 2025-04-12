@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import Image from 'next/image';
 import MenuSideBar from '@/app/components/seller/menusidebar/page';
 import Header from '@/app/components/seller/header/page';
-import Toast from '@/app/components/ui/toast/page';
+import Toast from '@/app/components/ui/toast/Toast';
 import { useRouter } from 'next/navigation';
 import {
    ChevronDownIcon,

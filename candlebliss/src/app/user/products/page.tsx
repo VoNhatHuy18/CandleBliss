@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { Star, StarHalf, Eye, Menu, X } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -270,6 +270,18 @@ const ProductCard = ({
    );
 };
 
+// Create a client component that uses searchParams
+function ProductSearch({ onSearch }: { onSearch: (query: string) => void }) {
+   const searchParams = useSearchParams();
+   const searchQuery = searchParams.get('search') || '';
+
+   useEffect(() => {
+      onSearch(searchQuery);
+   }, [searchParams, onSearch]);
+
+   return null; // This component doesn't render anything, just processes the search
+}
+
 export default function ProductPage() {
    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
    const [products, setProducts] = useState<
@@ -312,6 +324,7 @@ export default function ProductPage() {
    >([]);
    const [loading, setLoading] = useState(true);
    const [error, setError] = useState<string | null>(null);
+   const [searchQuery, setSearchQuery] = useState('');
 
    const [currentPage, setCurrentPage] = useState(1);
    const productsPerPage = 25;
@@ -323,9 +336,6 @@ export default function ProductPage() {
    };
 
    const totalPages = Math.ceil(filteredProducts.length / productsPerPage);
-
-   const searchParams = useSearchParams();
-   const searchQuery = searchParams.get('search') || '';
 
    useEffect(() => {
       const fetchProducts = async () => {
@@ -505,6 +515,10 @@ export default function ProductPage() {
       setFilteredProducts(filtered);
    }, [searchQuery, products]);
 
+   const handleSearch = (query: string) => {
+      setSearchQuery(query);
+   };
+
    const handleViewDetail = (productId: number) => {
       console.log('View detail clicked for product ID:', productId);
    };
@@ -512,6 +526,12 @@ export default function ProductPage() {
    return (
       <div className='bg-[#F1EEE9] min-h-screen'>
          <NavBar />
+
+         {/* Wrap the search params usage in Suspense */}
+         <Suspense fallback={<div>Loading search results...</div>}>
+            <ProductSearch onSearch={handleSearch} />
+         </Suspense>
+
          <div className='px-4 lg:px-0 py-8'>
             <p className='text-center text-[#555659] text-lg font-mont'>S Ả N P H Ẩ M</p>
             {searchQuery ? (

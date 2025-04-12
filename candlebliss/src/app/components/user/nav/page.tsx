@@ -2,26 +2,36 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, Suspense } from 'react';
 import { MagnifyingGlassIcon } from '@heroicons/react/20/solid';
 import { UserIcon, ShoppingBagIcon, Bars3Icon, XMarkIcon } from '@heroicons/react/24/outline';
 import Image from 'next/image';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { jwtDecode } from 'jwt-decode';
 
+// Loading component
+const NavBarLoading = () => (
+   <div className='bg-[#F1EEE9] flex justify-between items-center px-4 sm:px-6 md:px-12 lg:px-20 xl:px-60 py-2'>
+      <div className='animate-pulse h-12 w-48 bg-gray-200 rounded'></div>
+      <div className='flex space-x-4'>
+         <div className='animate-pulse h-6 w-6 bg-gray-200 rounded-full'></div>
+         <div className='animate-pulse h-6 w-6 bg-gray-200 rounded-full'></div>
+         <div className='animate-pulse h-6 w-6 bg-gray-200 rounded-full'></div>
+      </div>
+   </div>
+);
+
+// Interfaces definitions
 interface DecodedToken {
    name: string;
    exp: number;
    id?: number;
-   // Replace [key: string]: any with a more specific index signature
    [key: string]: string | number | undefined;
 }
 
-// First, define interfaces for your cart data structures
 interface CartItem {
    productDetailId: number;
    quantity: number;
-   // Add other properties that might be in cart items with specific types
    name?: string;
    price?: number;
    image?: string;
@@ -29,12 +39,29 @@ interface CartItem {
 
 interface Cart {
    items: CartItem[];
-   // Add other properties that might be in the cart
    total?: number;
    userId?: number;
 }
 
-export default function NavBar() {
+// Create a client component that uses searchParams
+function SearchParamsHandler({ onUpdate }: { onUpdate: (productDetailId: number | null) => void }) {
+   const searchParams = useSearchParams();
+
+   useEffect(() => {
+      const pdIdParam = searchParams.get('productDetailId');
+      if (pdIdParam) {
+         const pdId = parseInt(pdIdParam);
+         onUpdate(isNaN(pdId) ? null : pdId);
+      } else {
+         onUpdate(null);
+      }
+   }, [searchParams, onUpdate]);
+
+   return null;
+}
+
+// Main NavBar component
+function NavBarContent() {
    const [showSearchInput, setShowSearchInput] = useState(false);
    const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
    const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -48,8 +75,16 @@ export default function NavBar() {
 
    const router = useRouter();
    const pathname = usePathname();
-   const searchParams = useSearchParams();
 
+   // Rest of your component code
+   // ...
+
+   // Handle update from SearchParamsHandler
+   const handleSearchParamsUpdate = useCallback((productDetailId: number | null) => {
+      setCurrentProductDetailId(productDetailId);
+   }, []);
+
+   // Your existing functions
    const toggleMobileMenu = () => {
       setMobileMenuOpen(!mobileMenuOpen);
    };
@@ -72,6 +107,10 @@ export default function NavBar() {
       router.push('/user/home');
    }, [router]);
 
+   // Rest of your functions and useEffects
+   // ...
+
+   // Keep all your original code, just replacing the searchParams usage
    const checkAuthStatus = useCallback(() => {
       const token = localStorage.getItem('token');
 
@@ -157,16 +196,6 @@ export default function NavBar() {
       }
    }, [isLoggedIn, userId, pathname, fetchCartItemCount]);
 
-   useEffect(() => {
-      const pdIdParam = searchParams.get('productDetailId');
-      if (pdIdParam) {
-         const pdId = parseInt(pdIdParam);
-         setCurrentProductDetailId(isNaN(pdId) ? null : pdId);
-      } else {
-         setCurrentProductDetailId(null);
-      }
-   }, [searchParams]);
-
    const getProductDetailCount = (productDetailId: number | null): number => {
       if (!productDetailId) return 0;
       return productDetailCounts[productDetailId] || 0;
@@ -244,6 +273,12 @@ export default function NavBar() {
 
    return (
       <>
+         {/* This is where we'll use the Suspense component to handle searchParams */}
+         <Suspense fallback={null}>
+            <SearchParamsHandler onUpdate={handleSearchParamsUpdate} />
+         </Suspense>
+
+         {/* Rest of your original JSX remains the same */}
          <div className='bg-[#F1EEE9] flex justify-between items-center px-4 sm:px-6 md:px-12 lg:px-20 xl:px-60 py-2'>
             <div className='flex items-center'>
                <Link href='/user/home'>
@@ -535,5 +570,14 @@ export default function NavBar() {
             </div>
          )}
       </>
+   );
+}
+
+// Export wrapper with Suspense
+export default function NavBar() {
+   return (
+      <Suspense fallback={<NavBarLoading />}>
+         <NavBarContent />
+      </Suspense>
    );
 }

@@ -7,8 +7,8 @@ import { FaSpinner, FaExclamationTriangle, FaAddressBook, FaPlus } from 'react-i
 import Header from '@/app/components/user/nav/page';
 import Footer from '@/app/components/user/footer/page';
 import ViewedCarousel from '@/app/components/user/viewedcarousel/page';
-import MenuProfile from '@/app/components/user/menuprofile/page';
-import Toast from '@/app/components/ui/toast/page';
+import MenuProfile from '@/app/components/user/menuprofile/MenuProfile';
+import Toast from '@/app/components/ui/toast/Toast';
 
 interface Address {
    id?: number;

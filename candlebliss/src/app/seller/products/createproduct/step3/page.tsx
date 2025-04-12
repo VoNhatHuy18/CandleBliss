@@ -6,7 +6,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import Toast from '@/app/components/ui/toast/page'; // Add Toast import
+import Toast from '@/app/components/ui/toast/Toast'; // Add Toast import
 
 // Interface for variant that's compatible with both Step2 and Step3
 interface Variant {

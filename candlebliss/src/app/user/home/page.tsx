@@ -1,8 +1,6 @@
 'use client';
-import React from 'react';
-
+import React, { Suspense } from 'react'; // Add Suspense import
 import { ChevronRightIcon } from '@heroicons/react/24/outline';
-
 import Image from 'next/image';
 import Carousel from '@/app/components/user/carousel/page';
 import AccessoriesCarousel from '@/app/components/user/accessoriescarousel/page';
@@ -11,15 +9,28 @@ import RotatingImages from '@/app/components/user/rotatingimages/page';
 import NavBar from '@/app/components/user/nav/page';
 import Footer from '@/app/components/user/footer/page';
 
+// Fallback loading components
+const LoadingSpinner = () => (
+   <div className='flex justify-center items-center p-4'>
+      <div className='animate-spin rounded-full h-8 w-8 border-b-2 border-[#553C26]'></div>
+   </div>
+);
+
 export default function HomePage() {
    return (
       <>
          <div className='bg-[#F1EEE9] min-h-screen'>
-            <NavBar />
+            {/* Wrap NavBar in Suspense in case it's using useSearchParams */}
+            <Suspense fallback={<LoadingSpinner />}>
+               <NavBar />
+            </Suspense>
+
             {/* Hero Section */}
             <div className='flex flex-col lg:flex-row bg-[#F1EEE9] px-4 lg:px-0'>
                <div className='w-full lg:w-auto lg:px-32'>
-                  <Carousel />
+                  <Suspense fallback={<LoadingSpinner />}>
+                     <Carousel />
+                  </Suspense>
                </div>
                <div className='py-8 lg:py-52'>
                   <p className='text-[#553C26] font-mont font-semibold py-4'>What&apos;s new?</p>
@@ -48,7 +59,7 @@ export default function HomePage() {
                      alt='Logo'
                      height={20}
                      width={20}
-                     style={{ height: 'auto', width: '20px' }}  // Add this style to maintain aspect ratio
+                     style={{ height: 'auto', width: '20px' }}
                   />
                </div>
                <div className='flex-grow border-t border-[#553C26] w-full lg:w-96'></div>
@@ -60,7 +71,9 @@ export default function HomePage() {
                <p className='text-center font-mont font-semibold text-xl lg:text-3xl pb-4'>
                   Những sản phẩm bán chạy
                </p>
-               <TrendingCarousel />
+               <Suspense fallback={<LoadingSpinner />}>
+                  <TrendingCarousel />
+               </Suspense>
 
                {/* Sale Banner */}
                <div className='px-4 lg:px-0 pb-10'>
@@ -89,7 +102,9 @@ export default function HomePage() {
                         đón nhận nhẹ nhàng của bản chất thiên nhiên.
                      </p>
                   </div>
-                  <RotatingImages />
+                  <Suspense fallback={<LoadingSpinner />}>
+                     <RotatingImages />
+                  </Suspense>
                </div>
             </div>
 
@@ -99,7 +114,9 @@ export default function HomePage() {
                <p className='text-center font-mont font-semibold text-xl lg:text-3xl pb-4'>
                   PHỤ KIỆN NẾN
                </p>
-               <AccessoriesCarousel />
+               <Suspense fallback={<LoadingSpinner />}>
+                  <AccessoriesCarousel />
+               </Suspense>
             </div>
 
             {/* Text Page and Banner Images */}
@@ -197,7 +214,9 @@ export default function HomePage() {
                   </div>
                </div>
             </div>
-            <Footer />
+            <Suspense fallback={<LoadingSpinner />}>
+               <Footer />
+            </Suspense>
          </div>
       </>
    );

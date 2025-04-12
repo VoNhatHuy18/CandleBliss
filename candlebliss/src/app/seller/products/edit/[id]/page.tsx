@@ -6,7 +6,7 @@ import Image from 'next/image';
 import { useParams, useRouter } from 'next/navigation';
 import MenuSideBar from '@/app/components/seller/menusidebar/page';
 import Header from '@/app/components/seller/header/page';
-import Toast from '@/app/components/ui/toast/page';
+import Toast from '@/app/components/ui/toast/Toast';
 import {
    ArrowLeftIcon,
    ChevronDownIcon,
@@ -1200,8 +1200,6 @@ export default function EditProduct() {
          return false;
       }
    };
-
-   
 
    if (loading && !product) {
       return (
