@@ -17,10 +17,40 @@ interface OrderItem {
    quantity: number;
    totalPrice: string;
    product?: {
+      id: number;
       name: string;
-      images: string[];
+      images: Array<{
+         id: string;
+         path: string;
+         public_id: string;
+      }>;
+   };
+   product_detail?: {
+      id: number;
+      size: string;
+      type: string;
+      values: string;
+      images: Array<{
+         id: string;
+         path: string;
+         public_id: string;
+      }>;
    };
    __entity: string;
+   // Add this field to store fetched product detail data
+   productDetailData?: {
+      id: number;
+      size: string;
+      type: string;
+      values: string;
+      quantities: number;
+      isActive: boolean;
+      images: Array<{
+         id: string;
+         path: string;
+         public_id: string;
+      }>;
+   };
 }
 
 interface Order {
@@ -66,10 +96,31 @@ const formatDate = (dateString: string): string => {
 // Trạng thái đơn hàng và màu sắc tương ứng
 const orderStatusColors: Record<string, { bg: string; text: string; border: string }> = {
    'Đơn hàng vừa được tạo': { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200' },
+   'Đang chờ thanh toán': { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200' },
+   'Thanh toán thất bại': { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200' },
+   'Thanh toán thành công': {
+      bg: 'bg-green-50',
+      text: 'text-green-700',
+      border: 'border-green-200',
+   },
    'Đang xử lý': { bg: 'bg-yellow-50', text: 'text-yellow-700', border: 'border-yellow-200' },
    'Đang giao hàng': { bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200' },
+   'Đã đặt hàng': { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200' },
    'Đã giao hàng': { bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-200' },
-   'Đã hủy': { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200' },
+   'Hoàn thành': { bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-200' },
+   'Đã huỷ': { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200' }, // Corrected from 'Đã hủy' to 'Đã huỷ'
+   'Đang chờ hoàn tiền': {
+      bg: 'bg-yellow-50',
+      text: 'text-yellow-700',
+      border: 'border-yellow-200',
+   },
+   'Hoàn tiền thành công': {
+      bg: 'bg-green-50',
+      text: 'text-green-700',
+      border: 'border-green-200',
+   },
+   'Hoàn tiền thất bại': { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200' },
+   'Đổi trả hàng': { bg: 'bg-yellow-50', text: 'text-yellow-700', border: 'border-yellow-200' }, // Added missing status
 };
 
 // Create a client component that uses searchParams
@@ -84,6 +135,75 @@ function OrderFilter({ onFilterChange }: { onFilterChange: (filterId: string | n
    return null; // This component doesn't render anything, just processes the search params
 }
 
+// Component đếm ngược thời gian thanh toán
+const PaymentCountdown = ({
+   createdAt,
+   orderId,
+   onTimeout,
+}: {
+   createdAt: string;
+   orderId: number;
+   onTimeout: (orderId: number) => void;
+}) => {
+   const [timeLeft, setTimeLeft] = useState<number>(0);
+   const [timedOut, setTimedOut] = useState<boolean>(false);
+
+   useEffect(() => {
+      const calculateTimeLeft = () => {
+         const createdTime = new Date(createdAt).getTime();
+         const now = new Date().getTime();
+         const timePassed = now - createdTime;
+         const timeoutMs = 15 * 60 * 1000; // 15 phút tính bằng ms
+
+         const remaining = timeoutMs - timePassed;
+         return Math.max(0, Math.floor(remaining / 1000)); // Trả về số giây còn lại
+      };
+
+      // Tính toán thời gian ban đầu
+      const initialTimeLeft = calculateTimeLeft();
+      setTimeLeft(initialTimeLeft);
+
+      // Nếu đã hết thời gian, gọi callback onTimeout ngay
+      if (initialTimeLeft <= 0 && !timedOut) {
+         setTimedOut(true);
+         onTimeout(orderId);
+         return;
+      }
+
+      // Thiết lập interval để cập nhật thời gian đếm ngược mỗi giây
+      const timer = setInterval(() => {
+         const remaining = calculateTimeLeft();
+         setTimeLeft(remaining);
+
+         // Khi hết thời gian, gọi callback để update trạng thái đơn hàng
+         if (remaining <= 0 && !timedOut) {
+            clearInterval(timer);
+            setTimedOut(true);
+            onTimeout(orderId);
+         }
+      }, 1000);
+
+      return () => clearInterval(timer);
+   }, [createdAt, orderId, onTimeout, timedOut]);
+
+   // Đã hết thời gian
+   if (timeLeft <= 0) {
+      return <span className='text-red-600 text-sm font-medium'>Hết thời gian thanh toán</span>;
+   }
+
+   // Hiển thị thời gian còn lại
+   const minutes = Math.floor(timeLeft / 60);
+   const seconds = timeLeft % 60;
+
+   return (
+      <span
+         className={`text-sm font-medium ${timeLeft < 300 ? 'text-red-600' : 'text-orange-600'}`}
+      >
+         Thanh toán còn: {minutes}:{seconds < 10 ? `0${seconds}` : seconds}
+      </span>
+   );
+};
+
 export default function OrderPage() {
    const router = useRouter();
    const [loading, setLoading] = useState(true);
@@ -95,6 +215,12 @@ export default function OrderPage() {
       message: '',
       type: 'info' as 'success' | 'error' | 'info',
    });
+
+   // Add a state to track which product details have been fetched
+   const [fetchedDetails, setFetchedDetails] = useState<Record<number, boolean>>({});
+
+   // Add a new state to track which products have been fetched
+   const [fetchedProducts, setFetchedProducts] = useState<Record<number, boolean>>({});
 
    // Wrap with useCallback
    const showToastMessage = useCallback((message: string, type: 'success' | 'error' | 'info') => {
@@ -154,6 +280,131 @@ export default function OrderPage() {
       [router, showToastMessage],
    );
 
+   // Add a function to fetch product details
+   const fetchProductDetails = useCallback(
+      async (orders: Order[]) => {
+         const token = localStorage.getItem('token');
+         if (!token) return;
+
+         let hasUpdates = false;
+         const updatedOrders = [...orders];
+
+         for (const order of updatedOrders) {
+            for (const item of order.item) {
+               // 1. Fetch product detail information
+               if (!fetchedDetails[item.product_detail_id] && item.product_detail_id) {
+                  try {
+                     const detailResponse = await fetch(
+                        `http://68.183.226.198:3000/api/product-details/${item.product_detail_id}`,
+                        {
+                           headers: {
+                              Authorization: `Bearer ${token}`,
+                           },
+                        },
+                     );
+
+                     if (detailResponse.ok) {
+                        const detailData = await detailResponse.json();
+                        item.productDetailData = detailData;
+                        hasUpdates = true;
+
+                        // Mark detail as fetched
+                        setFetchedDetails((prev) => ({
+                           ...prev,
+                           [item.product_detail_id]: true,
+                        }));
+
+                        // 2. If we found a product_id in the detail, fetch the product info
+                        if (detailData.product_id && !fetchedProducts[detailData.product_id]) {
+                           try {
+                              const productResponse = await fetch(
+                                 `http://68.183.226.198:3000/api/products/${detailData.product_id}`,
+                                 {
+                                    headers: {
+                                       Authorization: `Bearer ${token}`,
+                                    },
+                                 },
+                              );
+
+                              if (productResponse.ok) {
+                                 const productData = await productResponse.json();
+
+                                 // Update the item with product information
+                                 if (!item.product) {
+                                    item.product = {
+                                       id: productData.id,
+                                       name: productData.name,
+                                       images: productData.images || [],
+                                    };
+                                 }
+
+                                 // Find matching detail in the product's details array
+                                 const matchingDetail = productData.details?.find(
+                                    (detail: { id: number }) =>
+                                       detail.id === item.product_detail_id,
+                                 );
+
+                                 // If we found a matching detail with images, use that for the product_detail
+                                 if (
+                                    matchingDetail &&
+                                    matchingDetail.images &&
+                                    matchingDetail.images.length > 0
+                                 ) {
+                                    if (!item.product_detail) {
+                                       item.product_detail = {
+                                          id: matchingDetail.id,
+                                          size: matchingDetail.size,
+                                          type: matchingDetail.type,
+                                          values: matchingDetail.values,
+                                          images: matchingDetail.images,
+                                       };
+                                    } else if (
+                                       !item.product_detail.images ||
+                                       item.product_detail.images.length === 0
+                                    ) {
+                                       item.product_detail.images = matchingDetail.images;
+                                    }
+                                 }
+
+                                 // Mark product as fetched
+                                 setFetchedProducts((prev) => ({
+                                    ...prev,
+                                    [detailData.product_id]: true,
+                                 }));
+
+                                 hasUpdates = true;
+                              }
+                           } catch (productError) {
+                              console.error(
+                                 `Failed to fetch product for product_id ${detailData.product_id}:`,
+                                 productError,
+                              );
+                           }
+                        }
+                     }
+                  } catch (detailError) {
+                     console.error(
+                        `Failed to fetch details for product_detail_id ${item.product_detail_id}:`,
+                        detailError,
+                     );
+                  }
+               }
+            }
+         }
+
+         // Update orders with fetched data if any updates were made
+         if (hasUpdates) {
+            setOrders(updatedOrders);
+            setFilteredOrders(
+               statusFilter
+                  ? updatedOrders.filter((order) => order.status === statusFilter)
+                  : updatedOrders,
+            );
+         }
+      },
+      [fetchedDetails, fetchedProducts, statusFilter],
+   );
+
    // Update useEffect with all dependencies
    useEffect(() => {
       const init = async () => {
@@ -181,6 +432,13 @@ export default function OrderPage() {
       init();
    }, [router, loadOrders, showToastMessage]);
 
+   // Call fetchProductDetails when orders change
+   useEffect(() => {
+      if (orders.length > 0) {
+         fetchProductDetails(orders);
+      }
+   }, [orders, fetchProductDetails]);
+
    // Update handleCancelOrder with proper error typing
    const handleCancelOrder = async (orderId: number) => {
       if (!confirm('Bạn có chắc chắn muốn hủy đơn hàng này không?')) {
@@ -197,24 +455,10 @@ export default function OrderPage() {
             return;
          }
 
-         // Gọi API để hủy đơn hàng
-         const response = await fetch(`http://68.183.226.198:3000/api/orders/${orderId}/cancel`, {
-            method: 'PUT',
-            headers: {
-               Authorization: `Bearer ${token}`,
-               'Content-Type': 'application/json',
-            },
-         });
-
-         if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.message || 'Không thể hủy đơn hàng');
-         }
-
          // Cập nhật trạng thái trong state
          setOrders((prevOrders) =>
-            prevOrders.map((order) =>
-               order.id === orderId ? { ...order, status: 'Đã hủy' } : order,
+            prevOrders.map(
+               (order) => (order.id === orderId ? { ...order, status: 'Đã huỷ' } : order), // Changed from 'Đã hủy' to 'Đã huỷ'
             ),
          );
 
@@ -270,15 +514,147 @@ export default function OrderPage() {
    const getPaymentMethodIcon = (method: string) => {
       switch (method) {
          case 'COD':
-            return '/images/payment/cod.png';
+            return '/images/logo.png';
          case 'BANKING':
             return '/images/payment/bank.png';
          case 'MOMO':
-            return '/images/payment/momo-logo.png';
+            return '/images/momo-logo.png';
          default:
             return '/images/payment/cod.png';
       }
    };
+
+   // Thêm hàm này trong component OrderPage
+
+   // Hàm cập nhật trạng thái đơn hàng khi hết thời gian thanh toán
+   const handlePaymentTimeout = useCallback(
+      async (orderId: number) => {
+         try {
+            const token = localStorage.getItem('token');
+            if (!token) return;
+
+            // Gọi API để cập nhật trạng thái đơn hàng thành "Thanh toán thất bại"
+            const response = await fetch(
+               `http://68.183.226.198:3000/api/orders/${orderId}/status`,
+               {
+                  method: 'PATCH',
+                  headers: {
+                     Authorization: `Bearer ${token}`,
+                     'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({
+                     status: 'Thanh toán thất bại',
+                  }),
+               },
+            );
+
+            if (response.ok) {
+               // Cập nhật state để hiển thị trạng thái mới
+               setOrders((prevOrders) =>
+                  prevOrders.map((order) =>
+                     order.id === orderId ? { ...order, status: 'Thanh toán thất bại' } : order,
+                  ),
+               );
+
+               // Hiển thị thông báo
+               showToastMessage(`Đơn hàng #${orderId} đã hết thời gian thanh toán`, 'error');
+            } else {
+               console.error('Failed to update order status:', await response.text());
+            }
+         } catch (error) {
+            console.error('Error handling payment timeout:', error);
+         }
+      },
+      [showToastMessage],
+   );
+
+   // Thêm hàm kiểm tra các đơn hàng chưa thanh toán khi component mount
+   const checkPendingPayments = useCallback(() => {
+      // Lọc các đơn hàng mới tạo không phải COD
+      const pendingOrders = orders.filter(
+         (order) => order.status === 'Đơn hàng vừa được tạo' && order.method_payment !== 'COD',
+      );
+
+      if (pendingOrders.length > 0) {
+         // Hiện toast cảnh báo - chỉ hiển thị khi có đơn hàng cần thanh toán
+         showToastMessage(
+            'Lưu ý: Đơn hàng sẽ tự động hủy nếu không thanh toán trong vòng 15 phút',
+            'info',
+         );
+      }
+
+      // Kiểm tra các đơn đã quá hạn thanh toán - chỉ kiểm tra những đơn không phải COD
+      const now = new Date().getTime();
+      pendingOrders.forEach((order) => {
+         const createdTime = new Date(order.createdAt).getTime();
+         const timePassed = now - createdTime;
+         const timeoutMs = 15 * 60 * 1000; // 15 phút
+
+         if (timePassed >= timeoutMs) {
+            // Tự động cập nhật trạng thái
+            handlePaymentTimeout(order.id);
+         }
+      });
+   }, [orders, handlePaymentTimeout, showToastMessage]);
+
+   // Thêm useEffect này sau các useEffect hiện có
+
+   // Kiểm tra đơn hàng chưa thanh toán khi component mount
+   useEffect(() => {
+      if (orders.length > 0) {
+         checkPendingPayments();
+      }
+   }, [orders, checkPendingPayments]);
+
+   // Fix the handleCODOrderStatus function
+   const handleCODOrderStatus = useCallback(async () => {
+      // Find orders that are COD and have status "Đơn hàng vừa được tạo"
+      const codOrdersToUpdate = orders.filter(
+         (order) => order.status === 'Đơn hàng vừa được tạo' && order.method_payment === 'COD',
+      );
+
+      if (codOrdersToUpdate.length === 0) return;
+
+      const token = localStorage.getItem('token');
+      if (!token) return;
+
+      // Update each order's status
+      for (const order of codOrdersToUpdate) {
+         try {
+            const response = await fetch(
+               `http://68.183.226.198:3000/api/orders/${order.id}/status`,
+               {
+                  method: 'PATCH',
+                  headers: {
+                     Authorization: `Bearer ${token}`,
+                     'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({
+                     status: 'Đã đặt hàng', // Change to an explicitly allowed value from the error list
+                  }),
+               },
+            );
+
+            if (response.ok) {
+               // Update the state locally
+               setOrders((prevOrders) =>
+                  prevOrders.map((o) => (o.id === order.id ? { ...o, status: 'Đã đặt hàng' } : o)),
+               );
+            } else {
+               console.error(`Failed to update order ${order.id} status:`, await response.text());
+            }
+         } catch (error) {
+            console.error(`Error updating order ${order.id} status:`, error);
+         }
+      }
+   }, [orders]);
+
+   // Add a new useEffect to run the COD status update
+   useEffect(() => {
+      if (orders.length > 0) {
+         handleCODOrderStatus();
+      }
+   }, [orders, handleCODOrderStatus]);
 
    if (loading) {
       return (
@@ -344,14 +720,6 @@ export default function OrderPage() {
             {filteredOrders.length === 0 ? (
                <div className='bg-white rounded-lg shadow p-8 text-center'>
                   <div className='flex flex-col items-center'>
-                     <div className='mb-4'>
-                        <Image
-                           src='/images/empty-order.png'
-                           alt='No orders'
-                           width={150}
-                           height={150}
-                        />
-                     </div>
                      <h3 className='text-xl font-medium mb-2'>Bạn chưa có đơn hàng nào</h3>
                      <p className='text-gray-500 mb-6'>
                         Hãy trải nghiệm mua sắm và quay lại đây để xem đơn hàng của bạn
@@ -383,6 +751,16 @@ export default function OrderPage() {
                                     {formatDate(order.createdAt)}
                                  </span>
                               </p>
+
+                              {/* Thêm đồng hồ đếm ngược cho đơn hàng mới và không phải COD */}
+                              {order.status === 'Đơn hàng vừa được tạo' &&
+                                 order.method_payment !== 'COD' && (
+                                    <PaymentCountdown
+                                       createdAt={order.createdAt}
+                                       orderId={order.id}
+                                       onTimeout={handlePaymentTimeout}
+                                    />
+                                 )}
                            </div>
                            <div className='flex items-center'>
                               {order.method_payment && (
@@ -419,24 +797,41 @@ export default function OrderPage() {
                                  }`}
                               >
                                  <div className='relative w-16 h-16 bg-gray-100 rounded'>
-                                    {/* Placeholder nếu không có ảnh sản phẩm */}
+                                    {/* First try to use productDetailData images, then fallback to product_detail, then product */}
                                     <Image
-                                       src={item.product?.images?.[0] || '/images/placeholder.jpg'}
+                                       src={
+                                          item.productDetailData?.images?.[0]?.path ||
+                                          item.product_detail?.images?.[0]?.path ||
+                                          item.product?.images?.[0]?.path ||
+                                          '/images/default-product.png'
+                                       }
                                        alt={
                                           item.product?.name ||
                                           `Sản phẩm #${item.product_detail_id}`
                                        }
-                                       layout='fill'
-                                       objectFit='contain'
+                                       fill
+                                       sizes='64px'
+                                       style={{ objectFit: 'contain' }}
                                        className='p-2'
                                     />
                                  </div>
                                  <div className='ml-3 flex-1'>
                                     <div className='flex justify-between'>
-                                       <p className='font-medium text-sm'>
-                                          {item.product?.name ||
-                                             `Sản phẩm #${item.product_detail_id}`}
-                                       </p>
+                                       <div>
+                                          <p className='font-medium text-sm'>
+                                             {item.product?.name ||
+                                                `Sản phẩm #${item.product_detail_id}`}
+                                          </p>
+                                          {(item.productDetailData || item.product_detail) && (
+                                             <p className='text-xs text-gray-500'>
+                                                {item.productDetailData?.size ||
+                                                   item.product_detail?.size}{' '}
+                                                -{' '}
+                                                {item.productDetailData?.values ||
+                                                   item.product_detail?.values}
+                                             </p>
+                                          )}
+                                       </div>
                                        <p className='text-orange-600 font-medium text-sm'>
                                           {formatPrice(item.totalPrice)}
                                        </p>
@@ -482,11 +877,7 @@ export default function OrderPage() {
                               </span>
                            </div>
 
-                           <div className='flex justify-between items-center mt-4'>
-                              <div className='text-sm text-gray-500'>
-                                 <span className='font-medium'>Giao đến:</span> {order.address}
-                              </div>
-
+                           <div className='flex justify-end items-center mt-4'>
                               <div className='flex space-x-2'>
                                  <Link
                                     href={`/user/order/${order.id}`}
@@ -513,7 +904,7 @@ export default function OrderPage() {
                                     </Link>
                                  )}
 
-                                 {(order.status === 'Đã hủy' ||
+                                 {(order.status === 'Đã huỷ' || // Changed from 'Đã hủy' to 'Đã huỷ'
                                     order.status === 'Đã giao hàng') && (
                                     <button
                                        onClick={() => {

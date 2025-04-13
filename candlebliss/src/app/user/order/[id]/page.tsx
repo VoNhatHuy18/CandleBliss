@@ -105,10 +105,55 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
       }, 3000);
    }, []);
 
-   // First, wrap loadOrderDetail with useCallback
-   const loadOrderDetail = useCallback(
-      async (orderId: string) => {
+   // Thêm hàm này vào phần đầu component (sau các khai báo hiện tại)
+
+   const getShippingInfoFromLocalStorage = (orderId: string, userId: number | null) => {
+      if (!userId) return null;
+
+      try {
+         // Lấy thông tin địa chỉ từ localStorage
+         const shippingInfoKey = `user_${userId}_order_${orderId}_shipping`;
+         const shippingInfoStr = localStorage.getItem(shippingInfoKey);
+
+         if (shippingInfoStr) {
+            return JSON.parse(shippingInfoStr);
+         }
+
+         // Thử lấy từ danh sách địa chỉ đã lưu
+         const addressesKey = `user_${userId}_addresses`;
+         const addressesStr = localStorage.getItem(addressesKey);
+
+         if (addressesStr) {
+            const addresses = JSON.parse(addressesStr);
+            // Tìm địa chỉ mặc định hoặc địa chỉ đầu tiên
+            const defaultAddress =
+               addresses.find((addr: { isDefault: boolean }) => addr.isDefault) || addresses[0];
+            return defaultAddress;
+         }
+
+         return null;
+      } catch (error) {
+         console.error('Error reading shipping info from localStorage:', error);
+         return null;
+      }
+   };
+
+   // Then update your useEffect
+   useEffect(() => {
+      const init = async () => {
+         // Lấy thông tin userId từ localStorage
+         const storedUserId = localStorage.getItem('userId');
+         if (!storedUserId) {
+            // Nếu không có userId, chuyển về trang đăng nhập
+            router.push('/user/signin');
+            return;
+         }
+
+         const parsedUserId = parseInt(storedUserId);
+         setUserId(parsedUserId);
+
          try {
+            setLoading(true);
             const token = localStorage.getItem('token');
             if (!token) {
                showToastMessage('Phiên đăng nhập hết hạn, vui lòng đăng nhập lại', 'error');
@@ -116,7 +161,6 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                return;
             }
 
-            // Sửa URL API theo định dạng mới
             const response = await fetch(
                `http://68.183.226.198:3000/api/orders/${orderId}?id=${orderId}`,
                {
@@ -136,49 +180,25 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
             }
 
             const data = await response.json();
-            setOrder(data);
 
-            // Add this check
-            if (userId !== data.user_id) {
+            // Kiểm tra quyền xem đơn hàng
+            if (parsedUserId !== data.user_id) {
                showToastMessage('Bạn không có quyền xem đơn hàng này', 'error');
                router.push('/user/order');
                return;
             }
+
+            setOrder(data);
          } catch (error) {
             console.error('Error loading order detail:', error);
             showToastMessage('Không thể tải chi tiết đơn hàng', 'error');
-         }
-      },
-      [router, showToastMessage, userId],
-   );
-
-   // Then update your useEffect
-   useEffect(() => {
-      const init = async () => {
-         // Lấy thông tin userId từ localStorage
-         const storedUserId = localStorage.getItem('userId');
-         if (!storedUserId) {
-            // Nếu không có userId, chuyển về trang đăng nhập
-            router.push('/user/signin');
-            return;
-         }
-
-         const userId = parseInt(storedUserId);
-         setUserId(userId);
-
-         try {
-            setLoading(true);
-            await loadOrderDetail(orderId);
-         } catch (error) {
-            console.error('Error initializing data:', error);
-            showToastMessage('Có lỗi xảy ra khi tải dữ liệu', 'error');
          } finally {
             setLoading(false);
          }
       };
 
       init();
-   }, [orderId, router, loadOrderDetail, showToastMessage]);
+   }, [orderId, router, showToastMessage]);
 
    // Hàm xử lý hủy đơn hàng
    const handleCancelOrder = async () => {
@@ -692,7 +712,20 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                                        d='M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z'
                                     />
                                  </svg>
-                                 <span>{order.recipient_name || 'Không có thông tin'}</span>
+                                 <span>
+                                    {(() => {
+                                       // Thử lấy thông tin từ localStorage trước
+                                       const shippingInfo = getShippingInfoFromLocalStorage(
+                                          orderId,
+                                          userId,
+                                       );
+                                       if (shippingInfo?.fullName) {
+                                          return shippingInfo.fullName;
+                                       }
+                                       // Nếu không có, dùng thông tin từ API
+                                       return order.recipient_name || 'Không có thông tin';
+                                    })()}
+                                 </span>
                               </p>
                               <p className='flex items-center'>
                                  <svg
@@ -709,7 +742,20 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                                        d='M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z'
                                     />
                                  </svg>
-                                 <span>{order.recipient_phone || 'Không có thông tin'}</span>
+                                 <span>
+                                    {(() => {
+                                       // Thử lấy thông tin từ localStorage trước
+                                       const shippingInfo = getShippingInfoFromLocalStorage(
+                                          orderId,
+                                          userId,
+                                       );
+                                       if (shippingInfo?.phone) {
+                                          return shippingInfo.phone;
+                                       }
+                                       // Nếu không có, dùng thông tin từ API
+                                       return order.recipient_phone || 'Không có thông tin';
+                                    })()}
+                                 </span>
                               </p>
                            </div>
                         </div>
@@ -738,20 +784,13 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                                     d='M15 11a3 3 0 11-6 0 3 3 0 016 0z'
                                  />
                               </svg>
-                              <span>{order.address || 'Không có thông tin'}</span>
+                              <span>
+                                 {(() => {
+                                    return order.address || 'Không có thông tin';
+                                 })()}
+                              </span>
                            </p>
                         </div>
-
-                        {/* Nếu đơn hàng đang giao, có thể hiển thị thông tin đơn vị vận chuyển */}
-                        {order.status === 'Đang giao hàng' && (
-                           <div className='mt-4 pt-4 border-t border-gray-100'>
-                              <h3 className='font-medium mb-2'>Đơn vị vận chuyển:</h3>
-                              <p className='text-gray-600'>Giao hàng nhanh</p>
-                              <p className='text-gray-600 text-sm'>
-                                 Mã vận đơn: {order.order_code}
-                              </p>
-                           </div>
-                        )}
                      </div>
                   </div>
 

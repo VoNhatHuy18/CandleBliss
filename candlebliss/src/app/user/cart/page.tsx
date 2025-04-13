@@ -783,15 +783,7 @@ export default function CartPage() {
                                                             ? 'text-orange-600'
                                                             : 'text-red-600'
                                                       }`}
-                                                   >
-                                                      {productDetails[item.detailId].stock > 10
-                                                         ? 'Còn hàng'
-                                                         : productDetails[item.detailId].stock > 0
-                                                         ? `Chỉ còn ${
-                                                              productDetails[item.detailId].stock
-                                                           } sản phẩm`
-                                                         : 'Hết hàng'}
-                                                   </span>
+                                                   ></span>
                                                 </div>
                                              )}
                                           </div>
