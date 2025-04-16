@@ -439,9 +439,24 @@ export default function OrderPage() {
       }
    }, [orders, fetchProductDetails]);
 
-   // Update handleCancelOrder with proper error typing
+   // Modified handleCancelOrder function to only allow cancellation in specific statuses
    const handleCancelOrder = async (orderId: number) => {
       if (!confirm('Bạn có chắc chắn muốn hủy đơn hàng này không?')) {
+         return;
+      }
+
+      // Find the order
+      const orderToCancel = orders.find(order => order.id === orderId);
+
+      // Check if order exists and is in a status that can be cancelled
+      if (!orderToCancel) {
+         showToastMessage('Không tìm thấy đơn hàng', 'error');
+         return;
+      }
+
+      // Only allow cancellation for orders in "Đơn hàng vừa được tạo" or "Đang xử lý" status
+      if (orderToCancel.status !== 'Đơn hàng vừa được tạo' && orderToCancel.status !== 'Đang xử lý') {
+         showToastMessage('Đơn hàng này không thể hủy ở trạng thái hiện tại', 'error');
          return;
       }
 
@@ -455,11 +470,28 @@ export default function OrderPage() {
             return;
          }
 
-         // Cập nhật trạng thái trong state
+         // Call API to cancel the order
+         const response = await fetch(
+            `http://68.183.226.198:3000/api/orders/${orderId}/status`,
+            {
+               method: 'PATCH',
+               headers: {
+                  Authorization: `Bearer ${token}`,
+                  'Content-Type': 'application/json',
+               },
+               body: JSON.stringify({
+                  status: 'Đã huỷ',
+               }),
+            }
+         );
+
+         if (!response.ok) {
+            throw new Error('Không thể hủy đơn hàng');
+         }
+
+         // Update the state after successful API call
          setOrders((prevOrders) =>
-            prevOrders.map(
-               (order) => (order.id === orderId ? { ...order, status: 'Đã huỷ' } : order), // Changed from 'Đã hủy' to 'Đã huỷ'
-            ),
+            prevOrders.map((order) => (order.id === orderId ? { ...order, status: 'Đã huỷ' } : order))
          );
 
          showToastMessage('Đơn hàng đã được hủy thành công', 'success');
@@ -694,11 +726,10 @@ export default function OrderPage() {
             <div className='flex overflow-x-auto mb-6 gap-2'>
                <Link
                   href='/user/order'
-                  className={`px-4 py-2 whitespace-nowrap rounded-md ${
-                     !statusFilter
-                        ? 'bg-orange-100 text-orange-700 font-medium'
-                        : 'bg-white hover:bg-gray-100'
-                  }`}
+                  className={`px-4 py-2 whitespace-nowrap rounded-md ${!statusFilter
+                     ? 'bg-orange-100 text-orange-700 font-medium'
+                     : 'bg-white hover:bg-gray-100'
+                     }`}
                >
                   Tất cả
                </Link>
@@ -706,11 +737,10 @@ export default function OrderPage() {
                   <Link
                      key={status}
                      href={`/user/order?status=${encodeURIComponent(status)}`}
-                     className={`px-4 py-2 whitespace-nowrap rounded-md ${
-                        statusFilter === status
-                           ? 'bg-orange-100 text-orange-700 font-medium'
-                           : 'bg-white hover:bg-gray-100'
-                     }`}
+                     className={`px-4 py-2 whitespace-nowrap rounded-md ${statusFilter === status
+                        ? 'bg-orange-100 text-orange-700 font-medium'
+                        : 'bg-white hover:bg-gray-100'
+                        }`}
                   >
                      {status}
                   </Link>
@@ -776,10 +806,10 @@ export default function OrderPage() {
                                        {order.method_payment === 'COD'
                                           ? 'Thanh toán khi nhận hàng'
                                           : order.method_payment === 'BANKING'
-                                          ? 'Chuyển khoản ngân hàng'
-                                          : order.method_payment === 'MOMO'
-                                          ? 'Ví MoMo'
-                                          : 'Không xác định'}
+                                             ? 'Chuyển khoản ngân hàng'
+                                             : order.method_payment === 'MOMO'
+                                                ? 'Ví MoMo'
+                                                : 'Không xác định'}
                                     </span>
                                  </div>
                               )}
@@ -792,9 +822,8 @@ export default function OrderPage() {
                            {order.item.map((item, index) => (
                               <div
                                  key={item.id}
-                                 className={`flex py-3 ${
-                                    index < order.item.length - 1 ? 'border-b border-gray-100' : ''
-                                 }`}
+                                 className={`flex py-3 ${index < order.item.length - 1 ? 'border-b border-gray-100' : ''
+                                    }`}
                               >
                                  <div className='relative w-16 h-16 bg-gray-100 rounded'>
                                     {/* First try to use productDetailData images, then fallback to product_detail, then product */}
@@ -877,8 +906,11 @@ export default function OrderPage() {
                               </span>
                            </div>
 
-                           <div className='flex justify-end items-center mt-4'>
-                              <div className='flex space-x-2'>
+                           <div className='flex justify-between  items-center mt-4'>
+                              <span className='text-sm text-gray-600'>
+                                 Địa chỉ giao hàng: {order.address}
+                              </span>
+                              <div className='flex  space-x-2'>
                                  <Link
                                     href={`/user/order/${order.id}`}
                                     className='text-sm text-orange-600 border border-orange-300 bg-white hover:bg-orange-50 px-3 py-1 rounded'
@@ -886,7 +918,8 @@ export default function OrderPage() {
                                     Chi tiết
                                  </Link>
 
-                                 {order.status === 'Đơn hàng vừa được tạo' && (
+                                 {/* Only show Cancel button for orders in appropriate statuses */}
+                                 {(order.status === 'Đơn hàng vừa được tạo' || order.status === 'Đang xử lý') && (
                                     <button
                                        onClick={() => handleCancelOrder(order.id)}
                                        className='text-sm text-red-600 border border-red-300 bg-white hover:bg-red-50 px-3 py-1 rounded'
@@ -906,20 +939,20 @@ export default function OrderPage() {
 
                                  {(order.status === 'Đã huỷ' || // Changed from 'Đã hủy' to 'Đã huỷ'
                                     order.status === 'Đã giao hàng') && (
-                                    <button
-                                       onClick={() => {
-                                          // Lưu thông tin sản phẩm vào localStorage để mua lại
-                                          // Đây chỉ là giả định, bạn cần thực hiện logic riêng
-                                          showToastMessage(
-                                             'Đang thêm sản phẩm vào giỏ hàng...',
-                                             'info',
-                                          );
-                                       }}
-                                       className='text-sm text-blue-600 border border-blue-300 bg-white hover:bg-blue-50 px-3 py-1 rounded'
-                                    >
-                                       Mua lại
-                                    </button>
-                                 )}
+                                       <button
+                                          onClick={() => {
+                                             // Lưu thông tin sản phẩm vào localStorage để mua lại
+                                             // Đây chỉ là giả định, bạn cần thực hiện logic riêng
+                                             showToastMessage(
+                                                'Đang thêm sản phẩm vào giỏ hàng...',
+                                                'info',
+                                             );
+                                          }}
+                                          className='text-sm text-blue-600 border border-blue-300 bg-white hover:bg-blue-50 px-3 py-1 rounded'
+                                       >
+                                          Mua lại
+                                       </button>
+                                    )}
                               </div>
                            </div>
                         </div>

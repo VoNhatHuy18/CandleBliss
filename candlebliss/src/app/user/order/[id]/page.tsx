@@ -43,6 +43,10 @@ interface Order {
    recipient_name?: string;
    recipient_phone?: string;
    // Lưu ý: có thể API trả về những thông tin này trong trường address dưới dạng chuỗi
+   statusUpdates?: {
+      status: string;
+      updatedAt: string;
+   }[];
 }
 
 // Format price helper function
@@ -138,6 +142,36 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
       }
    };
 
+   // Add a function to process order status history
+   const processOrderStatusHistory = (order: Order) => {
+      // Start with the initial status
+      const statusUpdates = [
+         {
+            status: 'Đơn hàng vừa được tạo',
+            updatedAt: order.createdAt,
+         },
+      ];
+
+      // If the API provides status history, add those statuses
+      if (order.statusUpdates && order.statusUpdates.length > 0) {
+         // Sort status updates by date and filter out the initial status if it's already included
+         const additionalUpdates = order.statusUpdates
+            .filter(update => update.status !== 'Đơn hàng vừa được tạo')
+            .sort((a, b) => new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime());
+
+         statusUpdates.push(...additionalUpdates);
+      }
+      // If API doesn't provide history but current status is different from initial
+      else if (order.status !== 'Đơn hàng vừa được tạo') {
+         statusUpdates.push({
+            status: order.status,
+            updatedAt: order.updatedAt,
+         });
+      }
+
+      return statusUpdates;
+   };
+
    // Then update your useEffect
    useEffect(() => {
       const init = async () => {
@@ -204,6 +238,12 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
    const handleCancelOrder = async () => {
       if (!order) return;
 
+      // Check if order can be cancelled based on status
+      if (order.status !== 'Đơn hàng vừa được tạo' && order.status !== 'Đang xử lý') {
+         showToastMessage('Đơn hàng này không thể hủy ở trạng thái hiện tại', 'error');
+         return;
+      }
+
       if (!confirm('Bạn có chắc chắn muốn hủy đơn hàng này không?')) {
          return;
       }
@@ -218,15 +258,18 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
             return;
          }
 
-         // Sửa URL API cho endpoint hủy đơn hàng
+         // Update API endpoint to use the status update endpoint
          const response = await fetch(
-            `http://68.183.226.198:3000/api/orders/${order.id}/cancel?id=${order.id}`,
+            `http://68.183.226.198:3000/api/orders/${order.id}/status`,
             {
-               method: 'PUT',
+               method: 'PATCH', // Use PATCH instead of PUT
                headers: {
                   Authorization: `Bearer ${token}`,
                   'Content-Type': 'application/json',
                },
+               body: JSON.stringify({
+                  status: 'Đã hủy'
+               }),
             },
          );
 
@@ -235,13 +278,28 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
             throw new Error(errorData.message || 'Không thể hủy đơn hàng');
          }
 
-         // Cập nhật trạng thái trong state
-         setOrder({ ...order, status: 'Đã hủy' });
+         // Update the state with both status and updatedAt
+         const newStatusUpdate = {
+            status: 'Đã hủy',
+            updatedAt: new Date().toISOString()
+         };
+
+         setOrder({
+            ...order,
+            status: 'Đã hủy',
+            updatedAt: new Date().toISOString(),
+            statusUpdates: order.statusUpdates
+               ? [...order.statusUpdates, newStatusUpdate]
+               : [
+                  { status: 'Đơn hàng vừa được tạo', updatedAt: order.createdAt },
+                  newStatusUpdate
+               ]
+         });
+
          showToastMessage('Đơn hàng đã được hủy thành công', 'success');
       } catch (error: unknown) {
          console.error('Error canceling order:', error);
 
-         // Safely extract error message
          let errorMessage = 'Không thể hủy đơn hàng';
          if (error instanceof Error) {
             errorMessage = error.message;
@@ -280,7 +338,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
          case 'BANKING':
             return '/images/payment/bank.png';
          case 'MOMO':
-            return '/images/payment/momo-logo.png';
+            return '/images/momo-logo.png';
          default:
             return '/images/payment/cod.png';
       }
@@ -381,190 +439,60 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                            {/* Timeline Line */}
                            <div className='absolute left-3 top-0 h-full w-0.5 bg-gray-200'></div>
 
-                           {/* Order Created */}
-                           <div className='relative flex items-start mb-8'>
-                              <div className='flex items-center justify-center w-6 h-6 rounded-full bg-green-500 text-white z-10'>
-                                 <svg
-                                    xmlns='http://www.w3.org/2000/svg'
-                                    width='16'
-                                    height='16'
-                                    viewBox='0 0 24 24'
-                                    fill='none'
-                                    stroke='currentColor'
-                                    strokeWidth='2'
-                                    strokeLinecap='round'
-                                    strokeLinejoin='round'
-                                 >
-                                    <polyline points='20 6 9 17 4 12'></polyline>
-                                 </svg>
-                              </div>
-                              <div className='ml-4'>
-                                 <h3 className='font-medium'>Đơn hàng đã được tạo</h3>
-                                 <p className='text-sm text-gray-500'>
-                                    {formatDate(order.createdAt)}
-                                 </p>
-                              </div>
-                           </div>
+                           {/* Dynamic Status Timeline - Only show actual status updates */}
+                           {processOrderStatusHistory(order).map((statusUpdate, index) => {
+                              const isCancelled = statusUpdate.status === 'Đã hủy';
 
-                           {/* Order Processing */}
-                           <div className='relative flex items-start mb-8'>
-                              <div
-                                 className={`flex items-center justify-center w-6 h-6 rounded-full ${
-                                    order.status !== 'Đơn hàng vừa được tạo' &&
-                                    order.status !== 'Đã hủy'
-                                       ? 'bg-green-500 text-white'
-                                       : 'bg-gray-200 text-gray-400'
-                                 } z-10`}
-                              >
-                                 {order.status !== 'Đơn hàng vừa được tạo' &&
-                                 order.status !== 'Đã hủy' ? (
-                                    <svg
-                                       xmlns='http://www.w3.org/2000/svg'
-                                       width='16'
-                                       height='16'
-                                       viewBox='0 0 24 24'
-                                       fill='none'
-                                       stroke='currentColor'
-                                       strokeWidth='2'
-                                       strokeLinecap='round'
-                                       strokeLinejoin='round'
+                              return (
+                                 <div key={index} className='relative flex items-start mb-8'>
+                                    <div
+                                       className={`flex items-center justify-center w-6 h-6 rounded-full z-10 
+              ${isCancelled ? 'bg-red-500 text-white' : 'bg-green-500 text-white'}`}
                                     >
-                                       <polyline points='20 6 9 17 4 12'></polyline>
-                                    </svg>
-                                 ) : (
-                                    <span className='text-xs'>2</span>
-                                 )}
-                              </div>
-                              <div className='ml-4'>
-                                 <h3
-                                    className={`font-medium ${
-                                       order.status === 'Đơn hàng vừa được tạo' ||
-                                       order.status === 'Đã hủy'
-                                          ? 'text-gray-400'
-                                          : ''
-                                    }`}
-                                 >
-                                    Đang xử lý
-                                 </h3>
-                                 <p className='text-sm text-gray-500'>
-                                    Đơn hàng của bạn đang được chuẩn bị
-                                 </p>
-                              </div>
-                           </div>
-
-                           {/* Shipping */}
-                           <div className='relative flex items-start mb-8'>
-                              <div
-                                 className={`flex items-center justify-center w-6 h-6 rounded-full ${
-                                    order.status === 'Đang giao hàng' ||
-                                    order.status === 'Đã giao hàng'
-                                       ? 'bg-green-500 text-white'
-                                       : 'bg-gray-200 text-gray-400'
-                                 } z-10`}
-                              >
-                                 {order.status === 'Đang giao hàng' ||
-                                 order.status === 'Đã giao hàng' ? (
-                                    <svg
-                                       xmlns='http://www.w3.org/2000/svg'
-                                       width='16'
-                                       height='16'
-                                       viewBox='0 0 24 24'
-                                       fill='none'
-                                       stroke='currentColor'
-                                       strokeWidth='2'
-                                       strokeLinecap='round'
-                                       strokeLinejoin='round'
-                                    >
-                                       <polyline points='20 6 9 17 4 12'></polyline>
-                                    </svg>
-                                 ) : (
-                                    <span className='text-xs'>3</span>
-                                 )}
-                              </div>
-                              <div className='ml-4'>
-                                 <h3
-                                    className={`font-medium ${
-                                       order.status !== 'Đang giao hàng' &&
-                                       order.status !== 'Đã giao hàng'
-                                          ? 'text-gray-400'
-                                          : ''
-                                    }`}
-                                 >
-                                    Đang giao hàng
-                                 </h3>
-                                 <p className='text-sm text-gray-500'>
-                                    Đơn hàng đang được vận chuyển
-                                 </p>
-                              </div>
-                           </div>
-
-                           {/* Delivered */}
-                           <div className='relative flex items-start'>
-                              <div
-                                 className={`flex items-center justify-center w-6 h-6 rounded-full ${
-                                    order.status === 'Đã giao hàng'
-                                       ? 'bg-green-500 text-white'
-                                       : 'bg-gray-200 text-gray-400'
-                                 } z-10`}
-                              >
-                                 {order.status === 'Đã giao hàng' ? (
-                                    <svg
-                                       xmlns='http://www.w3.org/2000/svg'
-                                       width='16'
-                                       height='16'
-                                       viewBox='0 0 24 24'
-                                       fill='none'
-                                       stroke='currentColor'
-                                       strokeWidth='2'
-                                       strokeLinecap='round'
-                                       strokeLinejoin='round'
-                                    >
-                                       <polyline points='20 6 9 17 4 12'></polyline>
-                                    </svg>
-                                 ) : (
-                                    <span className='text-xs'>4</span>
-                                 )}
-                              </div>
-                              <div className='ml-4'>
-                                 <h3
-                                    className={`font-medium ${
-                                       order.status !== 'Đã giao hàng' ? 'text-gray-400' : ''
-                                    }`}
-                                 >
-                                    Đã giao hàng
-                                 </h3>
-                                 <p className='text-sm text-gray-500'>
-                                    Đơn hàng đã được giao thành công
-                                 </p>
-                              </div>
-                           </div>
-
-                           {/* Cancelled (conditional) */}
-                           {order.status === 'Đã hủy' && (
-                              <div className='relative flex items-start mt-8 pl-10'>
-                                 <div className='absolute left-3 top-0 h-full w-0.5 bg-red-200'></div>
-                                 <div className='flex items-center justify-center w-6 h-6 rounded-full bg-red-500 text-white z-10'>
-                                    <svg
-                                       xmlns='http://www.w3.org/2000/svg'
-                                       width='16'
-                                       height='16'
-                                       viewBox='0 0 24 24'
-                                       fill='none'
-                                       stroke='currentColor'
-                                       strokeWidth='2'
-                                       strokeLinecap='round'
-                                       strokeLinejoin='round'
-                                    >
-                                       <line x1='18' y1='6' x2='6' y2='18'></line>
-                                       <line x1='6' y1='6' x2='18' y2='18'></line>
-                                    </svg>
+                                       {isCancelled ? (
+                                          <svg
+                                             xmlns='http://www.w3.org/2000/svg'
+                                             width='16'
+                                             height='16'
+                                             viewBox='0 0 24 24'
+                                             fill='none'
+                                             stroke='currentColor'
+                                             strokeWidth='2'
+                                             strokeLinecap='round'
+                                             strokeLinejoin='round'
+                                          >
+                                             <line x1='18' y1='6' x2='6' y2='18'></line>
+                                             <line x1='6' y1='6' x2='18' y2='18'></line>
+                                          </svg>
+                                       ) : (
+                                          <svg
+                                             xmlns='http://www.w3.org/2000/svg'
+                                             width='16'
+                                             height='16'
+                                             viewBox='0 0 24 24'
+                                             fill='none'
+                                             stroke='currentColor'
+                                             strokeWidth='2'
+                                             strokeLinecap='round'
+                                             strokeLinejoin='round'
+                                          >
+                                             <polyline points='20 6 9 17 4 12'></polyline>
+                                          </svg>
+                                       )}
+                                    </div>
+                                    <div className='ml-4'>
+                                       <h3 className={`font-medium ${isCancelled ? 'text-red-600' : ''}`}>
+                                          {statusUpdate.status}
+                                       </h3>
+                                       <p className='text-sm text-gray-500'>
+                                          {formatDate(statusUpdate.updatedAt)}
+                                       </p>
+                                    </div>
                                  </div>
-                                 <div className='ml-4'>
-                                    <h3 className='font-medium text-red-600'>Đơn hàng đã bị hủy</h3>
-                                    <p className='text-sm text-gray-500'>Đơn hàng này đã bị hủy</p>
-                                 </div>
-                              </div>
-                           )}
+                              );
+                           })}
+
+                           {/* Remove the Future Status section completely */}
                         </div>
                      </div>
                   </div>
@@ -649,10 +577,10 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                                     {order.method_payment === 'COD'
                                        ? 'Tiền mặt khi nhận hàng'
                                        : order.method_payment === 'BANKING'
-                                       ? 'Chuyển khoản ngân hàng'
-                                       : order.method_payment === 'MOMO'
-                                       ? 'Ví MoMo'
-                                       : 'Không xác định'}
+                                          ? 'Chuyển khoản ngân hàng'
+                                          : order.method_payment === 'MOMO'
+                                             ? 'Ví MoMo'
+                                             : 'Không xác định'}
                                  </span>
                               </div>
                            </div>
@@ -804,7 +732,8 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                            Quay lại danh sách đơn hàng
                         </Link>
 
-                        {order.status === 'Đơn hàng vừa được tạo' && (
+                        {/* Only show cancel button for orders that can be cancelled */}
+                        {(order.status === 'Đơn hàng vừa được tạo' || order.status === 'Đang xử lý') && (
                            <button
                               onClick={handleCancelOrder}
                               className='block w-full py-2 text-center bg-red-600 rounded text-white hover:bg-red-700'
