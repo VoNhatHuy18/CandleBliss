@@ -14,10 +14,10 @@ import {
 } from 'react-icons/fi';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import Toast from '@/app/components/ui/toast/Toast';
 
 export default function CreateVoucher() {
    const router = useRouter();
-   // Update your initial voucherData state
 
    const [voucherData, setVoucherData] = useState({
       code: '',
@@ -36,6 +36,27 @@ export default function CreateVoucher() {
 
    const [isSubmitting, setIsSubmitting] = useState(false);
    const [errors, setErrors] = useState<{ [key: string]: string }>({});
+
+   // Toast state
+   const [toast, setToast] = useState({
+      show: false,
+      message: '',
+      type: 'info' as 'success' | 'error' | 'info',
+   });
+
+   // Function to show toast messages
+   const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
+      setToast({
+         show: true,
+         message,
+         type,
+      });
+   };
+
+   // Function to hide toast
+   const hideToast = () => {
+      setToast(prev => ({ ...prev, show: false }));
+   };
 
    // Format date để hiển thị
    const formatDate = (dateString: string | number | Date) => {
@@ -70,7 +91,16 @@ export default function CreateVoucher() {
       // Date validation
       if (!voucherData.startDate) {
          newErrors.startDate = 'Vui lòng chọn ngày bắt đầu';
+      } else {
+         // Check if start date is not in the past
+         const today = new Date();
+         today.setHours(0, 0, 0, 0); // Set to beginning of the day for accurate comparison
+         const startDate = new Date(voucherData.startDate);
+         if (startDate < today) {
+            newErrors.startDate = 'Ngày bắt đầu phải là hôm nay hoặc trong tương lai';
+         }
       }
+
       if (!voucherData.endDate) {
          newErrors.endDate = 'Vui lòng chọn ngày kết thúc';
       }
@@ -124,14 +154,13 @@ export default function CreateVoucher() {
          // Get authentication token
          const token = localStorage.getItem('token') || sessionStorage.getItem('token');
          if (!token) {
-            alert('Bạn chưa đăng nhập hoặc phiên làm việc đã hết hạn');
+            showToast('Bạn chưa đăng nhập hoặc phiên làm việc đã hết hạn', 'error');
             router.push('/seller/signin');
             setIsSubmitting(false);
             return;
          }
 
          // Complete payload with all fields matching database schema
-
          const voucherPayload = {
             code: voucherData.code,
             description:
@@ -186,11 +215,71 @@ export default function CreateVoucher() {
                try {
                   // Try to parse JSON error response
                   const errorData = JSON.parse(responseText);
+
+                  // Check specifically for the exact error code
+                  if (errorData.message === 'voucherCodeAlreadyExists' ||
+                     responseText.includes('voucherCodeAlreadyExists')) {
+                     // Set specific error for the code field
+                     setErrors(prev => ({
+                        ...prev,
+                        code: 'Mã voucher này đã tồn tại trong hệ thống, vui lòng chọn mã khác'
+                     }));
+                     // Show toast for duplicate voucher code
+                     showToast('Mã voucher này đã tồn tại trong hệ thống, vui lòng chọn mã khác', 'error');
+                     // Scroll back to the code input
+                     document.getElementsByName('code')[0]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                     throw new Error('Mã voucher này đã tồn tại, vui lòng chọn mã khác');
+                  }
+
+                  // Existing checks for duplicate voucher
+                  if (errorData.message &&
+                     (errorData.message.includes('duplicate') ||
+                        errorData.message.includes('already exists') ||
+                        errorData.message.includes('đã tồn tại'))) {
+                     // Set specific error for the code field
+                     setErrors(prev => ({
+                        ...prev,
+                        code: 'Mã voucher này đã tồn tại, vui lòng chọn mã khác'
+                     }));
+                     // Show toast for duplicate voucher code
+                     showToast('Mã voucher này đã tồn tại, vui lòng chọn mã khác', 'error');
+                     // Scroll back to the code input
+                     document.getElementsByName('code')[0]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                     throw new Error('Mã voucher này đã tồn tại, vui lòng chọn mã khác');
+                  }
+
                   errorMessage =
                      errorData.message || errorData.error || 'Lỗi không xác định từ server';
+                  showToast(errorMessage, 'error');
                } catch {
                   // If it's not valid JSON, use the raw text
                   errorMessage = `Lỗi server: ${responseText.substring(0, 100)}...`;
+
+                  // Add specific check for the voucherCodeAlreadyExists string in text response
+                  if (responseText.includes('voucherCodeAlreadyExists')) {
+                     setErrors(prev => ({
+                        ...prev,
+                        code: 'Mã voucher này đã tồn tại trong hệ thống, vui lòng chọn mã khác'
+                     }));
+                     showToast('Mã voucher này đã tồn tại trong hệ thống, vui lòng chọn mã khác', 'error');
+                     document.getElementsByName('code')[0]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                     errorMessage = 'Mã voucher này đã tồn tại, vui lòng chọn mã khác';
+                  }
+
+                  // Check for other duplicate strings in plain text response
+                  else if (responseText.includes('duplicate') ||
+                     responseText.includes('already exists') ||
+                     responseText.includes('đã tồn tại')) {
+                     setErrors(prev => ({
+                        ...prev,
+                        code: 'Mã voucher này đã tồn tại, vui lòng chọn mã khác'
+                     }));
+                     showToast('Mã voucher này đã tồn tại, vui lòng chọn mã khác', 'error');
+                     document.getElementsByName('code')[0]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                     errorMessage = 'Mã voucher này đã tồn tại, vui lòng chọn mã khác';
+                  } else {
+                     showToast(errorMessage, 'error');
+                  }
                }
 
                throw new Error(errorMessage);
@@ -206,24 +295,27 @@ export default function CreateVoucher() {
             }
 
             console.log('Voucher created successfully:', result);
-            alert('Đã tạo mã giảm giá thành công!');
-            router.push('/seller/vouchers');
+            showToast('Đã tạo mã giảm giá thành công!', 'success');
+
+            // Give toast a moment to show before navigating away
+            setTimeout(() => {
+               router.push('/seller/vouchers');
+            }, 1500);
+
          } catch (error) {
             console.error('Error creating voucher:', error);
-            alert(
-               `Lỗi khi tạo mã giảm giá: ${
-                  error instanceof Error ? error.message : 'Lỗi không xác định'
-               }`,
+            showToast(
+               `Lỗi khi tạo mã giảm giá: ${error instanceof Error ? error.message : 'Lỗi không xác định'}`,
+               'error'
             );
          } finally {
             setIsSubmitting(false);
          }
       } catch (error) {
          console.error('Error creating voucher:', error);
-         alert(
-            `Lỗi khi tạo mã giảm giá: ${
-               error instanceof Error ? error.message : 'Lỗi không xác định'
-            }`,
+         showToast(
+            `Lỗi khi tạo mã giảm giá: ${error instanceof Error ? error.message : 'Lỗi không xác định'}`,
+            'error'
          );
       } finally {
          setIsSubmitting(false);
@@ -235,6 +327,16 @@ export default function CreateVoucher() {
          <Head>
             <title>Tạo mã giảm giá mới - Candle Bliss</title>
          </Head>
+
+         {/* Toast component */}
+         <Toast
+            show={toast.show}
+            message={toast.message}
+            type={toast.type}
+            onClose={hideToast}
+            position="top-right"
+            duration={5000}
+         />
 
          {/* Sidebar cố định bên trái */}
          <div className='fixed left-0 top-0 h-full z-30'>
@@ -280,9 +382,8 @@ export default function CreateVoucher() {
                                  <input
                                     type='text'
                                     name='code'
-                                    className={`w-full p-2 pl-10 border rounded-md focus:outline-none focus:ring-2 focus:ring-amber-300 transition ${
-                                       errors.code ? 'border-red-500 ring-1 ring-red-500' : ''
-                                    }`}
+                                    className={`w-full p-2 pl-10 border rounded-md focus:outline-none focus:ring-2 focus:ring-amber-300 transition ${errors.code ? 'border-red-500 ring-1 ring-red-500' : ''
+                                       }`}
                                     placeholder='SUMMER2025'
                                     value={voucherData.code}
                                     onChange={handleChange}
@@ -306,9 +407,8 @@ export default function CreateVoucher() {
                               <input
                                  type='date'
                                  name='startDate'
-                                 className={`w-full p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-amber-300 transition ${
-                                    errors.startDate ? 'border-red-500 ring-1 ring-red-500' : ''
-                                 }`}
+                                 className={`w-full p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-amber-300 transition ${errors.startDate ? 'border-red-500 ring-1 ring-red-500' : ''
+                                    }`}
                                  value={voucherData.startDate}
                                  onChange={handleChange}
                                  required
@@ -326,9 +426,8 @@ export default function CreateVoucher() {
                               <input
                                  type='date'
                                  name='endDate'
-                                 className={`w-full p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-amber-300 transition ${
-                                    errors.endDate ? 'border-red-500 ring-1 ring-red-500' : ''
-                                 }`}
+                                 className={`w-full p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-amber-300 transition ${errors.endDate ? 'border-red-500 ring-1 ring-red-500' : ''
+                                    }`}
                                  value={voucherData.endDate}
                                  onChange={handleChange}
                                  required
@@ -352,11 +451,10 @@ export default function CreateVoucher() {
                               <input
                                  type='number'
                                  name='discountPercent'
-                                 className={`w-full p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-amber-300 transition ${
-                                    errors.discountPercent
-                                       ? 'border-red-500 ring-1 ring-red-500'
-                                       : ''
-                                 }`}
+                                 className={`w-full p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-amber-300 transition ${errors.discountPercent
+                                    ? 'border-red-500 ring-1 ring-red-500'
+                                    : ''
+                                    }`}
                                  placeholder='10'
                                  min='0'
                                  max='100'
@@ -504,9 +602,8 @@ export default function CreateVoucher() {
                            <button
                               type='submit'
                               disabled={isSubmitting}
-                              className={`px-5 py-2 text-sm text-white bg-amber-600 rounded-md hover:bg-amber-700 transition focus:outline-none focus:ring-2 focus:ring-amber-500 flex items-center ${
-                                 isSubmitting ? 'opacity-70 cursor-not-allowed' : ''
-                              }`}
+                              className={`px-5 py-2 text-sm text-white bg-amber-600 rounded-md hover:bg-amber-700 transition focus:outline-none focus:ring-2 focus:ring-amber-500 flex items-center ${isSubmitting ? 'opacity-70 cursor-not-allowed' : ''
+                                 }`}
                            >
                               {isSubmitting ? (
                                  <>
@@ -560,8 +657,8 @@ export default function CreateVoucher() {
                                  <div className='flex justify-between mb-2'>
                                     <div className='text-sm font-semibold'>
                                        Mã Voucher:{' '}
-                                       <span className='font-bold text-amber-600'>
-                                          {voucherData.code || 'VOUCHER'}
+                                       <span className={`font-bold ${voucherData.code ? 'text-amber-600' : 'text-gray-400 italic'}`}>
+                                          {voucherData.code || 'Chưa có mã giảm giá'}
                                        </span>
                                     </div>
                                     <div className='bg-amber-50 p-1.5 rounded-full'>
@@ -643,8 +740,8 @@ export default function CreateVoucher() {
                                  <span className='ml-1'>
                                     {voucherData.minPrice
                                        ? `${Number(voucherData.minPrice).toLocaleString(
-                                            'vi-VN',
-                                         )} VNĐ`
+                                          'vi-VN',
+                                       )} VNĐ`
                                        : '...'}
                                  </span>
                               </div>
@@ -654,8 +751,8 @@ export default function CreateVoucher() {
                                  <span className='ml-1'>
                                     {voucherData.startDate
                                        ? `${formatDate(voucherData.startDate)} - ${formatDate(
-                                            voucherData.endDate || new Date(),
-                                         )}`
+                                          voucherData.endDate || new Date(),
+                                       )}`
                                        : '...'}
                                  </span>
                               </div>
@@ -673,10 +770,10 @@ export default function CreateVoucher() {
                                     {voucherData.applyTo === 'all'
                                        ? 'Tất cả sản phẩm'
                                        : voucherData.applyTo === 'product'
-                                       ? 'Sản phẩm cụ thể'
-                                       : voucherData.applyTo === 'category'
-                                       ? 'Danh mục sản phẩm'
-                                       : '...'}
+                                          ? 'Sản phẩm cụ thể'
+                                          : voucherData.applyTo === 'category'
+                                             ? 'Danh mục sản phẩm'
+                                             : '...'}
                                  </span>
                               </div>
                            </div>
