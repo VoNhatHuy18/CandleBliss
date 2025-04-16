@@ -85,7 +85,7 @@ export default function Dashboard() {
       totalRevenue: '0',
       totalProducts: 0,
       totalOrders: 0,
-      totalCustomers: 0
+      totalCustomers: 0,
    });
 
    // Fetch data from API
@@ -100,10 +100,10 @@ export default function Dashboard() {
                return;
             }
 
-            const response = await fetch('http://68.183.226.198:3000/api/orders', {
+            const response = await fetch('http://68.183.226.198:3000/api/orders/all', {
                headers: {
-                  Authorization: `Bearer ${token}`
-               }
+                  Authorization: `Bearer ${token}`,
+               },
             });
 
             if (!response.ok) {
@@ -113,8 +113,9 @@ export default function Dashboard() {
             const data = await response.json();
 
             // Sort orders by date (newest first)
-            const sortedOrders = data.sort((a: Order, b: Order) =>
-               new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+            const sortedOrders = data.sort(
+               (a: Order, b: Order) =>
+                  new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
             );
 
             setOrders(sortedOrders);
@@ -137,7 +138,7 @@ export default function Dashboard() {
       const customers = new Set();
       let productCount = 0;
 
-      orders.forEach(order => {
+      orders.forEach((order) => {
          // Only count completed orders for revenue
          if (order.status === 'Hoàn thành' || order.status === 'Đã giao hàng') {
             revenue += parseFloat(order.total_price);
@@ -146,7 +147,7 @@ export default function Dashboard() {
          customers.add(order.user_id);
 
          // Count total products
-         order.item?.forEach(item => {
+         order.item?.forEach((item) => {
             productCount += item.quantity;
          });
       });
@@ -155,7 +156,7 @@ export default function Dashboard() {
          totalRevenue: revenue.toString(),
          totalProducts: productCount,
          totalOrders: orders.length,
-         totalCustomers: customers.size
+         totalCustomers: customers.size,
       });
    };
 
@@ -165,7 +166,7 @@ export default function Dashboard() {
       return date.toLocaleDateString('vi-VN', {
          day: '2-digit',
          month: '2-digit',
-         year: 'numeric'
+         year: 'numeric',
       });
    };
 
@@ -173,7 +174,9 @@ export default function Dashboard() {
    const renderStatusBadge = (status: string) => {
       const colorClass = orderStatusColors[status] || 'bg-gray-100 text-gray-800';
       return (
-         <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${colorClass}`}>
+         <span
+            className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${colorClass}`}
+         >
             {status}
          </span>
       );
@@ -205,7 +208,9 @@ export default function Dashboard() {
                      <div className='flex items-center justify-between'>
                         <div>
                            <h3 className='text-gray-600 text-sm font-medium'>Tổng doanh thu</h3>
-                           <p className='text-gray-800 font-semibold mt-1'>{formatPrice(stats.totalRevenue)}</p>
+                           <p className='text-gray-800 font-semibold mt-1'>
+                              {formatPrice(stats.totalRevenue)}
+                           </p>
                         </div>
                         <div className='p-2 bg-purple-500 text-white rounded-full'>
                            <CreditCard size={20} />
@@ -215,7 +220,9 @@ export default function Dashboard() {
                   <div className='bg-orange-100 rounded-lg p-4 shadow-sm'>
                      <div className='flex items-center justify-between'>
                         <div>
-                           <h3 className='text-gray-600 text-sm font-medium'>Tổng sản phẩm bán ra</h3>
+                           <h3 className='text-gray-600 text-sm font-medium'>
+                              Tổng sản phẩm bán ra
+                           </h3>
                            <p className='text-gray-800 font-semibold mt-1'>{stats.totalProducts}</p>
                         </div>
                         <div className='p-2 bg-orange-500 text-white rounded-full'>
@@ -238,7 +245,9 @@ export default function Dashboard() {
                      <div className='flex items-center justify-between'>
                         <div>
                            <h3 className='text-gray-600 text-sm font-medium'>Tổng khách hàng</h3>
-                           <p className='text-gray-800 font-semibold mt-1'>{stats.totalCustomers}</p>
+                           <p className='text-gray-800 font-semibold mt-1'>
+                              {stats.totalCustomers}
+                           </p>
                         </div>
                         <div className='p-2 bg-yellow-500 text-white rounded-full'>
                            <Users size={20} />
@@ -263,26 +272,41 @@ export default function Dashboard() {
                         <table className='min-w-full divide-y divide-gray-200'>
                            <thead className='bg-gray-50'>
                               <tr>
-                                 <th scope='col' className='px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
+                                 <th
+                                    scope='col'
+                                    className='px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'
+                                 >
                                     Mã đơn
                                  </th>
-                                 <th scope='col' className='px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
+                                 <th
+                                    scope='col'
+                                    className='px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'
+                                 >
                                     Ngày đặt
                                  </th>
-                                 <th scope='col' className='px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
+                                 <th
+                                    scope='col'
+                                    className='px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'
+                                 >
                                     Khách hàng
                                  </th>
-                                 <th scope='col' className='px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
+                                 <th
+                                    scope='col'
+                                    className='px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'
+                                 >
                                     Giá trị
                                  </th>
-                                 <th scope='col' className='px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
+                                 <th
+                                    scope='col'
+                                    className='px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'
+                                 >
                                     Phương thức
                                  </th>
-                                 <th scope='col' className='px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
+                                 <th
+                                    scope='col'
+                                    className='px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'
+                                 >
                                     Trạng thái
-                                 </th>
-                                 <th scope='col' className='px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
-                                    Thao tác
                                  </th>
                               </tr>
                            </thead>
@@ -302,16 +326,16 @@ export default function Dashboard() {
                                        {formatPrice(order.total_price)}
                                     </td>
                                     <td className='px-4 py-3 whitespace-nowrap text-sm text-gray-500'>
-                                       {order.method_payment === 'COD' ? 'Tiền mặt' :
-                                          order.method_payment === 'BANKING' ? 'Chuyển khoản' :
-                                             order.method_payment === 'MOMO' ? 'Ví MoMo' :
-                                                order.method_payment}
+                                       {order.method_payment === 'COD'
+                                          ? 'Tiền mặt'
+                                          : order.method_payment === 'BANKING'
+                                          ? 'Chuyển khoản'
+                                          : order.method_payment === 'MOMO'
+                                          ? 'Ví MoMo'
+                                          : order.method_payment}
                                     </td>
                                     <td className='px-4 py-3 whitespace-nowrap'>
                                        {renderStatusBadge(order.status)}
-                                    </td>
-                                    <td className='px-4 py-3 whitespace-nowrap text-sm text-indigo-600 hover:text-indigo-900'>
-                                       <a href={`/seller/orders/${order.id}`}>Chi tiết</a>
                                     </td>
                                  </tr>
                               ))}
@@ -319,9 +343,7 @@ export default function Dashboard() {
                         </table>
 
                         {orders.length === 0 && (
-                           <div className='p-6 text-center text-gray-500'>
-                              Chưa có đơn hàng nào
-                           </div>
+                           <div className='p-6 text-center text-gray-500'>Chưa có đơn hàng nào</div>
                         )}
                      </div>
                   )}
@@ -360,7 +382,10 @@ export default function Dashboard() {
                <div className='mt-8'>
                   <div className='flex justify-between items-center mb-4'>
                      <h3 className='text-lg font-medium text-gray-700'>Sản phẩm bán chạy</h3>
-                     <Link href='/seller/products' className='text-sm text-indigo-600 hover:text-indigo-800'>
+                     <Link
+                        href='/seller/products'
+                        className='text-sm text-indigo-600 hover:text-indigo-800'
+                     >
                         Xem tất cả
                      </Link>
                   </div>

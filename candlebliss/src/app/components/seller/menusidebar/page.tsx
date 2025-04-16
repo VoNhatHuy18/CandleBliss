@@ -1,4 +1,4 @@
-'use client'
+'use client';
 
 import React from 'react';
 
@@ -31,7 +31,6 @@ export default function MenuSideBar() {
       window.location.href = '/seller/signin';
    };
 
-
    return (
       <div className='min-h-screen  flex'>
          {/* Sidebar */}
@@ -53,7 +52,7 @@ export default function MenuSideBar() {
                   <Link
                      href='/user/home'
                      className='flex items-center p-2 text-emerald-600 hover:bg-emerald-50 rounded border border-emerald-200 transition-colors'
-                     rel="noopener noreferrer"
+                     rel='noopener noreferrer'
                   >
                      <Globe size={18} className='mr-2' />
                      <span>Xem Cửa Hàng</span>
@@ -112,7 +111,7 @@ export default function MenuSideBar() {
                </div>
                <div className='px-4 py-2'>
                   <Link
-                     href='/orders'
+                     href='/seller/orders'
                      className='flex items-center p-2 text-gray-600 hover:bg-gray-100 rounded'
                   >
                      <ShoppingBag size={18} className='mr-2' />
