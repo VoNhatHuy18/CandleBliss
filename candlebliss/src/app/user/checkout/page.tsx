@@ -64,6 +64,16 @@ interface UserInfo {
    phone?: string;
 }
 
+// Thêm vào phần khai báo interface ở đầu file
+interface InvoiceInfo {
+   type: 'personal' | 'company';
+   name: string;
+   address: string;
+   email: string;
+   companyName?: string;
+   taxCode?: string;
+}
+
 // Format price helper function
 const formatPrice = (price: number): string => {
    return new Intl.NumberFormat('vi-VN', {
@@ -171,7 +181,6 @@ export default function CheckoutPage() {
    });
 
    // Ghi chú đơn hàng
-   const [orderNote, setOrderNote] = useState('');
 
    // Trạng thái toast thông báo
    const [toast, setToast] = useState({
@@ -193,6 +202,16 @@ export default function CheckoutPage() {
    const [applyingVoucher, setApplyingVoucher] = useState(false);
    const [paymentMethod, setPaymentMethod] = useState<'COD' | 'BANKING' | 'MOMO'>('COD');
    const [processingPayment, setProcessingPayment] = useState(false);
+
+   // Thêm các state sau phần khai báo các state khác
+   const [needInvoice, setNeedInvoice] = useState(false);
+   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
+   const [invoiceInfo, setInvoiceInfo] = useState<InvoiceInfo>({
+      type: 'personal',
+      name: '',
+      address: '',
+      email: '',
+   });
 
    // Thêm hàm hiện toast message
    const showToastMessage = (message: string, type: 'success' | 'error' | 'info') => {
@@ -302,17 +321,17 @@ export default function CheckoutPage() {
       }
    };
 
-   // Thêm hàm xử lý khi chọn địa chỉ giao hàng
+   // When selecting an address
    const handleAddressSelect = (addressId: number) => {
       setSelectedAddressId(addressId);
 
-      // Tìm địa chỉ được chọn để tính phí vận chuyển
+      // Tìm địa chỉ được chọn
       const selectedAddress = addresses.find((addr) => addr.id === addressId);
       if (selectedAddress) {
-         const newShippingFee = calculateShippingFee(selectedAddress.province);
-         setShippingFee(newShippingFee);
+         // Phí vận chuyển luôn là 30000
+         setShippingFee(30000);
          // Cập nhật tổng tiền
-         setTotalPrice(subTotal + newShippingFee - discount);
+         setTotalPrice(subTotal + 30000 - discount);
          showToastMessage('Đã chọn địa chỉ giao hàng', 'info');
       }
    };
@@ -343,25 +362,7 @@ export default function CheckoutPage() {
       setWards([]);
    };
 
-   // Cập nhật hàm tính phí vận chuyển dựa trên địa chỉ
-   const calculateShippingFee = (province: string): number => {
-      // Kiểm tra nếu tỉnh/thành phố là TP.HCM (với nhiều cách viết khác nhau)
-      const hcmVariations = [
-         'hồ chí minh',
-         'ho chi minh',
-         'tp hcm',
-         'tp. hcm',
-         'tp.hcm',
-         'thành phố hồ chí minh',
-         'thanh pho ho chi minh',
-      ];
 
-      // Chuyển đổi tên thành phố sang chữ thường để so sánh
-      const normalizedProvince = province.toLowerCase().trim();
-
-      // Nếu là TP.HCM thì phí ship là 20.000đ, ngược lại là 30.000đ
-      return hcmVariations.includes(normalizedProvince) ? 20000 : 30000;
-   };
 
    useEffect(() => {
       const init = async () => {
@@ -747,21 +748,20 @@ export default function CheckoutPage() {
             const defaultAddress = validAddresses.find(
                (addr: { isDefault: boolean }) => addr.isDefault,
             );
+            // When loading addresses
             if (defaultAddress) {
                setSelectedAddressId(defaultAddress.id ?? null);
-               // Cập nhật phí vận chuyển dựa trên địa chỉ mặc định
-               const newShippingFee = calculateShippingFee(defaultAddress.province);
-               setShippingFee(newShippingFee);
+               // Phí vận chuyển luôn là 30000
+               setShippingFee(30000);
                // Cập nhật tổng tiền
-               setTotalPrice(subTotal + newShippingFee - discount);
+               setTotalPrice(subTotal + 30000 - discount);
             } else if (validAddresses.length > 0) {
                // Nếu không có địa chỉ mặc định, chọn địa chỉ đầu tiên
                setSelectedAddressId(validAddresses[0].id ?? null);
-               // Cập nhật phí vận chuyển dựa trên địa chỉ đầu tiên
-               const newShippingFee = calculateShippingFee(validAddresses[0].province);
-               setShippingFee(newShippingFee);
+               // Phí vận chuyển luôn là 30000
+               setShippingFee(30000);
                // Cập nhật tổng tiền
-               setTotalPrice(subTotal + newShippingFee - discount);
+               setTotalPrice(subTotal + 30000 - discount);
             }
          } else {
             // Không có địa chỉ
@@ -901,8 +901,8 @@ export default function CheckoutPage() {
                (addressData.user
                   ? `${addressData.user.firstName || ''} ${addressData.user.lastName || ''}`.trim()
                   : userInfo
-                  ? `${userInfo.firstName || ''} ${userInfo.lastName || ''}`.trim()
-                  : '');
+                     ? `${userInfo.firstName || ''} ${userInfo.lastName || ''}`.trim()
+                     : '');
 
             // Lấy số điện thoại từ địa chỉ hoặc từ thông tin người dùng
             const receiverPhone =
@@ -1163,10 +1163,9 @@ export default function CheckoutPage() {
          // Chọn địa chỉ vừa tạo/cập nhật
          setSelectedAddressId(formattedAddress.id ?? null);
 
-         // Cập nhật phí vận chuyển dựa trên địa chỉ mới
-         const newShippingFee = calculateShippingFee(formattedAddress.province);
-         setShippingFee(newShippingFee);
-         setTotalPrice(subTotal + newShippingFee - discount);
+         // Phí vận chuyển luôn là 30000
+         setShippingFee(30000);
+         setTotalPrice(subTotal + 30000 - discount);
 
          // Ẩn form thêm địa chỉ
          setShowAddAddressForm(false);
@@ -1401,6 +1400,15 @@ export default function CheckoutPage() {
             // Remove payment_method from initial order creation to use the update endpoint later
             // instead set default status for COD
             status: paymentMethod === 'COD' ? 'Đã đặt hàng' : undefined,
+            // Thêm thông tin hóa đơn nếu cần
+            invoice: needInvoice ? {
+               type: invoiceInfo.type,
+               name: invoiceInfo.name,
+               address: invoiceInfo.address,
+               email: invoiceInfo.email,
+               companyName: invoiceInfo.type === 'company' ? invoiceInfo.companyName : undefined,
+               taxCode: invoiceInfo.type === 'company' ? invoiceInfo.taxCode : undefined
+            } : undefined
          };
 
          console.log('Đang tạo đơn hàng mới:', newOrderData);
@@ -1656,15 +1664,15 @@ export default function CheckoutPage() {
                                                    {/* Chỉ hiển thị nút xóa khi có nhiều hơn 1 địa chỉ hoặc địa chỉ hiện tại không phải mặc định */}
                                                    {(addresses.length > 1 ||
                                                       !selectedAddress.isDefault) && (
-                                                      <button
-                                                         className='text-red-600 text-sm hover:underline'
-                                                         onClick={() =>
-                                                            handleDeleteAddress(selectedAddress.id!)
-                                                         }
-                                                      >
-                                                         Xóa
-                                                      </button>
-                                                   )}
+                                                         <button
+                                                            className='text-red-600 text-sm hover:underline'
+                                                            onClick={() =>
+                                                               handleDeleteAddress(selectedAddress.id!)
+                                                            }
+                                                         >
+                                                            Xóa
+                                                         </button>
+                                                      )}
                                                 </div>
                                              </div>
                                           ) : null;
@@ -1830,11 +1838,10 @@ export default function CheckoutPage() {
                                           }}
                                           disabled={addresses.length === 0 && !newAddress.id} // Disable nút hủy khi không có địa chỉ và đang thêm mới
                                           className={`flex-1 py-2 border border-gray-300 rounded-md text-gray-700 
-                              ${
-                                 addresses.length === 0 && !newAddress.id
-                                    ? 'opacity-50 cursor-not-allowed bg-gray-100'
-                                    : 'hover:bg-gray-50'
-                              }`}
+                              ${addresses.length === 0 && !newAddress.id
+                                                ? 'opacity-50 cursor-not-allowed bg-gray-100'
+                                                : 'hover:bg-gray-50'
+                                             }`}
                                        >
                                           Hủy
                                        </button>
@@ -1858,20 +1865,18 @@ export default function CheckoutPage() {
 
                      <div className='space-y-3'>
                         <div
-                           className={`border rounded-lg p-4 cursor-pointer ${
-                              paymentMethod === 'COD'
-                                 ? 'border-orange-500 bg-orange-50'
-                                 : 'border-gray-200'
-                           }`}
+                           className={`border rounded-lg p-4 cursor-pointer ${paymentMethod === 'COD'
+                              ? 'border-orange-500 bg-orange-50'
+                              : 'border-gray-200'
+                              }`}
                            onClick={() => setPaymentMethod('COD')}
                         >
                            <div className='flex items-center'>
                               <div
-                                 className={`w-5 h-5 rounded-full border flex items-center justify-center mr-3 ${
-                                    paymentMethod === 'COD'
-                                       ? 'border-orange-500'
-                                       : 'border-gray-400'
-                                 }`}
+                                 className={`w-5 h-5 rounded-full border flex items-center justify-center mr-3 ${paymentMethod === 'COD'
+                                    ? 'border-orange-500'
+                                    : 'border-gray-400'
+                                    }`}
                               >
                                  {paymentMethod === 'COD' && (
                                     <div className='w-3 h-3 bg-orange-500 rounded-full'></div>
@@ -1887,20 +1892,18 @@ export default function CheckoutPage() {
                         </div>
 
                         <div
-                           className={`border rounded-lg p-4 cursor-pointer ${
-                              paymentMethod === 'BANKING'
-                                 ? 'border-orange-500 bg-orange-50'
-                                 : 'border-gray-200'
-                           }`}
+                           className={`border rounded-lg p-4 cursor-pointer ${paymentMethod === 'BANKING'
+                              ? 'border-orange-500 bg-orange-50'
+                              : 'border-gray-200'
+                              }`}
                            onClick={() => setPaymentMethod('BANKING')}
                         >
                            <div className='flex items-center'>
                               <div
-                                 className={`w-5 h-5 rounded-full border flex items-center justify-center mr-3 ${
-                                    paymentMethod === 'BANKING'
-                                       ? 'border-orange-500'
-                                       : 'border-gray-400'
-                                 }`}
+                                 className={`w-5 h-5 rounded-full border flex items-center justify-center mr-3 ${paymentMethod === 'BANKING'
+                                    ? 'border-orange-500'
+                                    : 'border-gray-400'
+                                    }`}
                               >
                                  {paymentMethod === 'BANKING' && (
                                     <div className='w-3 h-3 bg-orange-500 rounded-full'></div>
@@ -1939,20 +1942,18 @@ export default function CheckoutPage() {
 
                         {/* Add MOMO payment option */}
                         <div
-                           className={`border rounded-lg p-4 cursor-pointer ${
-                              paymentMethod === 'MOMO'
-                                 ? 'border-orange-500 bg-orange-50'
-                                 : 'border-gray-200'
-                           }`}
+                           className={`border rounded-lg p-4 cursor-pointer ${paymentMethod === 'MOMO'
+                              ? 'border-orange-500 bg-orange-50'
+                              : 'border-gray-200'
+                              }`}
                            onClick={() => setPaymentMethod('MOMO')}
                         >
                            <div className='flex items-center'>
                               <div
-                                 className={`w-5 h-5 rounded-full border flex items-center justify-center mr-3 ${
-                                    paymentMethod === 'MOMO'
-                                       ? 'border-orange-500'
-                                       : 'border-gray-400'
-                                 }`}
+                                 className={`w-5 h-5 rounded-full border flex items-center justify-center mr-3 ${paymentMethod === 'MOMO'
+                                    ? 'border-orange-500'
+                                    : 'border-gray-400'
+                                    }`}
                               >
                                  {paymentMethod === 'MOMO' && (
                                     <div className='w-3 h-3 bg-orange-500 rounded-full'></div>
@@ -1977,19 +1978,46 @@ export default function CheckoutPage() {
                         </div>
                      </div>
 
-                     {/* Ghi chú đơn hàng */}
-                     <div className='mt-4'>
-                        <label className='block text-sm font-medium text-gray-700 mb-1'>
-                           Ghi chú đơn hàng (không bắt buộc)
-                        </label>
-                        <textarea
-                           name='orderNote'
-                           value={orderNote}
-                           onChange={(e) => setOrderNote(e.target.value)}
-                           placeholder='Nhập ghi chú cho đơn hàng của bạn...'
-                           rows={3}
-                           className='w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange-500'
-                        ></textarea>
+                     {/* Thêm phần checkbox in hóa đơn */}
+                     <div className="mt-6 border-t border-gray-200 pt-4">
+                        <div className="flex items-center">
+                           <input
+                              type="checkbox"
+                              id="needInvoice"
+                              checked={needInvoice}
+                              onChange={(e) => setNeedInvoice(e.target.checked)}
+                              className="h-4 w-4 text-orange-600 focus:ring-orange-500 border-gray-300 rounded"
+                           />
+                           <label htmlFor="needInvoice" className="ml-2 block text-sm text-gray-900">
+                              Yêu cầu xuất hóa đơn
+                           </label>
+                           {needInvoice && (
+                              <button
+                                 type="button"
+                                 onClick={() => setShowInvoiceModal(true)}
+                                 className="ml-auto text-sm text-orange-600 hover:text-orange-700 font-medium"
+                              >
+                                 {invoiceInfo.name ? 'Chỉnh sửa thông tin' : 'Nhập thông tin'}
+                              </button>
+                           )}
+                        </div>
+
+                        {needInvoice && invoiceInfo.name && (
+                           <div className="mt-3 p-3 bg-orange-50 rounded-lg border border-orange-200 text-sm">
+                              <p className="font-medium">
+                                 {invoiceInfo.type === 'personal' ? 'Hóa đơn cá nhân' : 'Hóa đơn công ty'}
+                              </p>
+                              {invoiceInfo.type === 'company' && (
+                                 <>
+                                    <p>Công ty: <span className="font-medium">{invoiceInfo.companyName}</span></p>
+                                    <p>Mã số thuế: <span className="font-medium">{invoiceInfo.taxCode}</span></p>
+                                 </>
+                              )}
+                              <p>Người nhận: <span className="font-medium">{invoiceInfo.name}</span></p>
+                              <p>Địa chỉ: <span className="font-medium">{invoiceInfo.address}</span></p>
+                              <p>Email: <span className="font-medium">{invoiceInfo.email}</span></p>
+                           </div>
+                        )}
                      </div>
                   </div>
                </div>
@@ -2050,11 +2078,6 @@ export default function CheckoutPage() {
                            <span className='text-gray-600'>Phí vận chuyển</span>
                            <div className='text-right'>
                               <span>{formatPrice(shippingFee)}</span>
-                              <div className='text-xs text-gray-500 mt-1'>
-                                 {shippingFee === 20000
-                                    ? '(TP. Hồ Chí Minh)'
-                                    : '(Tỉnh/thành phố khác)'}
-                              </div>
                            </div>
                         </div>
 
@@ -2103,11 +2126,11 @@ export default function CheckoutPage() {
                                           </span>
                                           <span className='text-green-700 font-medium text-sm ml-2'>
                                              {appliedVoucher.percent_off &&
-                                             Number(appliedVoucher.percent_off) > 0
+                                                Number(appliedVoucher.percent_off) > 0
                                                 ? `Giảm ${appliedVoucher.percent_off}%`
                                                 : `Giảm ${formatPrice(
-                                                     Number(appliedVoucher.amount_off),
-                                                  )}`}
+                                                   Number(appliedVoucher.amount_off),
+                                                )}`}
                                           </span>
                                        </div>
                                        <span className='text-green-700 font-medium'>
@@ -2217,6 +2240,181 @@ export default function CheckoutPage() {
          </div>
 
          <Footer />
+
+         {/* Modal nhập thông tin hóa đơn */}
+         {showInvoiceModal && (
+            <div className="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="invoice-modal-title" role="dialog" aria-modal="true">
+               <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+                  {/* Overlay */}
+                  <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={() => setShowInvoiceModal(false)}></div>
+
+                  {/* Modal */}
+                  <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+                     <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                        <h3 className="text-lg font-medium leading-6 text-gray-900 mb-4" id="invoice-modal-title">
+                           Thông tin xuất hóa đơn
+                        </h3>
+
+                        <div className="space-y-4">
+                           {/* Loại hóa đơn */}
+                           <div className="flex space-x-6">
+                              <div className="flex items-center">
+                                 <input
+                                    id="invoice-personal"
+                                    name="invoice-type"
+                                    type="radio"
+                                    checked={invoiceInfo.type === 'personal'}
+                                    onChange={() => setInvoiceInfo({ ...invoiceInfo, type: 'personal' })}
+                                    className="h-4 w-4 text-orange-600 focus:ring-orange-500 border-gray-300"
+                                 />
+                                 <label htmlFor="invoice-personal" className="ml-2 block text-sm font-medium text-gray-700">
+                                    Cá nhân
+                                 </label>
+                              </div>
+
+                              <div className="flex items-center">
+                                 <input
+                                    id="invoice-company"
+                                    name="invoice-type"
+                                    type="radio"
+                                    checked={invoiceInfo.type === 'company'}
+                                    onChange={() => setInvoiceInfo({ ...invoiceInfo, type: 'company' })}
+                                    className="h-4 w-4 text-orange-600 focus:ring-orange-500 border-gray-300"
+                                 />
+                                 <label htmlFor="invoice-company" className="ml-2 block text-sm font-medium text-gray-700">
+                                    Công ty
+                                 </label>
+                              </div>
+                           </div>
+
+                           {/* Trường thông tin công ty nếu chọn loại hóa đơn công ty */}
+                           {invoiceInfo.type === 'company' && (
+                              <>
+                                 <div>
+                                    <label htmlFor="company-name" className="block text-sm font-medium text-gray-700">
+                                       Tên công ty <span className="text-red-500">*</span>
+                                    </label>
+                                    <input
+                                       type="text"
+                                       id="company-name"
+                                       value={invoiceInfo.companyName || ''}
+                                       onChange={(e) => setInvoiceInfo({ ...invoiceInfo, companyName: e.target.value })}
+                                       className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-orange-500 focus:border-orange-500 sm:text-sm"
+                                    />
+                                 </div>
+
+                                 <div>
+                                    <label htmlFor="tax-code" className="block text-sm font-medium text-gray-700">
+                                       Mã số thuế <span className="text-red-500">*</span>
+                                    </label>
+                                    <input
+                                       type="text"
+                                       id="tax-code"
+                                       value={invoiceInfo.taxCode || ''}
+                                       onChange={(e) => setInvoiceInfo({ ...invoiceInfo, taxCode: e.target.value })}
+                                       className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-orange-500 focus:border-orange-500 sm:text-sm"
+                                    />
+                                 </div>
+                              </>
+                           )}
+
+                           {/* Các trường thông tin chung */}
+                           <div>
+                              <label htmlFor="invoice-name" className="block text-sm font-medium text-gray-700">
+                                 Tên người nhận <span className="text-red-500">*</span>
+                              </label>
+                              <input
+                                 type="text"
+                                 id="invoice-name"
+                                 value={invoiceInfo.name}
+                                 onChange={(e) => setInvoiceInfo({ ...invoiceInfo, name: e.target.value })}
+                                 className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-orange-500 focus:border-orange-500 sm:text-sm"
+                              />
+                           </div>
+
+                           <div>
+                              <label htmlFor="invoice-address" className="block text-sm font-medium text-gray-700">
+                                 Địa chỉ <span className="text-red-500">*</span>
+                              </label>
+                              <input
+                                 id="invoice-address"
+                                 value={invoiceInfo.address}
+                                 onChange={(e) => setInvoiceInfo({ ...invoiceInfo, address: e.target.value })}
+                                 className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-orange-500 focus:border-orange-500 sm:text-sm"
+                              />
+                           </div>
+
+                           <div>
+                              <label htmlFor="invoice-email" className="block text-sm font-medium text-gray-700">
+                                 Email nhận hóa đơn <span className="text-red-500">*</span>
+                              </label>
+                              <input
+                                 type="email"
+                                 id="invoice-email"
+                                 value={invoiceInfo.email}
+                                 onChange={(e) => setInvoiceInfo({ ...invoiceInfo, email: e.target.value })}
+                                 className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-orange-500 focus:border-orange-500 sm:text-sm"
+                              />
+                           </div>
+
+
+                           <div>
+                              <div className="text-sm text-gray-600 space-y-2">
+                                 <p>
+                                    Hóa đơn sẽ được gửi trong vòng 7 ngày làm việc (không tính T7 - CN) kể từ thời điểm nhận hàng thành công và không phát sinh đổi trả.
+                                 </p>
+                                 <p>
+                                    <strong>Miễn trừ trách nhiệm:</strong> Hóa đơn điện tử cho đơn hàng này sẽ do Doanh nghiệp phát hành và được tính trên giá trị sản phẩm ban đầu (chưa bao gồm phí vận chuyển). Trường hợp Người mua không cung cấp thông tin hoặc không gửi yêu cầu xuất hóa đơn khi đặt hàng, Doanh nghiệp sẽ sử dụng thông tin trên đơn hàng để xuất hóa đơn.
+                                 </p>
+                                 <p>
+                                    Candle Bliss từ chối xử lý các yêu cầu phát sinh trong việc kê khai thuế đối với hóa đơn từ 20 triệu đồng trở lên thanh toán bằng tiền mặt.
+                                 </p>
+                              </div>
+                           </div>
+                        </div>
+                     </div>
+
+                     <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                        <button
+                           type="button"
+                           className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-orange-600 text-base font-medium text-white hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 sm:ml-3 sm:w-auto sm:text-sm"
+                           onClick={() => {
+                              // Validate
+                              if (invoiceInfo.type === 'company' && (!invoiceInfo.companyName || !invoiceInfo.taxCode)) {
+                                 showToastMessage("Vui lòng nhập đầy đủ thông tin công ty và mã số thuế", "error");
+                                 return;
+                              }
+
+                              if (!invoiceInfo.name || !invoiceInfo.address || !invoiceInfo.email) {
+                                 showToastMessage("Vui lòng nhập đầy đủ thông tin xuất hóa đơn", "error");
+                                 return;
+                              }
+
+                              // Validate email
+                              const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                              if (!emailRegex.test(invoiceInfo.email)) {
+                                 showToastMessage("Email không hợp lệ", "error");
+                                 return;
+                              }
+
+                              setShowInvoiceModal(false);
+                              showToastMessage("Đã lưu thông tin xuất hóa đơn", "success");
+                           }}
+                        >
+                           Xác nhận
+                        </button>
+                        <button
+                           type="button"
+                           className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
+                           onClick={() => setShowInvoiceModal(false)}
+                        >
+                           Hủy
+                        </button>
+                     </div>
+                  </div>
+               </div>
+            </div>
+         )}
       </div>
    );
 }
