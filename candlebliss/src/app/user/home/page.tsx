@@ -2,6 +2,7 @@
 import React, { Suspense } from 'react'; // Add Suspense import
 import { ChevronRightIcon } from '@heroicons/react/24/outline';
 import Image from 'next/image';
+import Link from 'next/link';
 import Carousel from '@/app/components/user/carousel/page';
 import AccessoriesCarousel from '@/app/components/user/accessoriescarousel/page';
 import TrendingCarousel from '@/app/components/user/trendingcarousel/page';
@@ -43,10 +44,12 @@ export default function HomePage() {
                   <p className='text-[#553C26] font-mont pb-4'>
                      Tìm kiếm sản phẩm yêu thích trong bộ sưu tập nến thơm đặc biệt của chúng tôi!
                   </p>
+                  <Link href='/user/products'>
                   <button className='font-mont h-8 w-36 bg-[#553C26] text-white rounded-2xl hover:animate-pulse'>
                      Xem thêm
                      <ChevronRightIcon className='h-4 w-5 inline' />
                   </button>
+                  </Link>
                </div>
             </div>
 

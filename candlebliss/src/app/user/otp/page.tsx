@@ -30,6 +30,19 @@ function OTPContent({ email }: { email: string }) {
    const [error, setError] = useState('');
    const [loading, setLoading] = useState(false);
    const [message, setMessage] = useState('');
+   const [resendLoading, setResendLoading] = useState(false);
+   const [resendCooldown, setResendCooldown] = useState(0);
+
+   // Add cooldown timer effect
+   useEffect(() => {
+      let timer: NodeJS.Timeout;
+      if (resendCooldown > 0) {
+         timer = setTimeout(() => {
+            setResendCooldown(resendCooldown - 1);
+         }, 1000);
+      }
+      return () => clearTimeout(timer);
+   }, [resendCooldown]);
 
    const handleVerifyOTP = async () => {
       setLoading(true);
@@ -61,6 +74,36 @@ function OTPContent({ email }: { email: string }) {
       }
    };
 
+   // Add function to resend OTP
+   const handleResendOTP = async () => {
+      if (resendCooldown > 0) return;
+
+      setResendLoading(true);
+      setError('');
+
+      try {
+         const res = await fetch('/api/v1/auth/email/confirm/new', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email }),
+         });
+
+         const data = await res.json();
+         if (!res.ok) throw new Error(data.message || 'Gửi lại mã thất bại');
+
+         setMessage('Đã gửi lại mã OTP mới thành công!');
+         setResendCooldown(60); // Set cooldown for 60 seconds
+      } catch (err) {
+         if (err instanceof Error) {
+            setError(err.message);
+         } else {
+            setError('An unknown error occurred');
+         }
+      } finally {
+         setResendLoading(false);
+      }
+   };
+
    return (
       <div
          className='min-h-screen w-full bg-cover bg-center bg-no-repeat flex items-center justify-center md:justify-end md:pr-60 p-4'
@@ -68,6 +111,12 @@ function OTPContent({ email }: { email: string }) {
       >
          <div className='bg-white p-6 md:p-8 rounded-lg shadow-md w-full max-w-sm md:max-w-lg'>
             <h2 className='text-2xl font-bold mb-6 text-center text-[#553C26]'>Xác thực OTP</h2>
+
+            {email && (
+               <p className='text-gray-600 text-center mb-4'>
+                  Mã xác thực đã được gửi đến: <strong>{email}</strong>
+               </p>
+            )}
 
             {message && <p className='text-green-600 text-center mb-4'>{message}</p>}
             {error && <p className='text-red-600 text-center mb-4'>{error}</p>}
@@ -93,6 +142,20 @@ function OTPContent({ email }: { email: string }) {
             >
                {loading ? 'Đang xác thực...' : 'Xác nhận'}
             </button>
+
+            <div className='mt-3 text-center'>
+               <button
+                  onClick={handleResendOTP}
+                  className='text-[#553C26] hover:underline disabled:opacity-50 disabled:no-underline'
+                  disabled={resendLoading || resendCooldown > 0}
+               >
+                  {resendLoading
+                     ? 'Đang gửi lại...'
+                     : resendCooldown > 0
+                        ? `Gửi lại mã sau (${resendCooldown}s)`
+                        : 'Gửi lại mã OTP'}
+               </button>
+            </div>
 
             <div className='flex items-center my-4'>
                <div className='flex-grow border-t border-[#553C26]'></div>

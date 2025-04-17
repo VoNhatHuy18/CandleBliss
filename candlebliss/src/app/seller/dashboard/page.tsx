@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Package, ShoppingBag, CreditCard, Users } from 'lucide-react';
 
 import Header from '@/app/components/seller/header/page';
@@ -8,6 +8,13 @@ import MenuSideBar from '@/app/components/seller/menusidebar/page';
 import Link from 'next/link';
 
 // Interfaces
+interface User {
+   id: number;
+   name: string;
+   phone: string;
+   email: string;
+}
+
 interface OrderItem {
    id: number;
    status: string;
@@ -48,6 +55,7 @@ interface Order {
    updatedAt: string;
    item: OrderItem[];
    __entity: string;
+   user?: User;
 }
 
 // Format currency helper function
@@ -81,12 +89,60 @@ const orderStatusColors: Record<string, string> = {
 export default function Dashboard() {
    const [orders, setOrders] = useState<Order[]>([]);
    const [loading, setLoading] = useState<boolean>(true);
+   const [fetchedUserIds, setFetchedUserIds] = useState<Record<number, boolean>>({});
    const [stats, setStats] = useState({
       totalRevenue: '0',
       totalProducts: 0,
       totalOrders: 0,
       totalCustomers: 0,
    });
+
+   // Fetch user data
+   const fetchUserData = useCallback(async (orders: Order[]) => {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+
+      let hasUpdates = false;
+      const updatedOrders = [...orders];
+
+      for (const order of updatedOrders) {
+         if (!order.user && order.user_id && !fetchedUserIds[order.user_id]) {
+            try {
+               const userResponse = await fetch(
+                  `http://68.183.226.198:3000/api/v1/users/${order.user_id}`,
+                  {
+                     headers: { Authorization: `Bearer ${token}` },
+                  }
+               );
+
+               if (userResponse.ok) {
+                  const userData = await userResponse.json();
+                  order.user = {
+                     id: userData.id,
+                     name:
+                        userData.firstName && userData.lastName
+                           ? `${userData.firstName} ${userData.lastName}`
+                           : userData.firstName || userData.lastName || 'Không có tên',
+                     phone: userData.phone ? userData.phone.toString() : 'Không có SĐT',
+                     email: userData.email || 'Không có email',
+                  };
+                  hasUpdates = true;
+
+                  setFetchedUserIds((prev) => ({
+                     ...prev,
+                     [order.user_id]: true,
+                  }));
+               }
+            } catch (error) {
+               console.error(`Failed to fetch user info for user ID ${order.user_id}:`, error);
+            }
+         }
+      }
+
+      if (hasUpdates) {
+         setOrders(updatedOrders);
+      }
+   }, [fetchedUserIds]);
 
    // Fetch data from API
    useEffect(() => {
@@ -131,6 +187,13 @@ export default function Dashboard() {
 
       fetchOrders();
    }, []);
+
+   // Fetch user data when orders change
+   useEffect(() => {
+      if (orders.length > 0) {
+         fetchUserData(orders);
+      }
+   }, [orders, fetchUserData]);
 
    // Calculate dashboard statistics
    const calculateStats = (orders: Order[]) => {
@@ -320,7 +383,7 @@ export default function Dashboard() {
                                        {formatDate(order.createdAt)}
                                     </td>
                                     <td className='px-4 py-3 whitespace-nowrap text-sm text-gray-500'>
-                                       {`Khách hàng #${order.user_id}`}
+                                       {order.user?.name || `Khách hàng #${order.user_id}`}
                                     </td>
                                     <td className='px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900'>
                                        {formatPrice(order.total_price)}
@@ -329,10 +392,10 @@ export default function Dashboard() {
                                        {order.method_payment === 'COD'
                                           ? 'Tiền mặt'
                                           : order.method_payment === 'BANKING'
-                                          ? 'Chuyển khoản'
-                                          : order.method_payment === 'MOMO'
-                                          ? 'Ví MoMo'
-                                          : order.method_payment}
+                                             ? 'Chuyển khoản'
+                                             : order.method_payment === 'MOMO'
+                                                ? 'Ví MoMo'
+                                                : order.method_payment}
                                     </td>
                                     <td className='px-4 py-3 whitespace-nowrap'>
                                        {renderStatusBadge(order.status)}

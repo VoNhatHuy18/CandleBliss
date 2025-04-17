@@ -4,7 +4,7 @@ import Link from 'next/link';
 import Header from '@/app/components/seller/header/page';
 import Sidebar from '@/app/components/seller/menusidebar/page';
 import Image from 'next/image';
-import { useState, useEffect, SetStateAction } from 'react';
+import { useState, useEffect, SetStateAction, useCallback, useMemo } from 'react';
 import {
    Search,
    DollarSign,
@@ -49,6 +49,14 @@ interface OrderItem {
    totalPrice: string;
 }
 
+// Define interface for user
+interface User {
+   id: number;
+   name: string;
+   phone: string;
+   email: string;
+}
+
 // Define interface for order
 interface Order {
    id: number;
@@ -63,6 +71,7 @@ interface Order {
    createdAt: string;
    updatedAt: string;
    item: OrderItem[];
+   user?: User; // Thêm trường user
 }
 
 // Hàm cập nhật dữ liệu cho biểu đồ
@@ -96,6 +105,18 @@ export default function FinancePage() {
       datasets: []
    });
    const [chartOptions, setChartOptions] = useState({});
+   const [fetchedUserIds, setFetchedUserIds] = useState<Record<number, boolean>>({});
+   const [completedOrders, setCompletedOrders] = useState<Array<{
+      id: number;
+      orderId: string;
+      customer: string;
+      address: string;
+      quantity: number;
+      shippingFee: number;
+      total: number;
+      status: string;
+      date: string;
+   }>>([]);
 
    // Thêm state cho dữ liệu biểu đồ lịch sử
    const [historicalData, setHistoricalData] = useState<Array<{
@@ -168,7 +189,77 @@ export default function FinancePage() {
       }
    };
 
+   const fetchUserData = useCallback(async (orders: Order[]) => {
+      const token = localStorage.getItem('token');
+      if (!token) return;
 
+      let hasUpdates = false;
+      const updatedOrders = [...orders];
+
+      for (const order of updatedOrders) {
+         if (!order.user && order.user_id && !fetchedUserIds[order.user_id]) {
+            try {
+               const userResponse = await fetch(
+                  `http://68.183.226.198:3000/api/v1/users/${order.user_id}`,
+                  {
+                     headers: { Authorization: `Bearer ${token}` },
+                  }
+               );
+
+               if (userResponse.ok) {
+                  const userData = await userResponse.json();
+                  order.user = {
+                     id: userData.id,
+                     name:
+                        userData.firstName && userData.lastName
+                           ? `${userData.firstName} ${userData.lastName}`
+                           : userData.firstName || userData.lastName || 'Không có tên',
+                     phone: userData.phone ? userData.phone.toString() : 'Không có SĐT',
+                     email: userData.email || 'Không có email',
+                  };
+                  hasUpdates = true;
+
+                  setFetchedUserIds((prev) => ({
+                     ...prev,
+                     [order.user_id]: true,
+                  }));
+               }
+            } catch (error) {
+               console.error(`Failed to fetch user info for user ID ${order.user_id}:`, error);
+            }
+         }
+      }
+
+      if (hasUpdates) {
+         setOrders(updatedOrders);
+         // Cập nhật filteredOrders nếu cần
+         const filtered = updatedOrders.filter(order => order.status === 'Hoàn thành');
+         const mappedOrders = filtered.map((order) => {
+            // Format date for display
+            const date = new Date(order.createdAt);
+            const formattedDate = `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getFullYear()}`;
+
+            return {
+               id: order.id,
+               orderId: order.order_code,
+               customer: order.user?.name || `Khách hàng #${order.user_id}`,
+               address: order.address,
+               quantity: order.total_quantity,
+               shippingFee: parseInt(order.ship_price),
+               total: parseInt(order.total_price),
+               status: order.status,
+               date: formattedDate,
+            };
+         });
+         setCompletedOrders(mappedOrders);
+      }
+   }, [fetchedUserIds]);
+
+   useEffect(() => {
+      if (orders.length > 0) {
+         fetchUserData(orders);
+      }
+   }, [orders, fetchUserData]);
 
    const handleTimeFilterChange = (event: { target: { value: SetStateAction<string>; }; }) => {
       setTimeFilter(event.target.value);
@@ -231,33 +322,14 @@ export default function FinancePage() {
       { id: 3, name: 'Cameron Williamson', image: '/images/cameron.png' },
    ];
 
-   // Transform API orders into the format we need for display
-   const completedOrders = orders
-      .filter(order => order.status === 'Hoàn thành')
-      .map((order) => {
-         // Format date for display
-         const date = new Date(order.createdAt);
-         const formattedDate = `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getFullYear()}`;
-
-         return {
-            id: order.id,
-            orderId: order.order_code,
-            customer: `Khách hàng #${order.user_id}`, // Replace with actual customer name if available
-            address: order.address,
-            quantity: order.total_quantity,
-            shippingFee: parseInt(order.ship_price),
-            total: parseInt(order.total_price),
-            status: order.status,
-            date: formattedDate,
-         };
-      });
-
-   const filteredOrders = completedOrders.filter(
-      (order) =>
-         order.orderId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-         order.customer.toLowerCase().includes(searchTerm.toLowerCase()) ||
-         order.address.toLowerCase().includes(searchTerm.toLowerCase()),
-   );
+   const filteredOrders = useMemo(() => {
+      return completedOrders.filter(
+         (order) =>
+            order.orderId.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            order.customer.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            order.address.toLowerCase().includes(searchTerm.toLowerCase()),
+      );
+   }, [completedOrders, searchTerm]);
 
    // Hàm xuất danh sách đơn hàng thành công dưới dạng Excel
    const exportOrdersToExcel = () => {
@@ -313,8 +385,6 @@ export default function FinancePage() {
       });
    };
 
-
-
    const updateChartData = (data: ChartData) => {
       const timeLabel = timeFilter === 'month'
          ? `Tháng ${timeValue}/${year}`
@@ -349,8 +419,6 @@ export default function FinancePage() {
          ]
       });
    };
-
-
 
    // Nếu không có API lịch sử, chúng ta có thể tạo dữ liệu mẫu:
    const generateSampleHistoricalData = () => {
@@ -853,26 +921,23 @@ export default function FinancePage() {
                            </div>
 
                            <div className='grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-4 gap-6'>
-                              {newCustomers.map((customer) => (
-                                 <div
-                                    key={customer.id}
-                                    className='flex items-center p-3 rounded-lg hover:bg-gray-50 transition-all'
-                                 >
-                                    <div className='w-12 h-12 rounded-full overflow-hidden border border-gray-200'>
-                                       <Image
-                                          src={customer.image}
-                                          alt={customer.name}
-                                          width={48}
-                                          height={48}
-                                          className='object-cover'
-                                       />
+                              {orders
+                                 .filter(order => order.user && order.user.name)
+                                 .slice(0, 8) // Giới hạn số lượng hiển thị
+                                 .map((order) => (
+                                    <div
+                                       key={order.user_id}
+                                       className='flex items-center p-3 rounded-lg hover:bg-gray-50 transition-all'
+                                    >
+                                       <div className='w-12 h-12 rounded-full overflow-hidden border border-gray-200 bg-gray-100 flex items-center justify-center'>
+                                          {order.user?.name.charAt(0).toUpperCase() || 'K'}
+                                       </div>
+                                       <div className='ml-3'>
+                                          <p className='font-medium text-gray-800'>{order.user?.name}</p>
+                                          <p className='text-xs text-gray-500'>{order.user?.phone || 'Không có SĐT'}</p>
+                                       </div>
                                     </div>
-                                    <div className='ml-3'>
-                                       <p className='font-medium text-gray-800'>{customer.name}</p>
-                                       <p className='text-xs text-gray-500'>Mới tham gia</p>
-                                    </div>
-                                 </div>
-                              ))}
+                                 ))}
                            </div>
                         </section>
                      </>

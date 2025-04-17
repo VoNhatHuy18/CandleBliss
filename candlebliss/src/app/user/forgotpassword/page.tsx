@@ -10,13 +10,13 @@ export default function ForgotPasswordPage() {
    const [email, setEmail] = useState('');
    const [newPassword, setNewPassword] = useState('');
    const [confirmPassword, setConfirmPassword] = useState('');
-   const [otp, setOtp] = useState('');
+   const [hash, setHash] = useState('');
 
    // Error states
    const [emailError, setEmailError] = useState('');
    const [passwordError, setPasswordError] = useState('');
    const [confirmPasswordError, setConfirmPasswordError] = useState('');
-   const [otpError, setOtpError] = useState('');
+   const [hashError, setHashError] = useState('');
 
    // Timer states
    const [countdown, setCountdown] = useState(0);
@@ -40,7 +40,6 @@ export default function ForgotPasswordPage() {
    // Regular expressions
    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
-   const otpRegex = /^\d{6}$/;
 
    // Timer effect
    useEffect(() => {
@@ -55,12 +54,12 @@ export default function ForgotPasswordPage() {
       return () => clearInterval(interval);
    }, [isTimerActive, countdown]);
 
-   // Cập nhật hàm handleSendOTP mà không cần kiểm tra email trước
+   // Cập nhật hàm handleSendOTP để gửi email quên mật khẩu
    const handleSendOTP = async () => {
       if (email && !emailError) {
          setIsSendingOTP(true);
          try {
-            // Gọi API gửi OTP và kiểm tra phản hồi
+            // Gọi API gửi yêu cầu quên mật khẩu
             const response = await fetch('http://68.183.226.198:3000/api/v1/auth/forgot/password', {
                method: 'POST',
                headers: {
@@ -85,11 +84,11 @@ export default function ForgotPasswordPage() {
 
             // Xử lý các trường hợp
             if (response.ok) {
-               // Thành công - email tồn tại và OTP đã được gửi
+               // Thành công - email tồn tại và mã hash đã được gửi
                setToast({
                   show: true,
                   message:
-                     'Mã OTP đã được gửi đến email của bạn. Vui lòng kiểm tra cả thư mục spam hoặc junk.',
+                     'Mã xác thực đã được gửi đến email của bạn. Vui lòng kiểm tra cả thư mục spam hoặc junk.',
                   type: 'success',
                });
                setCountdown(180); // 3 phút
@@ -97,7 +96,7 @@ export default function ForgotPasswordPage() {
             } else {
                // API trả về lỗi
                if (response.status === 404) {
-                  // Email không tồn tại (giả sử mã lỗi 404 = email không tìm thấy)
+                  // Email không tồn tại
                   setToast({
                      show: true,
                      message: 'Email này không tồn tại trong hệ thống. Vui lòng kiểm tra lại.',
@@ -106,7 +105,7 @@ export default function ForgotPasswordPage() {
                } else {
                   // Các lỗi khác
                   const errorMessage =
-                     data?.message || 'Không thể gửi mã OTP, vui lòng thử lại sau.';
+                     data?.message || 'Không thể gửi yêu cầu đặt lại mật khẩu, vui lòng thử lại sau.';
                   setToast({
                      show: true,
                      message: errorMessage,
@@ -115,7 +114,7 @@ export default function ForgotPasswordPage() {
                }
             }
          } catch (error: unknown) {
-            console.error('OTP send error:', error);
+            console.error('Password reset request error:', error);
             let errorMessage = 'Không thể kết nối đến máy chủ. Vui lòng thử lại sau.';
 
             if (error instanceof Error) {
@@ -178,14 +177,12 @@ export default function ForgotPasswordPage() {
       }
    };
 
-   const validateOtp = (value: string) => {
-      setOtp(value);
+   const validateHash = (value: string) => {
+      setHash(value);
       if (!value) {
-         setOtpError('Vui lòng nhập mã OTP');
-      } else if (!otpRegex.test(value)) {
-         setOtpError('Mã OTP phải là 6 chữ số');
+         setHashError('Vui lòng nhập mã xác thực từ email');
       } else {
-         setOtpError('');
+         setHashError('');
       }
    };
 
@@ -194,9 +191,9 @@ export default function ForgotPasswordPage() {
       validateEmail(email);
       validatePassword(newPassword);
       validateConfirmPassword(confirmPassword);
-      validateOtp(otp);
+      validateHash(hash);
 
-      if (emailError || passwordError || confirmPasswordError || otpError) {
+      if (emailError || passwordError || confirmPasswordError || hashError) {
          return;
       }
 
@@ -208,9 +205,8 @@ export default function ForgotPasswordPage() {
                'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-               email,
-               newPassword,
-               otp,
+               password: newPassword,
+               hash: hash
             }),
          });
 
@@ -298,28 +294,25 @@ export default function ForgotPasswordPage() {
                                  onClick={handleSendOTP}
                                  disabled={isTimerActive || !email || !!emailError || isSendingOTP}
                                  className={`absolute right-3 top-1/2 -translate-y-1/2 px-2 py-1 text-sm 
-                                    ${
-                                       isTimerActive
-                                          ? 'text-gray-500'
-                                          : 'text-[#553C26] hover:text-[#442f1e]'
+                                    ${isTimerActive
+                                       ? 'text-gray-500'
+                                       : 'text-[#553C26] hover:text-[#442f1e]'
                                     }
-                                    ${
-                                       isSendingOTP || !email || !!emailError
-                                          ? 'cursor-not-allowed opacity-50'
-                                          : 'cursor-pointer'
+                                    ${isSendingOTP || !email || !!emailError
+                                       ? 'cursor-not-allowed opacity-50'
+                                       : 'cursor-pointer'
                                     }`}
                               >
                                  {isSendingOTP
                                     ? 'Đang gửi...'
                                     : isTimerActive
-                                    ? formatTime(countdown)
-                                    : 'Gửi mã'}
+                                       ? formatTime(countdown)
+                                       : 'Gửi mã'}
                               </button>
                            </div>
                            {emailError && <p className='text-red-500 text-sm mt-1'>{emailError}</p>}
                         </div>
 
-                        {/* Rest of the form fields remain the same */}
                         {/* New Password Field */}
                         <div>
                            <label className='block text-[#553C26] mb-2'>Mật khẩu mới</label>
@@ -368,27 +361,25 @@ export default function ForgotPasswordPage() {
                            )}
                         </div>
 
-                        {/* OTP Field */}
+                        {/* Hash Field (replacing OTP field) */}
                         <div>
-                           <label className='block text-[#553C26] mb-2'>Nhập mã</label>
+                           <label className='block text-[#553C26] mb-2'>Mã xác thực</label>
                            <input
                               type='text'
-                              placeholder='6 chữ số'
+                              placeholder='Nhập mã xác thực từ email'
                               className='w-full px-4 py-2 border rounded-lg'
-                              maxLength={6}
-                              value={otp}
-                              onChange={(e) => validateOtp(e.target.value)}
+                              value={hash}
+                              onChange={(e) => validateHash(e.target.value)}
                            />
-                           {otpError && <p className='text-red-500 text-sm mt-1'>{otpError}</p>}
+                           {hashError && <p className='text-red-500 text-sm mt-1'>{hashError}</p>}
                         </div>
 
                         {/* Submit Button */}
                         <button
                            type='submit'
                            disabled={isResetting}
-                           className={`w-full bg-[#553C26] text-white py-3 rounded-lg hover:bg-[#442f1e] transition-colors mt-6 ${
-                              isResetting ? 'opacity-70 cursor-not-allowed' : ''
-                           }`}
+                           className={`w-full bg-[#553C26] text-white py-3 rounded-lg hover:bg-[#442f1e] transition-colors mt-6 ${isResetting ? 'opacity-70 cursor-not-allowed' : ''
+                              }`}
                         >
                            {isResetting ? 'Đang xử lý...' : 'Xác Nhận'}
                         </button>

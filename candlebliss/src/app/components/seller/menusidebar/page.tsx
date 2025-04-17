@@ -12,7 +12,6 @@ import {
    ShoppingBag,
    CreditCard,
    Settings,
-   Users,
    ChevronDown,
    ChevronUp,
    Globe, // Import Globe icon for store/client navigation
@@ -118,6 +117,16 @@ export default function MenuSideBar() {
                      <span>Quản Lý Đơn Hàng</span>
                   </Link>
                </div>
+
+               <div className='px-4 py-2'>
+                  <Link
+                     href='/seller/warehouse'
+                     className='flex items-center p-2 text-gray-600 hover:bg-gray-100 rounded'
+                  >
+                     <Package size={18} className='mr-2' />
+                     <span>Quản lý kho </span>
+                  </Link>
+               </div>
                <div className='px-4 py-2'>
                   <Link
                      href='/payments'
@@ -136,15 +145,7 @@ export default function MenuSideBar() {
                      <span>Quản Lý Tài Chính</span>
                   </Link>
                </div>
-               <div className='px-4 py-2'>
-                  <Link
-                     href='/permissions'
-                     className='flex items-center p-2 text-gray-600 hover:bg-gray-100 rounded'
-                  >
-                     <Users size={18} className='mr-2' />
-                     <span>Phân Quyền</span>
-                  </Link>
-               </div>
+
                <div className='px-4 py-2'>
                   <Link
                      href='/settings'

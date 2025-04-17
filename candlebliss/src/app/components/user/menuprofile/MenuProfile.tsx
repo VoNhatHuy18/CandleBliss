@@ -13,8 +13,8 @@ import {
    FaUserCog,
 } from 'react-icons/fa';
 
-import { fetchUserProfile } from '@/app/utils/api'; // Adjust the import path as necessary
-import type { User } from '@/app/user/profile/types'; // Adjust the import path as necessary
+import { fetchUserProfile } from '@/app/utils/api';
+import type { User } from '@/app/user/profile/types';
 
 interface MenuProfileProps {
    selectedTab: string;
@@ -59,7 +59,6 @@ const MenuProfile: React.FC<MenuProfileProps> = ({ selectedTab }) => {
          icon: FaShoppingBag,
          tab: 'orders',
          path: '/user/order',
-         badge: 3,
       },
       {
          label: 'Sản phẩm yêu thích',
@@ -77,27 +76,25 @@ const MenuProfile: React.FC<MenuProfileProps> = ({ selectedTab }) => {
          label: 'Đánh giá sản phẩm',
          icon: FaStar,
          tab: 'reviews',
-         path: '/user/profile/reviews',
-         badge: 2,
+         path: '/user/order/rating',
       },
       {
          label: 'Hỗ trợ & Góp ý',
          icon: FaHeadset,
          tab: 'support',
          path: '/user/profile/support',
-         badge: 1,
       },
       // Add Admin Dashboard button when user is admin
       ...(isAdmin
          ? [
-              {
-                 label: 'Quản trị viên',
-                 icon: FaUserCog,
-                 tab: 'admin-dashboard',
-                 path: '/seller/dashboard',
-                 isHighlighted: true,
-              },
-           ]
+            {
+               label: 'Quản trị viên',
+               icon: FaUserCog,
+               tab: 'admin-dashboard',
+               path: '/seller/dashboard',
+               isHighlighted: true,
+            },
+         ]
          : []),
       {
          label: 'Đăng xuất',
@@ -145,72 +142,59 @@ const MenuProfile: React.FC<MenuProfileProps> = ({ selectedTab }) => {
                {menuItems.map((item) => (
                   <div
                      key={item.tab}
-                     className={`border-b last:border-none ${
-                        selectedTab === item.tab ? 'bg-amber-50' : ''
-                     }`}
+                     className={`border-b last:border-none ${selectedTab === item.tab ? 'bg-amber-50' : ''
+                        }`}
                   >
                      {item.path ? (
                         <Link href={item.path}>
                            <div
-                              className={`flex items-center w-full py-3.5 px-5 transition duration-150 ${
-                                 item.isDanger
-                                    ? 'text-red-600 hover:bg-red-50 hover:text-red-700'
-                                    : item.isHighlighted
+                              className={`flex items-center w-full py-3.5 px-5 transition duration-150 ${item.isDanger
+                                 ? 'text-red-600 hover:bg-red-50 hover:text-red-700'
+                                 : item.isHighlighted
                                     ? 'font-medium text-purple-700 bg-purple-50 hover:bg-purple-100'
                                     : selectedTab === item.tab
-                                    ? 'font-medium text-amber-700'
-                                    : 'text-gray-700 hover:bg-amber-50'
-                              }`}
+                                       ? 'font-medium text-amber-700'
+                                       : 'text-gray-700 hover:bg-amber-50'
+                                 }`}
                            >
                               <item.icon
-                                 className={`mr-3 ${
-                                    item.isDanger
-                                       ? 'text-red-500'
-                                       : item.isHighlighted
+                                 className={`mr-3 ${item.isDanger
+                                    ? 'text-red-500'
+                                    : item.isHighlighted
                                        ? 'text-purple-600'
                                        : selectedTab === item.tab
-                                       ? 'text-amber-600'
-                                       : 'text-gray-500'
-                                 }`}
+                                          ? 'text-amber-600'
+                                          : 'text-gray-500'
+                                    }`}
                               />
                               <span>{item.label}</span>
-                              {item.badge && (
-                                 <span className='ml-auto bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs'>
-                                    {item.badge}
-                                 </span>
-                              )}
+
                            </div>
                         </Link>
                      ) : (
                         <button
-                           className={`flex items-center w-full py-3.5 px-5 transition duration-150 ${
-                              item.isDanger
-                                 ? 'text-red-600 hover:bg-red-50 hover:text-red-700'
-                                 : item.isHighlighted
+                           className={`flex items-center w-full py-3.5 px-5 transition duration-150 ${item.isDanger
+                              ? 'text-red-600 hover:bg-red-50 hover:text-red-700'
+                              : item.isHighlighted
                                  ? 'font-medium text-purple-700 bg-purple-50 hover:bg-purple-100'
                                  : selectedTab === item.tab
-                                 ? 'font-medium text-amber-700'
-                                 : 'text-gray-700 hover:bg-amber-50'
-                           }`}
+                                    ? 'font-medium text-amber-700'
+                                    : 'text-gray-700 hover:bg-amber-50'
+                              }`}
                            onClick={() => handleTabSelect(item.tab, item.path)}
                         >
                            <item.icon
-                              className={`mr-3 ${
-                                 item.isDanger
-                                    ? 'text-red-500'
-                                    : item.isHighlighted
+                              className={`mr-3 ${item.isDanger
+                                 ? 'text-red-500'
+                                 : item.isHighlighted
                                     ? 'text-purple-600'
                                     : selectedTab === item.tab
-                                    ? 'text-amber-600'
-                                    : 'text-gray-500'
-                              }`}
+                                       ? 'text-amber-600'
+                                       : 'text-gray-500'
+                                 }`}
                            />
                            <span>{item.label}</span>
-                           {item.badge && (
-                              <span className='ml-auto bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs'>
-                                 {item.badge}
-                              </span>
-                           )}
+
                         </button>
                      )}
                   </div>

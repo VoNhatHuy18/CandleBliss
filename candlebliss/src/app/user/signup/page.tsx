@@ -309,15 +309,15 @@ export default function SignUpPage() {
                router.push('/user/home');
             }, 1500);
          } else {
-            // // Trường hợp cần xác thực OTP
-            // showToastMessage('Đăng ký thành công! Vui lòng xác thực OTP để tiếp tục.', 'success');
-            // // Lưu thông tin đăng ký cho quá trình xác thực OTP
-            // sessionStorage.setItem('registerEmail', email);
-            // sessionStorage.setItem('registerPhone', phone);
-            // // Chờ 1.5 giây để hiển thị thông báo thành công trước khi chuyển hướng
-            // setTimeout(() => {
-            //    router.push('/user/otp');
-            // }, 1500);
+            // Trường hợp cần xác thực OTP
+            showToastMessage('Đăng ký thành công! Vui lòng xác thực OTP để tiếp tục.', 'success');
+            // Lưu thông tin đăng ký cho quá trình xác thực OTP
+            sessionStorage.setItem('registerEmail', email);
+            sessionStorage.setItem('registerPhone', phone);
+            // Chờ 1.5 giây để hiển thị thông báo thành công trước khi chuyển hướng
+            setTimeout(() => {
+               router.push('/user/otp');
+            }, 1500);
          }
 
          // Reset form sau khi đăng ký thành công

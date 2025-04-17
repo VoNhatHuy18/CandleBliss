@@ -9,7 +9,7 @@ const nextConfig = {
       ];
    },
    images: {
-      domains: ['example.com', 'localhost', 'res.cloudinary.com'], 
+      domains: ['example.com', 'localhost', 'res.cloudinary.com', 'placehold.co'],
    },
 };
 

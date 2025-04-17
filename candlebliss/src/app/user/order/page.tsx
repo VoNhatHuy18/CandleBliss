@@ -108,7 +108,7 @@ const orderStatusColors: Record<string, { bg: string; text: string; border: stri
    'Đã đặt hàng': { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200' },
    'Đã giao hàng': { bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-200' },
    'Hoàn thành': { bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-200' },
-   'Đã huỷ': { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200' }, // Corrected from 'Đã hủy' to 'Đã huỷ'
+   'Đã hủy': { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200' },
    'Đang chờ hoàn tiền': {
       bg: 'bg-yellow-50',
       text: 'text-yellow-700',
@@ -120,10 +120,9 @@ const orderStatusColors: Record<string, { bg: string; text: string; border: stri
       border: 'border-green-200',
    },
    'Hoàn tiền thất bại': { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200' },
-   'Đổi trả hàng': { bg: 'bg-yellow-50', text: 'text-yellow-700', border: 'border-yellow-200' }, // Added missing status
+   'Đổi trả hàng': { bg: 'bg-yellow-50', text: 'text-yellow-700', border: 'border-yellow-200' },
 };
 
-// Create a client component that uses searchParams
 function OrderFilter({ onFilterChange }: { onFilterChange: (filterId: string | null) => void }) {
    const searchParams = useSearchParams();
    const filterStatus = searchParams.get('status');
@@ -132,10 +131,9 @@ function OrderFilter({ onFilterChange }: { onFilterChange: (filterId: string | n
       onFilterChange(filterStatus);
    }, [searchParams, onFilterChange]);
 
-   return null; // This component doesn't render anything, just processes the search params
+   return null;
 }
 
-// Component đếm ngược thời gian thanh toán
 const PaymentCountdown = ({
    createdAt,
    orderId,
@@ -153,7 +151,7 @@ const PaymentCountdown = ({
          const createdTime = new Date(createdAt).getTime();
          const now = new Date().getTime();
          const timePassed = now - createdTime;
-         const timeoutMs = 15 * 60 * 1000; // 15 phút tính bằng ms
+         const timeoutMs = 15 * 60 * 1000;
 
          const remaining = timeoutMs - timePassed;
          return Math.max(0, Math.floor(remaining / 1000)); // Trả về số giây còn lại
@@ -202,6 +200,19 @@ const PaymentCountdown = ({
          Thanh toán còn: {minutes}:{seconds < 10 ? `0${seconds}` : seconds}
       </span>
    );
+};
+
+// Add this helper function before the OrderPage component
+const isDeliveredForTwoDays = (order: Order): boolean => {
+   // Check if order is in "Đang giao hàng" status
+   if (order.status !== 'Đang giao hàng') return false;
+
+   // Calculate if it's been at least 2 days since the order was updated
+   const updatedDate = new Date(order.updatedAt).getTime();
+   const now = new Date().getTime();
+   const twoDaysInMs = 2 * 24 * 60 * 60 * 1000; // 2 days in milliseconds
+
+   return now - updatedDate >= twoDaysInMs;
 };
 
 export default function OrderPage() {
@@ -480,7 +491,7 @@ export default function OrderPage() {
                   'Content-Type': 'application/json',
                },
                body: JSON.stringify({
-                  status: 'Đã huỷ',
+                  status: 'Đã hủy',
                }),
             }
          );
@@ -491,7 +502,7 @@ export default function OrderPage() {
 
          // Update the state after successful API call
          setOrders((prevOrders) =>
-            prevOrders.map((order) => (order.id === orderId ? { ...order, status: 'Đã huỷ' } : order))
+            prevOrders.map((order) => (order.id === orderId ? { ...order, status: 'Đã hủy' } : order))
          );
 
          showToastMessage('Đơn hàng đã được hủy thành công', 'success');
@@ -499,6 +510,59 @@ export default function OrderPage() {
          console.error('Error canceling order:', error);
 
          let errorMessage = 'Không thể hủy đơn hàng';
+         if (error instanceof Error) {
+            errorMessage = error.message;
+         } else if (typeof error === 'object' && error && 'message' in error) {
+            errorMessage = String((error as { message: unknown }).message);
+         }
+
+         showToastMessage(errorMessage, 'error');
+      } finally {
+         setLoading(false);
+      }
+   };
+
+   // Within the OrderPage component, add this new function to handle completing the order
+   const handleCompleteOrder = async (orderId: number) => {
+      try {
+         setLoading(true);
+         const token = localStorage.getItem('token');
+
+         if (!token) {
+            showToastMessage('Phiên đăng nhập hết hạn, vui lòng đăng nhập lại', 'error');
+            router.push('/user/signin');
+            return;
+         }
+
+         // Call API to update the order status to "Hoàn thành"
+         const response = await fetch(
+            `http://68.183.226.198:3000/api/orders/${orderId}/status`,
+            {
+               method: 'PATCH',
+               headers: {
+                  Authorization: `Bearer ${token}`,
+                  'Content-Type': 'application/json',
+               },
+               body: JSON.stringify({
+                  status: 'Hoàn thành',
+               }),
+            }
+         );
+
+         if (!response.ok) {
+            throw new Error('Không thể cập nhật trạng thái đơn hàng');
+         }
+
+         // Update the state after successful API call
+         setOrders((prevOrders) =>
+            prevOrders.map((order) => (order.id === orderId ? { ...order, status: 'Hoàn thành' } : order))
+         );
+
+         showToastMessage('Đơn hàng đã được hoàn thành', 'success');
+      } catch (error: unknown) {
+         console.error('Error completing order:', error);
+
+         let errorMessage = 'Không thể cập nhật trạng thái đơn hàng';
          if (error instanceof Error) {
             errorMessage = error.message;
          } else if (typeof error === 'object' && error && 'message' in error) {
@@ -910,7 +974,7 @@ export default function OrderPage() {
                               <span className='text-sm text-gray-600'>
                                  Địa chỉ giao hàng: {order.address}
                               </span>
-                              <div className='flex  space-x-2'>
+                              <div className='flex space-x-2'>
                                  <Link
                                     href={`/user/order/${order.id}`}
                                     className='text-sm text-orange-600 border border-orange-300 bg-white hover:bg-orange-50 px-3 py-1 rounded'
@@ -928,16 +992,27 @@ export default function OrderPage() {
                                     </button>
                                  )}
 
-                                 {order.status === 'Đã giao hàng' && (
+                                 {/* Show Complete button for orders that have been in "Đang giao hàng" status for 2+ days */}
+                                 {isDeliveredForTwoDays(order) && (
+                                    <button
+                                       onClick={() => handleCompleteOrder(order.id)}
+                                       className='text-sm text-green-600 border border-green-300 bg-white hover:bg-green-50 px-3 py-1 rounded'
+                                    >
+                                       Hoàn thành
+                                    </button>
+                                 )}
+
+                                 {/* Show Review button for orders with status "Đã giao hàng" OR "Hoàn thành" */}
+                                 {(order.status === 'Đã giao hàng' || order.status === 'Hoàn thành') && (
                                     <Link
-                                       href={`/user/review?order=${order.id}`}
+                                       href={`/user/order/rating`}
                                        className='text-sm text-green-600 border border-green-300 bg-white hover:bg-green-50 px-3 py-1 rounded'
                                     >
                                        Đánh giá
                                     </Link>
                                  )}
 
-                                 {(order.status === 'Đã huỷ' || // Changed from 'Đã hủy' to 'Đã huỷ'
+                                 {(order.status === 'Đã hủy' ||
                                     order.status === 'Đã giao hàng') && (
                                        <button
                                           onClick={() => {
