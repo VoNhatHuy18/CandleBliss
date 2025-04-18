@@ -407,6 +407,13 @@ const ProductTable = ({
 
                <div className='flex items-center space-x-2'>
                   <button
+                     onClick={() => router.push('/seller/categories')}
+                     className='inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-amber-600 hover:bg-amber-700 shadow-sm'
+                  >
+                     <PlusIcon className='h-4 w-4 mr-1.5' />
+                     Thêm danh mục
+                  </button>
+                  <button
                      onClick={() => router.push('/seller/products/createproduct/step1')}
                      className='inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-amber-600 hover:bg-amber-700 shadow-sm'
                   >
@@ -569,8 +576,8 @@ const ProductTable = ({
                                              ? `${categoryNames[product.category_id]} `
                                              : `Đang tải... (ID: ${product.category_id})`
                                           : product.categories && product.categories.length > 0
-                                          ? `${product.categories[0].name} `
-                                          : 'Chưa có danh mục'}
+                                             ? `${product.categories[0].name} `
+                                             : 'Chưa có danh mục'}
                                     </p>
                                  </div>
                               </div>
@@ -594,19 +601,18 @@ const ProductTable = ({
 
                            <div className='hidden md:flex items-center'>
                               <span
-                                 className={`px-2.5 py-1 text-xs rounded-full ${
-                                    activeVariants > 0
-                                       ? 'bg-green-100 text-green-800'
-                                       : totalVariants === 0
+                                 className={`px-2.5 py-1 text-xs rounded-full ${activeVariants > 0
+                                    ? 'bg-green-100 text-green-800'
+                                    : totalVariants === 0
                                        ? 'bg-gray-100 text-gray-800'
                                        : 'bg-yellow-100 text-yellow-800'
-                                 }`}
+                                    }`}
                               >
                                  {activeVariants > 0
                                     ? 'Đang kinh doanh'
                                     : totalVariants === 0
-                                    ? 'Chưa có phiên bản'
-                                    : 'Chưa kinh doanh'}
+                                       ? 'Chưa có phiên bản'
+                                       : 'Chưa kinh doanh'}
                               </span>
                            </div>
 
@@ -641,19 +647,18 @@ const ProductTable = ({
                               </div>
                               <div className='text-right'>
                                  <span
-                                    className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                                       activeVariants > 0
-                                          ? 'bg-green-100 text-green-800'
-                                          : totalVariants === 0
+                                    className={`text-xs font-medium px-2 py-0.5 rounded-full ${activeVariants > 0
+                                       ? 'bg-green-100 text-green-800'
+                                       : totalVariants === 0
                                           ? 'bg-gray-100 text-gray-800'
                                           : 'bg-yellow-100 text-yellow-800'
-                                    }`}
+                                       }`}
                                  >
                                     {activeVariants > 0
                                        ? 'Đang kinh doanh'
                                        : totalVariants === 0
-                                       ? 'Chưa có phiên bản'
-                                       : 'Chưa kinh doanh'}
+                                          ? 'Chưa có phiên bản'
+                                          : 'Chưa kinh doanh'}
                                  </span>
                               </div>
                               <div className='col-span-2 text-xs text-gray-500 mt-1'>
@@ -661,10 +666,10 @@ const ProductTable = ({
                                  <span className='text-gray-700'>
                                     {product.category_id
                                        ? categoryNames[product.category_id] ||
-                                         `Đang tải... (ID: ${product.category_id})`
+                                       `Đang tải... (ID: ${product.category_id})`
                                        : product.categories && product.categories.length > 0
-                                       ? `${product.categories[0].name} (ID: ${product.categories[0].id})`
-                                       : 'Chưa có danh mục'}
+                                          ? `${product.categories[0].name} (ID: ${product.categories[0].id})`
+                                          : 'Chưa có danh mục'}
                                  </span>
                               </div>
                            </div>
@@ -758,11 +763,10 @@ const ProductTable = ({
                                                    </td>
                                                    <td className='px-6 py-4 whitespace-nowrap text-sm'>
                                                       <span
-                                                         className={`font-medium ${
-                                                            detail.quantities === 0
-                                                               ? 'text-red-500'
-                                                               : 'text-gray-700'
-                                                         }`}
+                                                         className={`font-medium ${detail.quantities === 0
+                                                            ? 'text-red-500'
+                                                            : 'text-gray-700'
+                                                            }`}
                                                       >
                                                          {detail.quantities}
                                                       </span>
@@ -776,7 +780,7 @@ const ProductTable = ({
                                                       {priceInfo.base_price ? (
                                                          <div>
                                                             {effectiveDiscountPrice &&
-                                                            effectiveDiscountPrice > 0 ? (
+                                                               effectiveDiscountPrice > 0 ? (
                                                                <>
                                                                   {/* Hiển thị giá sau khi giảm */}
                                                                   <div className='flex items-center'>
@@ -841,11 +845,10 @@ const ProductTable = ({
 
                                                    <td className='px-6 py-4 whitespace-nowrap'>
                                                       <span
-                                                         className={`px-2 py-1 text-xs rounded-full ${
-                                                            detail.isActive
-                                                               ? 'bg-green-100 text-green-800'
-                                                               : 'bg-gray-100 text-gray-800'
-                                                         }`}
+                                                         className={`px-2 py-1 text-xs rounded-full ${detail.isActive
+                                                            ? 'bg-green-100 text-green-800'
+                                                            : 'bg-gray-100 text-gray-800'
+                                                            }`}
                                                       >
                                                          {detail.isActive
                                                             ? 'Đang bán'
@@ -970,8 +973,8 @@ export default function ProductManagement() {
                      images: Array.isArray(product.images)
                         ? product.images
                         : product.images
-                        ? [product.images]
-                        : [],
+                           ? [product.images]
+                           : [],
                      details: [],
                      pricing: [],
                      categories: product.categories || [],
@@ -986,8 +989,8 @@ export default function ProductManagement() {
                   images: Array.isArray(detailData.images)
                      ? detailData.images
                      : detailData.images
-                     ? [detailData.images]
-                     : [],
+                        ? [detailData.images]
+                        : [],
                   details: detailData.details || [],
                   pricing: [], // We'll fetch pricing separately
                   categories: detailData.categories || [],
@@ -998,8 +1001,8 @@ export default function ProductManagement() {
                   images: Array.isArray(product.images)
                      ? product.images
                      : product.images
-                     ? [product.images]
-                     : [],
+                        ? [product.images]
+                        : [],
                   details: [],
                   pricing: [],
                   categories: product.categories || [],
@@ -1219,7 +1222,7 @@ export default function ProductManagement() {
                // Check if any product pricing has an active discount
                return product.pricing?.some((price) => {
                   // Check if there's a discount price
-                  const hasDiscount = price.discount_price > 0;
+                  const hasDiscount = price.discount_price && price.discount_price > 0;
 
                   // Check if the promotion is still active (not expired)
                   const isActive = isPromotionActive(price.end_date);
@@ -1251,7 +1254,7 @@ export default function ProductManagement() {
          'Hoạt động': products.filter((p) => p.details?.some((d) => d.isActive)).length,
          'Khuyến Mãi': products.filter((p) =>
             p.pricing?.some(
-               (price) => price.discount_price > 0 && isPromotionActive(price.end_date),
+               (price) => price.discount_price && price.discount_price > 0 && isPromotionActive(price.end_date),
             ),
          ).length,
          'Hết hàng': products.filter((p) => {
@@ -1283,20 +1286,18 @@ export default function ProductManagement() {
                            <button
                               key={tab.id}
                               onClick={() => setActiveTab(tab.id)}
-                              className={`py-2 px-4 border-b-2 font-medium text-sm flex items-center mr-6 ${
-                                 activeTab === tab.id
-                                    ? 'border-amber-500 text-amber-600'
-                                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                              }`}
+                              className={`py-2 px-4 border-b-2 font-medium text-sm flex items-center mr-6 ${activeTab === tab.id
+                                 ? 'border-amber-500 text-amber-600'
+                                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                                 }`}
                            >
                               {tab.label}
                               {!loading && (
                                  <span
-                                    className={`ml-1.5 px-1.5 py-0.5 text-xs rounded-full ${
-                                       activeTab === tab.id
-                                          ? 'bg-amber-100 text-amber-800'
-                                          : 'bg-gray-100 text-gray-600'
-                                    }`}
+                                    className={`ml-1.5 px-1.5 py-0.5 text-xs rounded-full ${activeTab === tab.id
+                                       ? 'bg-amber-100 text-amber-800'
+                                       : 'bg-gray-100 text-gray-600'
+                                       }`}
                                  >
                                     {tabCounts[tab.id]}
                                  </span>

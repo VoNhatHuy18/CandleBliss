@@ -540,7 +540,6 @@ const InventoryFilters = ({
         { id: 'Hoạt động', label: 'Đang bán' },
         { id: 'Sắp hết', label: 'Sắp hết hàng' },
         { id: 'Hết hàng', label: 'Hết hàng' },
-        { id: 'Khuyến mãi', label: 'Khuyến mãi' }
     ];
 
     return (

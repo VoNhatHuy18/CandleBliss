@@ -524,6 +524,11 @@ export default function OrderPage() {
 
    // Within the OrderPage component, add this new function to handle completing the order
    const handleCompleteOrder = async (orderId: number) => {
+      // Show warning confirmation dialog
+      if (!confirm('Khi bạn chọn Hoàn thành thì sẽ không thể đổi trả lại hàng, hãy quay clip và kiểm tra hàng trước khi chọn hoàn thành đơn. Bạn có chắc chắn muốn hoàn thành đơn hàng này?')) {
+         return; // If user cancels, exit the function
+      }
+
       try {
          setLoading(true);
          const token = localStorage.getItem('token');
@@ -561,6 +566,63 @@ export default function OrderPage() {
          showToastMessage('Đơn hàng đã được hoàn thành', 'success');
       } catch (error: unknown) {
          console.error('Error completing order:', error);
+
+         let errorMessage = 'Không thể cập nhật trạng thái đơn hàng';
+         if (error instanceof Error) {
+            errorMessage = error.message;
+         } else if (typeof error === 'object' && error && 'message' in error) {
+            errorMessage = String((error as { message: unknown }).message);
+         }
+
+         showToastMessage(errorMessage, 'error');
+      } finally {
+         setLoading(false);
+      }
+   };
+
+   // Add the handleReturnOrder function
+   const handleReturnOrder = async (orderId: number) => {
+      if (!confirm('Bạn có chắc chắn muốn đổi/trả đơn hàng này không?')) {
+         return;
+      }
+
+      try {
+         setLoading(true);
+         const token = localStorage.getItem('token');
+
+         if (!token) {
+            showToastMessage('Phiên đăng nhập hết hạn, vui lòng đăng nhập lại', 'error');
+            router.push('/user/signin');
+            return;
+         }
+
+         // Call API to update the order status to "Đổi trả hàng"
+         const response = await fetch(
+            `http://68.183.226.198:3000/api/orders/${orderId}/status`,
+            {
+               method: 'PATCH',
+               headers: {
+                  Authorization: `Bearer ${token}`,
+                  'Content-Type': 'application/json',
+               },
+               body: JSON.stringify({
+                  status: 'Đổi trả hàng',
+               }),
+            }
+         );
+
+         if (!response.ok) {
+            throw new Error('Không thể cập nhật trạng thái đơn hàng');
+         }
+
+         // Update the state after successful API call
+         setOrders((prevOrders) =>
+            prevOrders.map((order) => (order.id === orderId ? { ...order, status: 'Đổi trả hàng' } : order))
+         );
+
+         showToastMessage('Yêu cầu đổi/trả hàng đã được gửi', 'success');
+      } catch (error: unknown) {
+         console.error('Error requesting return/exchange:', error);
 
          let errorMessage = 'Không thể cập nhật trạng thái đơn hàng';
          if (error instanceof Error) {
@@ -992,14 +1054,22 @@ export default function OrderPage() {
                                     </button>
                                  )}
 
-                                 {/* Show Complete button for orders that have been in "Đang giao hàng" status for 2+ days */}
+                                 {/* Show Complete and Return/Exchange buttons for orders that have been in "Đang giao hàng" status for 2+ days */}
                                  {isDeliveredForTwoDays(order) && (
-                                    <button
-                                       onClick={() => handleCompleteOrder(order.id)}
-                                       className='text-sm text-green-600 border border-green-300 bg-white hover:bg-green-50 px-3 py-1 rounded'
-                                    >
-                                       Hoàn thành
-                                    </button>
+                                    <div className="flex space-x-2">
+                                       <button
+                                          onClick={() => handleCompleteOrder(order.id)}
+                                          className='text-sm text-green-600 border border-green-300 bg-white hover:bg-green-50 px-3 py-1 rounded'
+                                       >
+                                          Hoàn thành
+                                       </button>
+                                       <button
+                                          onClick={() => handleReturnOrder(order.id)}
+                                          className='text-sm text-purple-600 border border-purple-300 bg-white hover:bg-purple-50 px-3 py-1 rounded'
+                                       >
+                                          Đổi/Trả
+                                       </button>
+                                    </div>
                                  )}
 
                                  {/* Show Review button for orders with status "Đã giao hàng" OR "Hoàn thành" */}
@@ -1010,6 +1080,16 @@ export default function OrderPage() {
                                     >
                                        Đánh giá
                                     </Link>
+                                 )}
+
+                                 {/* Show Return button for orders with status "Đã giao hàng" */}
+                                 {order.status === 'Đã giao hàng' && (
+                                    <button
+                                       onClick={() => handleReturnOrder(order.id)}
+                                       className='text-sm text-yellow-600 border border-yellow-300 bg-white hover:bg-yellow-50 px-3 py-1 rounded'
+                                    >
+                                       Đổi trả
+                                    </button>
                                  )}
 
                                  {(order.status === 'Đã hủy' ||

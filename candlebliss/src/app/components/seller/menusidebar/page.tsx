@@ -91,7 +91,7 @@ export default function MenuSideBar() {
                            href='/products/gift-sets'
                            className='flex items-center p-2 text-gray-600 hover:bg-gray-100 rounded'
                         >
-                           <span className='text-sm'>Tạo set quà</span>
+                           <span className='text-sm'>Set quà</span>
                         </Link>
                         <Link
                            href='/seller/vouchers'
@@ -99,12 +99,7 @@ export default function MenuSideBar() {
                         >
                            <span className='text-sm'>Khuyến Mãi</span>
                         </Link>
-                        <Link
-                           href='/products/price-list'
-                           className='flex items-center p-2 text-gray-600 hover:bg-gray-100 rounded'
-                        >
-                           <span className='text-sm'>Bảng giá</span>
-                        </Link>
+
                      </div>
                   )}
                </div>
