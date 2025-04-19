@@ -108,10 +108,12 @@ export default function MenuSideBar() {
                      href='/seller/orders'
                      className='flex items-center p-2 text-gray-600 hover:bg-gray-100 rounded'
                   >
-                     <ShoppingBag size={18} className='mr-2' />
+                     <Package size={18} className='mr-2' />
                      <span>Quản Lý Đơn Hàng</span>
                   </Link>
                </div>
+
+
 
                <div className='px-4 py-2'>
                   <Link
@@ -138,6 +140,15 @@ export default function MenuSideBar() {
                   >
                      <CreditCard size={18} className='mr-2' />
                      <span>Quản Lý Tài Chính</span>
+                  </Link>
+               </div>
+               <div className='px-4 py-2'>
+                  <Link
+                     href='/seller/reviews'
+                     className='flex items-center p-2 text-gray-600 hover:bg-gray-100 rounded'
+                  >
+                     <ShoppingBag size={18} className='mr-2' />
+                     <span>Xem đánh giá sản phẩm</span>
                   </Link>
                </div>
 
