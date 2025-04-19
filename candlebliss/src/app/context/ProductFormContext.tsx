@@ -27,6 +27,7 @@ interface ProductFormData {
    selectedCategory: Category | null;
    categoryId?: number; // Add this field to match what's used in page.tsx
    images: string[];
+   videoUrl?: string;
    basePrice?: string;
    discountPrice?: string;
    startDate?: string;

@@ -41,7 +41,7 @@ export default function Step1() {
    // Add state for images
    const [productImages, setProductImages] = useState<string[]>(formData.images || []);
    const [imageError, setImageError] = useState<string | null>(null);
-
+   const [videoUrl, setVideoUrl] = useState(formData.videoUrl || 'https://www.youtube.com/')
    const [errors, setErrors] = useState({
       name: '',
       category: '',
@@ -370,7 +370,10 @@ export default function Step1() {
             productFormData.append('category_id', categoryId.toString());
          }
 
-
+         if (videoUrl && videoUrl.trim() !== '') { 
+            console.log('Thêm video URL:', videoUrl);
+            productFormData.append('video', videoUrl);
+         }
 
          // Xử lý và thêm các hình ảnh
          let hasImages = false;
@@ -443,6 +446,7 @@ export default function Step1() {
             description,
             selectedCategory,
             images: safeProductImages,
+            videoUrl,
             productId: productId, // Sử dụng productId từ response API
          });
 
@@ -756,6 +760,22 @@ export default function Step1() {
                            {imageError && <p className='text-red-500 text-xs mt-1'>{imageError}</p>}
                         </div>
 
+                        {/* Video URL */}
+                        <div hidden={true}>
+                           <label className='block text-sm font-medium text-gray-700 mb-1'>
+                              Video sản phẩm (tùy chọn)
+                           </label>
+                           <input
+                              type='text'
+                              value={videoUrl}
+                              onChange={(e) => setVideoUrl(e.target.value)}
+                              placeholder='Nhập URL video (YouTube, TikTok, ...)'
+                              className='w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500'
+                           />
+                           <p className='text-xs text-gray-500 mt-1'>
+                              Video sẽ giúp khách hàng hiểu rõ hơn về sản phẩm của bạn
+                           </p>
+                        </div>
 
                         {/* Product Description */}
                         <div>
