@@ -107,19 +107,6 @@ export default function Step2() {
       return '';
    };
 
-   // Function to add a new variant row
-   const addVariant = () => {
-      if (!newVariantType || !newVariantValue) {
-         setErrors({
-            ...errors,
-            newVariant: 'Vui lòng nhập đầy đủ thông tin phân loại và giá trị',
-         });
-         return;
-      }
-      setErrors({});
-      setVariants([...variants, { type: '', values: '', isExpanded: false, images: [] }]);
-   };
-
    // Function to remove a variant row
    const removeVariant = (indexToRemove: number) => {
       // Don't remove if it's the last variant
@@ -510,28 +497,6 @@ export default function Step2() {
                            </div>
                         </div>
 
-                        <div className='flex items-center text-amber-600 mb-4'>
-                           <button
-                              className='flex items-center text-sm font-medium'
-                              onClick={addVariant}
-                           >
-                              <svg
-                                 xmlns='http://www.w3.org/2000/svg'
-                                 className='h-5 w-5 mr-1'
-                                 fill='none'
-                                 viewBox='0 0 24 24'
-                                 stroke='currentColor'
-                              >
-                                 <path
-                                    strokeLinecap='round'
-                                    strokeLinejoin='round'
-                                    strokeWidth={2}
-                                    d='M12 4v16m8-8H4'
-                                 />
-                              </svg>
-                              Thêm phân loại sản phẩm khác
-                           </button>
-                        </div>
 
                         {/* Chi tiết phiên bản */}
                         <div className='mt-8 mb-4'>
@@ -572,9 +537,8 @@ export default function Step2() {
                                        </button>
                                        <svg
                                           xmlns='http://www.w3.org/2000/svg'
-                                          className={`h-5 w-5 transform cursor-pointer ${
-                                             variant.isExpanded ? 'rotate-180' : ''
-                                          }`}
+                                          className={`h-5 w-5 transform cursor-pointer ${variant.isExpanded ? 'rotate-180' : ''
+                                             }`}
                                           fill='none'
                                           viewBox='0 0 24 24'
                                           stroke='currentColor'
@@ -610,11 +574,10 @@ export default function Step2() {
                                                       )
                                                    }
                                                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500 
-                                                   ${
-                                                      errors[`type_${index}`]
+                                                   ${errors[`type_${index}`]
                                                          ? 'border-red-500'
                                                          : 'border-gray-300'
-                                                   }`}
+                                                      }`}
                                                    placeholder='Nhập phân loại'
                                                 />
                                                 {errors[`type_${index}`] && (
@@ -638,11 +601,10 @@ export default function Step2() {
                                                       )
                                                    }
                                                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500 
-                                                   ${
-                                                      errors[`values_${index}`] // Changed from value_${index} to values_${index}
+                                                   ${errors[`values_${index}`] // Changed from value_${index} to values_${index}
                                                          ? 'border-red-500'
                                                          : 'border-gray-300'
-                                                   }`}
+                                                      }`}
                                                    placeholder='Nhập giá trị'
                                                 />
                                                 {errors[`values_${index}`] && ( // Changed from value_${index} to values_${index}
@@ -656,7 +618,7 @@ export default function Step2() {
                                           <div className='flex justify-between mb-4'>
                                              <div className='w-1/2 pr-2'>
                                                 <label className='block text-sm font-medium mb-1'>
-                                                   Size:
+                                                   Kích thước:
                                                 </label>
                                                 <input
                                                    type='text'
@@ -669,16 +631,15 @@ export default function Step2() {
                                                       )
                                                    }
                                                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500 
-                                                   ${
-                                                      errors[`size_${index}`]
+                                                   ${errors[`size_${index}`]
                                                          ? 'border-red-500'
                                                          : 'border-gray-300'
-                                                   }`}
+                                                      }`}
                                                    placeholder='Nhập size hoặc màu sắc'
                                                 />
                                                 {errors[`size_${index}`] && (
                                                    <p className='text-red-500 text-xs mt-1'>
-                                                      {errors[`size_${index}`]}
+                                                      {errors[`Kích thước không được để trống`]}
                                                    </p>
                                                 )}
                                              </div>
@@ -698,15 +659,14 @@ export default function Step2() {
                                                    }
                                                    placeholder='0'
                                                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500 
-                                                   ${
-                                                      errors[`quantity_${index}`]
+                                                   ${errors[`quantity_${index}`]
                                                          ? 'border-red-500'
                                                          : 'border-gray-300'
-                                                   }`}
+                                                      }`}
                                                 />
                                                 {errors[`quantity_${index}`] && (
                                                    <p className='text-red-500 text-xs mt-1'>
-                                                      {errors[`quantity_${index}`]}
+                                                      {errors[`Số lượng không được để trống`]}
                                                    </p>
                                                 )}
                                              </div>
@@ -725,9 +685,8 @@ export default function Step2() {
                                                       >
                                                          <Image
                                                             src={img}
-                                                            alt={`${variant.type} image ${
-                                                               imgIndex + 1
-                                                            }`}
+                                                            alt={`${variant.type} image ${imgIndex + 1
+                                                               }`}
                                                             width={64}
                                                             height={64}
                                                             className='object-cover'

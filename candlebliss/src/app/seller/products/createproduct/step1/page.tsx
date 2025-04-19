@@ -41,7 +41,7 @@ export default function Step1() {
    // Add state for images
    const [productImages, setProductImages] = useState<string[]>(formData.images || []);
    const [imageError, setImageError] = useState<string | null>(null);
-   const [videoUrl, setVideoUrl] = useState(formData.videoUrl || '');
+
    const [errors, setErrors] = useState({
       name: '',
       category: '',
@@ -370,10 +370,7 @@ export default function Step1() {
             productFormData.append('category_id', categoryId.toString());
          }
 
-         if (videoUrl) {
-            console.log('Thêm video URL:', videoUrl);
-            productFormData.append('video', videoUrl);
-         }
+
 
          // Xử lý và thêm các hình ảnh
          let hasImages = false;
@@ -446,7 +443,6 @@ export default function Step1() {
             description,
             selectedCategory,
             images: safeProductImages,
-            videoUrl,
             productId: productId, // Sử dụng productId từ response API
          });
 
@@ -588,9 +584,8 @@ export default function Step1() {
                                  setErrors((prev) => ({ ...prev, name: '' }));
                               }}
                               placeholder='Tên sản phẩm '
-                              className={`w-full px-3 py-2 border ${
-                                 errors.name ? 'border-red-500' : 'border-gray-300'
-                              } rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500`}
+                              className={`w-full px-3 py-2 border ${errors.name ? 'border-red-500' : 'border-gray-300'
+                                 } rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500`}
                            />
                            {errors.name && (
                               <p className='text-red-500 text-xs mt-1'>{errors.name}</p>
@@ -606,9 +601,8 @@ export default function Step1() {
                               <button
                                  type='button'
                                  onClick={handleOpenCategoryDropdown}
-                                 className={`w-full px-3 py-2 text-left border ${
-                                    errors.category ? 'border-red-500' : 'border-gray-300'
-                                 } rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white flex justify-between items-center`}
+                                 className={`w-full px-3 py-2 text-left border ${errors.category ? 'border-red-500' : 'border-gray-300'
+                                    } rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 bg-white flex justify-between items-center`}
                               >
                                  <span
                                     className={selectedCategory ? 'text-gray-900' : 'text-gray-400'}
@@ -644,11 +638,10 @@ export default function Step1() {
                                                 key={category.id}
                                                 type='button'
                                                 onClick={() => handleCategorySelect(category)}
-                                                className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-100 ${
-                                                   selectedCategory?.id === category.id
-                                                      ? 'bg-amber-50 text-amber-700'
-                                                      : 'text-gray-700'
-                                                }`}
+                                                className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-100 ${selectedCategory?.id === category.id
+                                                   ? 'bg-amber-50 text-amber-700'
+                                                   : 'text-gray-700'
+                                                   }`}
                                                 disabled={isCategoryDetailLoading}
                                              >
                                                 {isCategoryDetailLoading &&
@@ -676,29 +669,27 @@ export default function Step1() {
                               <span className='text-red-500'>*</span> Hình ảnh chi tiết sản phẩm:
                            </label>
                            <div
-                              className={`border border-dashed ${
-                                 errors.images ? 'border-red-500' : 'border-gray-300'
-                              } rounded-md p-6`}
+                              className={`border border-dashed ${errors.images ? 'border-red-500' : 'border-gray-300'
+                                 } rounded-md p-6`}
                            >
                               {/* Image Preview Grid */}
                               {productImages.length > 0 && (
-                                 <div className='grid grid-cols-4 gap-3 mb-4'>
+                                 <div className='grid grid-cols-8 gap-2 mb-4'>
                                     {productImages.map((image, index) => (
                                        <div key={index} className='relative group'>
                                           {/* Use a fixed aspect ratio container with smaller dimensions */}
-                                          <div className='aspect-square w-full max-w-[120px] h-[120px] relative rounded-md bg-gray-100 overflow-hidden'>
+                                          <div className='aspect-square w-full max-w-[150px] h-[150px] relative rounded-md bg-gray-100 overflow-hidden'>
                                              <Image
                                                 src={image}
                                                 alt={`Product image ${index + 1}`}
                                                 fill={true}
-                                                style={{ objectFit: 'cover' }}
                                                 className='transition-all duration-200'
                                              />
                                           </div>
                                           <button
                                              type='button'
                                              onClick={() => removeImage(index)}
-                                             className='absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 shadow-md hover:bg-red-600'
+                                             className='absolute -top-2  bg-red-500 text-white rounded-full p-1 shadow-md hover:bg-red-600'
                                           >
                                              <X size={16} />
                                           </button>
@@ -765,22 +756,6 @@ export default function Step1() {
                            {imageError && <p className='text-red-500 text-xs mt-1'>{imageError}</p>}
                         </div>
 
-                        {/* Video URL */}
-                        <div>
-                           <label className='block text-sm font-medium text-gray-700 mb-1'>
-                              Video sản phẩm (tùy chọn)
-                           </label>
-                           <input
-                              type='text'
-                              value={videoUrl}
-                              onChange={(e) => setVideoUrl(e.target.value)}
-                              placeholder='Nhập URL video (YouTube, TikTok, ...)'
-                              className='w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500'
-                           />
-                           <p className='text-xs text-gray-500 mt-1'>
-                              Video sẽ giúp khách hàng hiểu rõ hơn về sản phẩm của bạn
-                           </p>
-                        </div>
 
                         {/* Product Description */}
                         <div>
@@ -795,9 +770,8 @@ export default function Step1() {
                                  setErrors((prev) => ({ ...prev, description: '' }));
                               }}
                               placeholder='Mô tả chi tiết về sản phẩm, tính năng, đặc điểm nổi bật...'
-                              className={`w-full px-3 py-2 border ${
-                                 errors.description ? 'border-red-500' : 'border-gray-300'
-                              } rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500`}
+                              className={`w-full px-3 py-2 border ${errors.description ? 'border-red-500' : 'border-gray-300'
+                                 } rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500`}
                            />
                            {errors.description && (
                               <p className='text-red-500 text-xs mt-1'>{errors.description}</p>

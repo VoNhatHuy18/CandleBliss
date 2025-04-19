@@ -29,7 +29,6 @@ export default function Step3() {
    const [endDate, setEndDate] = useState('');
    const [variants, setVariants] = useState<Variant[]>(formData.variants || []);
    const [isActive] = useState(true);
-   const [videoUrl, setVideoUrl] = useState(formData.videoUrl || '');
    const [promotion] = useState('');
    const [isLoading, setIsLoading] = useState(false);
    const [calculatedPrice, setCalculatedPrice] = useState('');
@@ -400,20 +399,6 @@ export default function Step3() {
                               </div>
                            )}
                         </div>
-                     </div>
-
-                     {/* Video URL field */}
-                     <div className='mb-4 flex'>
-                        <label className='block text-sm font-medium mb-1 w-60'>
-                           Video sản phẩm:
-                        </label>
-                        <input
-                           type='text'
-                           className='w-full p-2 border rounded-md'
-                           placeholder='Nhập URL video sản phẩm (YouTube, Vimeo...)'
-                           value={videoUrl}
-                           onChange={(e) => setVideoUrl(e.target.value)}
-                        />
                      </div>
 
                      {/* Product description field */}
