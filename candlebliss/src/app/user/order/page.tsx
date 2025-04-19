@@ -398,7 +398,7 @@ export default function OrderPage() {
       },
       [fetchedDetails, fetchedProducts, statusFilter],
    );
-
+   
    // Helper function to process product images in different formats
    const processProductImages = (images: Array<{ id: string; path: string; public_id: string }> | { id: string; path: string; public_id: string } | null | undefined) => {
       if (!images) return [];

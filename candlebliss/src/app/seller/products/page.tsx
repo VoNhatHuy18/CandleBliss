@@ -185,6 +185,24 @@ const ProductTable = ({
    const [categoryNames, setCategoryNames] = useState<Record<number, string>>({});
    const router = useRouter();
 
+   // Add new state to track which detail images are being viewed
+   const [detailImagesModal, setDetailImagesModal] = useState<{
+      detailId: number;
+      images: Image[];
+      currentImageIndex: number;
+   } | null>(null);
+
+   // Add this function to show detail images
+   const showDetailImages = (detailId: number, images: Image[]) => {
+      if (images && images.length > 0) {
+         setDetailImagesModal({
+            detailId,
+            images,
+            currentImageIndex: 0
+         });
+      }
+   };
+
    // Filter products based on search term
    const filteredProducts = useMemo(() => {
       if (!searchTerm.trim()) return products;
@@ -744,9 +762,36 @@ const ProductTable = ({
                                                    {/* Các cột khác giữ nguyên */}
                                                    <td className='px-6 py-4 whitespace-nowrap'>
                                                       <div className='flex items-center'>
-                                                         <div className='h-10 w-10 flex-shrink-0 mr-3 border rounded-full overflow-hidden'>
-                                                            {/* Nội dung cũ */}
-                                                         </div>
+                                                         <button
+                                                            onClick={() => detail.images?.length > 0 && showDetailImages(detail.id, detail.images)}
+                                                            className='h-10 w-10 flex-shrink-0 mr-3 border rounded-md overflow-hidden hover:opacity-80 transition-opacity'
+                                                            disabled={!detail.images || detail.images.length === 0}
+                                                         >
+                                                            {detail.images && detail.images.length > 0 ? (
+                                                               <div className='relative h-full w-full'>
+                                                                  <Image
+                                                                     src={detail.images[0].path}
+                                                                     alt={`${product.name} - ${detail.size || ''} ${detail.type || ''}`}
+                                                                     width={40}
+                                                                     height={40}
+                                                                     className='object-cover h-full w-full'
+                                                                     onError={(e) => {
+                                                                        const target = e.target as HTMLImageElement;
+                                                                        target.src = '/placeholder.png';
+                                                                     }}
+                                                                  />
+                                                                  {detail.images.length > 1 && (
+                                                                     <div className='absolute bottom-0 right-0 bg-black bg-opacity-50 text-white text-xs rounded-tl-sm px-1'>
+                                                                        +{detail.images.length - 1}
+                                                                     </div>
+                                                                  )}
+                                                               </div>
+                                                            ) : (
+                                                               <div className='flex items-center justify-center h-full w-full text-gray-400 bg-gray-100'>
+                                                                  <PlusIcon className='h-5 w-5' />
+                                                               </div>
+                                                            )}
+                                                         </button>
                                                          <span className='text-gray-900 text-sm'>
                                                             #{detail.id}
                                                          </span>
@@ -874,6 +919,88 @@ const ProductTable = ({
                      </div>
                   );
                })}
+            </div>
+         )}
+         {/* Modal for viewing product detail images */}
+         {detailImagesModal && (
+            <div className='fixed inset-0 bg-black/70 flex items-center justify-center z-50'>
+               <div className='bg-white rounded-lg p-4 max-w-3xl mx-4 w-full shadow-xl'>
+                  <div className='flex justify-between items-center mb-4'>
+                     <h3 className='text-lg font-medium text-gray-900'>
+                        Hình ảnh phiên bản #{detailImagesModal.detailId}
+                     </h3>
+                     <button
+                        onClick={() => setDetailImagesModal(null)}
+                        className='text-gray-500 hover:text-gray-700'
+                     >
+                        <svg className='h-6 w-6' fill='none' viewBox='0 0 24 24' stroke='currentColor'>
+                           <path
+                              strokeLinecap='round'
+                              strokeLinejoin='round'
+                              strokeWidth={2}
+                              d='M6 18L18 6M6 6l12 12'
+                           />
+                        </svg>
+                     </button>
+                  </div>
+
+                  <div className='flex flex-col items-center'>
+                     {/* Main image */}
+                     <div className='relative w-full h-64 md:h-96 mb-4 bg-gray-100 rounded-lg overflow-hidden'>
+                        <Image
+                           src={detailImagesModal.images[detailImagesModal.currentImageIndex].path}
+                           alt={`Product detail image`}
+                           fill
+                           className='object-contain'
+                           onError={(e) => {
+                              const target = e.target as HTMLImageElement;
+                              target.src = '/placeholder.png';
+                           }}
+                        />
+                     </div>
+
+                     {/* Thumbnails */}
+                     {detailImagesModal.images.length > 1 && (
+                        <div className='flex space-x-2 overflow-x-auto max-w-full py-2'>
+                           {detailImagesModal.images.map((image, index) => (
+                              <button
+                                 key={image.id}
+                                 onClick={() => setDetailImagesModal({
+                                    ...detailImagesModal,
+                                    currentImageIndex: index
+                                 })}
+                                 className={`h-16 w-16 flex-shrink-0 rounded border-2 ${detailImagesModal.currentImageIndex === index
+                                       ? 'border-amber-600'
+                                       : 'border-transparent hover:border-gray-300'
+                                    }`}
+                              >
+                                 <div className='relative h-full w-full'>
+                                    <Image
+                                       src={image.path}
+                                       alt={`Thumbnail ${index + 1}`}
+                                       fill
+                                       className='object-cover rounded'
+                                       onError={(e) => {
+                                          const target = e.target as HTMLImageElement;
+                                          target.src = '/placeholder.png';
+                                       }}
+                                    />
+                                 </div>
+                              </button>
+                           ))}
+                        </div>
+                     )}
+                  </div>
+
+                  <div className='mt-4 flex justify-end'>
+                     <button
+                        onClick={() => setDetailImagesModal(null)}
+                        className='px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300'
+                     >
+                        Đóng
+                     </button>
+                  </div>
+               </div>
             </div>
          )}
       </div>
