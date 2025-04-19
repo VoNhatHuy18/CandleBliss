@@ -7,6 +7,8 @@ import { useRouter, useSearchParams } from 'next/navigation'; // Add useSearchPa
 import Header from '@/app/components/user/nav/page';
 import Footer from '@/app/components/user/footer/page';
 import Toast from '@/app/components/ui/toast/Toast';
+import ReturnRequestModal from '@/app/components/user/returnrequest/ReturnRequest';
+import { retryOrderPayment } from '@/app/utils/orderUtils';
 
 // Interfaces
 interface OrderItem {
@@ -14,6 +16,7 @@ interface OrderItem {
    status: string;
    unit_price: string;
    product_detail_id: number;
+   product_id: string; // Make sure this exists in the interface
    quantity: number;
    totalPrice: string;
    product?: {
@@ -133,10 +136,12 @@ const PaymentCountdown = ({
    createdAt,
    orderId,
    onTimeout,
+   status,
 }: {
    createdAt: string;
    orderId: number;
    onTimeout: (orderId: number) => void;
+   status: string;
 }) => {
    const [timeLeft, setTimeLeft] = useState<number>(0);
    const [timedOut, setTimedOut] = useState<boolean>(false);
@@ -146,29 +151,29 @@ const PaymentCountdown = ({
          const createdTime = new Date(createdAt).getTime();
          const now = new Date().getTime();
          const timePassed = now - createdTime;
-         const timeoutMs = 15 * 60 * 1000;
+         const timeoutMs = 15 * 60 * 1000; // 15 minutes
 
          const remaining = timeoutMs - timePassed;
-         return Math.max(0, Math.floor(remaining / 1000)); // Trả về số giây còn lại
+         return Math.max(0, Math.floor(remaining / 1000)); // Return seconds left
       };
 
-      // Tính toán thời gian ban đầu
+      // Calculate initial time left
       const initialTimeLeft = calculateTimeLeft();
       setTimeLeft(initialTimeLeft);
 
-      // Nếu đã hết thời gian, gọi callback onTimeout ngay
+      // If time already expired, call onTimeout immediately
       if (initialTimeLeft <= 0 && !timedOut) {
          setTimedOut(true);
          onTimeout(orderId);
          return;
       }
 
-      // Thiết lập interval để cập nhật thời gian đếm ngược mỗi giây
+      // Set up interval to update countdown every second
       const timer = setInterval(() => {
          const remaining = calculateTimeLeft();
          setTimeLeft(remaining);
 
-         // Khi hết thời gian, gọi callback để update trạng thái đơn hàng
+         // When time runs out, call callback to update order status
          if (remaining <= 0 && !timedOut) {
             clearInterval(timer);
             setTimedOut(true);
@@ -179,12 +184,12 @@ const PaymentCountdown = ({
       return () => clearInterval(timer);
    }, [createdAt, orderId, onTimeout, timedOut]);
 
-   // Đã hết thời gian
+   // Time expired
    if (timeLeft <= 0) {
       return <span className='text-red-600 text-sm font-medium'>Hết thời gian thanh toán</span>;
    }
 
-   // Hiển thị thời gian còn lại
+   // Display time remaining
    const minutes = Math.floor(timeLeft / 60);
    const seconds = timeLeft % 60;
 
@@ -192,7 +197,8 @@ const PaymentCountdown = ({
       <span
          className={`text-sm font-medium ${timeLeft < 300 ? 'text-red-600' : 'text-orange-600'}`}
       >
-         Thanh toán còn: {minutes}:{seconds < 10 ? `0${seconds}` : seconds}
+         {status === 'Đang chờ thanh toán' ? 'Thanh toán lại còn: ' : 'Thanh toán còn: '}
+         {minutes}:{seconds < 10 ? `0${seconds}` : seconds}
       </span>
    );
 };
@@ -226,7 +232,14 @@ export default function OrderPage() {
    const [fetchedDetails, setFetchedDetails] = useState<Record<number, boolean>>({});
 
    // Add a new state to track which products have been fetched
-   const [fetchedProducts, setFetchedProducts] = useState<Record<number, boolean>>({});
+   const [fetchedProducts, setFetchedProducts] = useState<Record<string, boolean>>({});
+
+   const [returnModalOpen, setReturnModalOpen] = useState(false);
+   const [returnType, setReturnType] = useState<'exchange' | 'refund'>('exchange');
+   const [selectedOrderId, setSelectedOrderId] = useState<number | null>(null);
+
+   // Add this state to track which order is currently processing payment
+   const [processingPaymentOrderId, setProcessingPaymentOrderId] = useState<number | null>(null);
 
    // Wrap with useCallback
    const showToastMessage = useCallback((message: string, type: 'success' | 'error' | 'info') => {
@@ -297,9 +310,52 @@ export default function OrderPage() {
 
          for (const order of updatedOrders) {
             for (const item of order.item) {
-               // 1. Fetch product detail information
+               console.log(`Processing item with product_id: ${item.product_id}, product_detail_id: ${item.product_detail_id}`);
+
+               // First try to fetch product directly using product_id
+               if (item.product_id && !fetchedProducts[item.product_id]) {
+                  try {
+                     console.log(`Fetching product with ID: ${item.product_id}`);
+                     const productResponse = await fetch(
+                        `http://68.183.226.198:3000/api/products/${item.product_id}`,
+                        {
+                           headers: {
+                              Authorization: `Bearer ${token}`,
+                           },
+                        },
+                     );
+
+                     if (productResponse.ok) {
+                        const productData = await productResponse.json();
+                        console.log(`Product data fetched:`, productData);
+
+                        // Set the product information, handle both array and object formats for images
+                        item.product = {
+                           id: productData.id,
+                           name: productData.name || "Sản phẩm không tên",
+                           images: processProductImages(productData.images),
+                        };
+
+                        // Mark product as fetched
+                        setFetchedProducts((prev) => ({
+                           ...prev,
+                           [item.product_id]: true,
+                        }));
+
+                        hasUpdates = true;
+                        console.log(`Updated item with product data:`, item.product);
+                     } else {
+                        console.error(`Error fetching product ${item.product_id}, status: ${productResponse.status}`);
+                     }
+                  } catch (productError) {
+                     console.error(`Failed to fetch product for product_id ${item.product_id}:`, productError);
+                  }
+               }
+
+               // Then fetch product detail info if needed
                if (!fetchedDetails[item.product_detail_id] && item.product_detail_id) {
                   try {
+                     console.log(`Fetching product detail with ID: ${item.product_detail_id}`);
                      const detailResponse = await fetch(
                         `http://68.183.226.198:3000/api/product-details/${item.product_detail_id}`,
                         {
@@ -311,8 +367,8 @@ export default function OrderPage() {
 
                      if (detailResponse.ok) {
                         const detailData = await detailResponse.json();
+                        console.log(`Product detail data fetched:`, detailData);
                         item.productDetailData = detailData;
-                        hasUpdates = true;
 
                         // Mark detail as fetched
                         setFetchedDetails((prev) => ({
@@ -320,85 +376,17 @@ export default function OrderPage() {
                            [item.product_detail_id]: true,
                         }));
 
-                        // 2. If we found a product_id in the detail, fetch the product info
-                        if (detailData.product_id && !fetchedProducts[detailData.product_id]) {
-                           try {
-                              const productResponse = await fetch(
-                                 `http://68.183.226.198:3000/api/products/${detailData.product_id}`,
-                                 {
-                                    headers: {
-                                       Authorization: `Bearer ${token}`,
-                                    },
-                                 },
-                              );
-
-                              if (productResponse.ok) {
-                                 const productData = await productResponse.json();
-
-                                 // Update the item with product information
-                                 if (!item.product) {
-                                    item.product = {
-                                       id: productData.id,
-                                       name: productData.name,
-                                       images: productData.images || [],
-                                    };
-                                 }
-
-                                 // Find matching detail in the product's details array
-                                 const matchingDetail = productData.details?.find(
-                                    (detail: { id: number }) =>
-                                       detail.id === item.product_detail_id,
-                                 );
-
-                                 // If we found a matching detail with images, use that for the product_detail
-                                 if (
-                                    matchingDetail &&
-                                    matchingDetail.images &&
-                                    matchingDetail.images.length > 0
-                                 ) {
-                                    if (!item.product_detail) {
-                                       item.product_detail = {
-                                          id: matchingDetail.id,
-                                          size: matchingDetail.size,
-                                          type: matchingDetail.type,
-                                          values: matchingDetail.values,
-                                          images: matchingDetail.images,
-                                       };
-                                    } else if (
-                                       !item.product_detail.images ||
-                                       item.product_detail.images.length === 0
-                                    ) {
-                                       item.product_detail.images = matchingDetail.images;
-                                    }
-                                 }
-
-                                 // Mark product as fetched
-                                 setFetchedProducts((prev) => ({
-                                    ...prev,
-                                    [detailData.product_id]: true,
-                                 }));
-
-                                 hasUpdates = true;
-                              }
-                           } catch (productError) {
-                              console.error(
-                                 `Failed to fetch product for product_id ${detailData.product_id}:`,
-                                 productError,
-                              );
-                           }
-                        }
+                        hasUpdates = true;
+                     } else {
+                        console.error(`Error fetching product detail ${item.product_detail_id}, status: ${detailResponse.status}`);
                      }
                   } catch (detailError) {
-                     console.error(
-                        `Failed to fetch details for product_detail_id ${item.product_detail_id}:`,
-                        detailError,
-                     );
+                     console.error(`Failed to fetch details for product_detail_id ${item.product_detail_id}:`, detailError);
                   }
                }
             }
          }
 
-         // Update orders with fetched data if any updates were made
          if (hasUpdates) {
             setOrders(updatedOrders);
             setFilteredOrders(
@@ -410,6 +398,23 @@ export default function OrderPage() {
       },
       [fetchedDetails, fetchedProducts, statusFilter],
    );
+
+   // Helper function to process product images in different formats
+   const processProductImages = (images: Array<{ id: string; path: string; public_id: string }> | { id: string; path: string; public_id: string } | null | undefined) => {
+      if (!images) return [];
+
+      // If images is an array
+      if (Array.isArray(images)) {
+         return images;
+      }
+
+      // If images is a single object
+      if (typeof images === 'object' && images.path) {
+         return [images];
+      }
+
+      return [];
+   };
 
    // Update useEffect with all dependencies
    useEffect(() => {
@@ -582,75 +587,21 @@ export default function OrderPage() {
    };
 
    // Add the handleReturnOrder function
-   const handleReturnOrder = async (orderId: number) => {
-      if (!confirm('Bạn có chắc chắn muốn đổi/trả đơn hàng này không?')) {
-         return;
-      }
-
-      try {
-         setLoading(true);
-         const token = localStorage.getItem('token');
-
-         if (!token) {
-            showToastMessage('Phiên đăng nhập hết hạn, vui lòng đăng nhập lại', 'error');
-            router.push('/user/signin');
-            return;
-         }
-
-         // Use query parameter for status instead of JSON body
-         const encodedStatus = encodeURIComponent('Đổi trả hàng');
-         // Call API to update the order status to "Đổi trả hàng"
-         const response = await fetch(
-            `http://68.183.226.198:3000/api/orders/${orderId}/status?status=${encodedStatus}`,
-            {
-               method: 'PATCH',
-               headers: {
-                  Authorization: `Bearer ${token}`,
-                  'Content-Type': 'application/json',
-               },
-               // No body needed since we're using query parameters
-            }
-         );
-
-         // Handle specific error codes
-         if (response.status === 422) {
-            const errorData = await response.json();
-            showToastMessage(errorData.errors?.status || 'Trạng thái không hợp lệ', 'error');
-            return;
-         }
-
-         if (!response.ok) {
-            throw new Error('Không thể cập nhật trạng thái đơn hàng');
-         }
-
-         // Update the state after successful API call
-         setOrders((prevOrders) =>
-            prevOrders.map((order) => (order.id === orderId ? { ...order, status: 'Đổi trả hàng' } : order))
-         );
-
-         showToastMessage('Yêu cầu đổi/trả hàng đã được gửi', 'success');
-      } catch (error: unknown) {
-         console.error('Error requesting return/exchange:', error);
-
-         let errorMessage = 'Không thể cập nhật trạng thái đơn hàng';
-         if (error instanceof Error) {
-            errorMessage = error.message;
-         } else if (typeof error === 'object' && error && 'message' in error) {
-            errorMessage = String((error as { message: unknown }).message);
-         }
-
-         showToastMessage(errorMessage, 'error');
-      } finally {
-         setLoading(false);
-      }
+   const handleReturnOrder = (orderId: number) => {
+      setSelectedOrderId(orderId);
+      setReturnType('exchange');
+      setReturnModalOpen(true);
    };
 
    // Add this new function for handling the return and refund request
-   const handleReturnWithRefund = async (orderId: number) => {
-      if (!confirm('Bạn có chắc chắn muốn trả hàng và hoàn tiền không?')) {
-         return;
-      }
+   const handleReturnWithRefund = (orderId: number) => {
+      setSelectedOrderId(orderId);
+      setReturnType('refund');
+      setReturnModalOpen(true);
+   };
 
+   // Add this new function to handle the form submission from the modal:
+   const handleReturnRequestSubmit = async (data: { reason: string; images: File[] }, orderId: number) => {
       try {
          setLoading(true);
          const token = localStorage.getItem('token');
@@ -661,11 +612,38 @@ export default function OrderPage() {
             return;
          }
 
-         // Use query parameter for status
-         const encodedStatus = encodeURIComponent('Trả hàng hoàn tiền');
+         // Create FormData to handle file uploads
+         const formData = new FormData();
+         formData.append('reason', data.reason);
+         formData.append('order_id', orderId.toString());
+         formData.append('type', returnType === 'exchange' ? 'exchange' : 'refund');
 
-         // Call API to update the order status
-         const response = await fetch(
+         // Add each image to the formData
+         data.images.forEach((image) => {
+            formData.append(`images`, image);
+         });
+
+         // First, upload the return request with images
+         const uploadResponse = await fetch(
+            `http://68.183.226.198:3000/api/return-requests`,
+            {
+               method: 'POST',
+               headers: {
+                  Authorization: `Bearer ${token}`,
+               },
+               body: formData,
+            }
+         );
+
+         if (!uploadResponse.ok) {
+            throw new Error('Không thể tạo yêu cầu đổi/trả hàng');
+         }
+
+         // Then update the order status
+         const newStatus = returnType === 'exchange' ? 'Đổi trả hàng' : 'Trả hàng hoàn tiền';
+         const encodedStatus = encodeURIComponent(newStatus);
+
+         const statusResponse = await fetch(
             `http://68.183.226.198:3000/api/orders/${orderId}/status?status=${encodedStatus}`,
             {
                method: 'PATCH',
@@ -676,27 +654,25 @@ export default function OrderPage() {
             }
          );
 
-         // Handle specific error codes
-         if (response.status === 422) {
-            const errorData = await response.json();
-            showToastMessage(errorData.errors?.status || 'Trạng thái không hợp lệ', 'error');
-            return;
-         }
-
-         if (!response.ok) {
+         if (!statusResponse.ok) {
             throw new Error('Không thể cập nhật trạng thái đơn hàng');
          }
 
          // Update the state after successful API call
          setOrders((prevOrders) =>
-            prevOrders.map((order) => (order.id === orderId ? { ...order, status: 'Trả hàng hoàn tiền' } : order))
+            prevOrders.map((order) => (order.id === orderId ? { ...order, status: newStatus } : order))
          );
 
-         showToastMessage('Yêu cầu trả hàng và hoàn tiền đã được gửi', 'success');
+         showToastMessage(
+            returnType === 'exchange'
+               ? 'Yêu cầu đổi/trả hàng đã được gửi'
+               : 'Yêu cầu trả hàng và hoàn tiền đã được gửi',
+            'success'
+         );
       } catch (error: unknown) {
-         console.error('Error requesting return with refund:', error);
+         console.error('Error submitting return request:', error);
 
-         let errorMessage = 'Không thể cập nhật trạng thái đơn hàng';
+         let errorMessage = 'Có lỗi xảy ra khi gửi yêu cầu';
          if (error instanceof Error) {
             errorMessage = error.message;
          } else if (typeof error === 'object' && error && 'message' in error) {
@@ -825,28 +801,31 @@ export default function OrderPage() {
 
    // Thêm hàm kiểm tra các đơn hàng chưa thanh toán khi component mount
    const checkPendingPayments = useCallback(() => {
-      // Lọc các đơn hàng mới tạo không phải COD
+      // Filter orders that are either newly created or waiting for payment (non-COD)
       const pendingOrders = orders.filter(
-         (order) => order.status === 'Đơn hàng vừa được tạo' && order.method_payment !== 'COD',
+         (order) => (
+            (order.status === 'Đơn hàng vừa được tạo' || order.status === 'Đang chờ thanh toán')
+            && order.method_payment !== 'COD'
+         )
       );
 
       if (pendingOrders.length > 0) {
-         // Hiện toast cảnh báo - chỉ hiển thị khi có đơn hàng cần thanh toán
+         // Show warning toast - only show when there are orders needing payment
          showToastMessage(
             'Lưu ý: Đơn hàng sẽ tự động hủy nếu không thanh toán trong vòng 15 phút',
             'info',
          );
       }
 
-      // Kiểm tra các đơn đã quá hạn thanh toán - chỉ kiểm tra những đơn không phải COD
+      // Check for orders that have passed the payment deadline
       const now = new Date().getTime();
       pendingOrders.forEach((order) => {
          const createdTime = new Date(order.createdAt).getTime();
          const timePassed = now - createdTime;
-         const timeoutMs = 15 * 60 * 1000; // 15 phút
+         const timeoutMs = 15 * 60 * 1000; // 15 minutes
 
          if (timePassed >= timeoutMs) {
-            // Tự động cập nhật trạng thái
+            // Automatically update status
             handlePaymentTimeout(order.id);
          }
       });
@@ -913,6 +892,90 @@ export default function OrderPage() {
       }
    }, [orders, handleCODOrderStatus]);
 
+   // Add this function inside your OrderPage component
+   const handleRetryPayment = async (orderId: number) => {
+      try {
+         setProcessingPaymentOrderId(orderId); // Set the processing order ID
+
+         // Get the order to check its payment method
+         const orderToRetry = orders.find(order => order.id === orderId);
+         if (!orderToRetry) {
+            showToastMessage('Không tìm thấy đơn hàng', 'error');
+            return;
+         }
+
+         // Save the pending order ID in localStorage for verification after payment
+         localStorage.setItem('pendingOrderId', orderId.toString());
+
+         // Check if it's MOMO payment or other method
+         if (orderToRetry.method_payment === 'MOMO') {
+            // For MOMO, get a new payment link and redirect
+            try {
+               const paymentLink = await retryOrderPayment(orderId);
+
+               // Show toast message
+               showToastMessage('Đang chuyển đến trang thanh toán MOMO...', 'info');
+
+               // Redirect to MOMO payment page
+               window.location.href = paymentLink;
+            } catch (error) {
+               console.error('Error creating MOMO payment:', error);
+               showToastMessage('Không thể tạo liên kết thanh toán MOMO', 'error');
+               setLoading(false);
+            }
+         } else if (orderToRetry.method_payment === 'BANKING') {
+            // For BANKING, show banking information
+            showToastMessage('Vui lòng chuyển khoản theo thông tin đã cung cấp', 'info');
+
+            // Redirect to order detail page
+            router.push(`/user/order/${orderId}`);
+         } else {
+            // For other payment methods, redirect to payment page
+            router.push(`/user/checkout/payment?order_id=${orderId}`);
+         }
+      } catch (error) {
+         console.error('Error processing retry payment:', error);
+         showToastMessage('Có lỗi xảy ra khi xử lý thanh toán lại', 'error');
+      } finally {
+         setProcessingPaymentOrderId(null); // Clear the processing state
+      }
+   };
+
+   // Add this useEffect near the top of your OrderPage component, after other useEffect hooks
+   useEffect(() => {
+      const checkMomoPayment = async () => {
+         // Check if there's a pending order ID in localStorage
+         const pendingOrderId = localStorage.getItem('pendingOrderId');
+
+         // Check if there are URL parameters indicating payment return
+         const urlParams = new URLSearchParams(window.location.search);
+         const paymentStatus = urlParams.get('status');
+
+         if (pendingOrderId && paymentStatus) {
+            try {
+               // Clear the pending order ID
+               localStorage.removeItem('pendingOrderId');
+
+               if (paymentStatus === 'success') {
+                  showToastMessage('Thanh toán thành công!', 'success');
+
+                  // Refresh the orders list to show updated status
+                  const storedUserId = localStorage.getItem('userId');
+                  if (storedUserId) {
+                     const userId = parseInt(storedUserId);
+                     await loadOrders(parseInt(userId.toString()));
+                  }
+               } else {
+                  showToastMessage('Thanh toán thất bại. Vui lòng thử lại hoặc chọn phương thức khác', 'error');
+               }
+            } catch (error) {
+               console.error('Error verifying MOMO payment:', error);
+            }
+         }
+      };
+
+      checkMomoPayment();
+   }, []);
 
    if (loading) {
       return (
@@ -1008,13 +1071,14 @@ export default function OrderPage() {
                                  </span>
                               </p>
 
-                              {/* Thêm đồng hồ đếm ngược cho đơn hàng mới và không phải COD */}
-                              {order.status === 'Đơn hàng vừa được tạo' &&
+                              {/* Add countdown timer for both newly created and waiting for payment status */}
+                              {(order.status === 'Đơn hàng vừa được tạo' || order.status === 'Đang chờ thanh toán') &&
                                  order.method_payment !== 'COD' && (
                                     <PaymentCountdown
                                        createdAt={order.createdAt}
                                        orderId={order.id}
                                        onTimeout={handlePaymentTimeout}
+                                       status={order.status}
                                     />
                                  )}
                            </div>
@@ -1052,11 +1116,9 @@ export default function OrderPage() {
                                     }`}
                               >
                                  <div className='relative w-16 h-16 bg-gray-100 rounded'>
-                                    {/* First try to use productDetailData images, then fallback to product_detail, then product */}
+                                    {/* Use product images instead of product detail images */}
                                     <Image
                                        src={
-                                          item.productDetailData?.images?.[0]?.path ||
-                                          item.product_detail?.images?.[0]?.path ||
                                           item.product?.images?.[0]?.path ||
                                           '/images/default-product.png'
                                        }
@@ -1144,7 +1206,39 @@ export default function OrderPage() {
                                     Chi tiết
                                  </Link>
 
-                                 {/* Cancel button for new or processing orders */}
+                                 {/* Add Retry Payment button for waiting orders */}
+                                 {order.status === 'Đang chờ thanh toán' && (() => {
+                                    // Calculate if it's still within 15 minutes
+                                    const createdTime = new Date(order.createdAt).getTime();
+                                    const now = new Date().getTime();
+                                    const timePassed = now - createdTime;
+                                    const timeoutMs = 15 * 60 * 1000; // 15 minutes
+
+                                    if (timePassed < timeoutMs) {
+                                       return (
+                                          <button
+                                             onClick={() => handleRetryPayment(order.id)}
+                                             disabled={processingPaymentOrderId === order.id}
+                                             className='text-sm text-blue-600 border border-blue-300 bg-white hover:bg-blue-50 px-3 py-1 rounded flex items-center'
+                                          >
+                                             {processingPaymentOrderId === order.id ? (
+                                                <>
+                                                   <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                                   </svg>
+                                                   Đang xử lý...
+                                                </>
+                                             ) : (
+                                                'Thanh toán lại'
+                                             )}
+                                          </button>
+                                       );
+                                    }
+                                    return null;
+                                 })()}
+
+                                 {/* Cancel button for new or processing or waiting for payment orders */}
                                  {(order.status === 'Đơn hàng vừa được tạo' ||
                                     order.status === 'Đang xử lý' ||
                                     order.status === 'Đang chờ thanh toán') && (
@@ -1156,7 +1250,7 @@ export default function OrderPage() {
                                        </button>
                                     )}
 
-                                 {/* Complete button for orders that have been delivered for 2+ days */}
+                                 {/* Rest of your buttons... */}
                                  {isDeliveredForTwoDays(order) && (
                                     <button
                                        onClick={() => handleCompleteOrder(order.id)}
@@ -1166,25 +1260,21 @@ export default function OrderPage() {
                                     </button>
                                  )}
 
-                                 {/* Return/Exchange buttons for orders that have been in "Đang giao hàng" status for 2+ days */}
-                                 {isDeliveredForTwoDays(order) && (
-                                    <>
-                                       <button
-                                          onClick={() => handleReturnOrder(order.id)}
-                                          className='text-sm text-purple-600 border border-purple-300 bg-white hover:bg-purple-50 px-3 py-1 rounded'
-                                       >
-                                          Đổi/Trả
-                                       </button>
-                                       <button
-                                          onClick={() => handleReturnWithRefund(order.id)}
-                                          className='text-sm text-yellow-600 border border-yellow-300 bg-white hover:bg-yellow-50 px-3 py-1 rounded'
-                                       >
-                                          Trả hàng hoàn tiền
-                                       </button>
-                                    </>
-                                 )}
+                                 {/* Return/Exchange buttons */}
+                                 <button
+                                    onClick={() => handleReturnOrder(order.id)}
+                                    className='text-sm text-purple-600 border border-purple-300 bg-white hover:bg-purple-50 px-3 py-1 rounded'
+                                 >
+                                    Đổi/Trả
+                                 </button>
+                                 <button
+                                    onClick={() => handleReturnWithRefund(order.id)}
+                                    className='text-sm text-yellow-600 border border-yellow-300 bg-white hover:bg-yellow-50 px-3 py-1 rounded'
+                                 >
+                                    Trả hàng hoàn tiền
+                                 </button>
 
-                                 {/* Show Review button for orders with status "Hoàn thành" or "Đổi trả thành công" */}
+                                 {/* Show Review button */}
                                  {(order.status === 'Hoàn thành' || order.status === 'Đổi trả thành công') && (
                                     <Link
                                        href={`/user/order/rating`}
@@ -1193,8 +1283,6 @@ export default function OrderPage() {
                                        Đánh giá
                                     </Link>
                                  )}
-
-
                               </div>
                            </div>
                         </div>
@@ -1205,6 +1293,23 @@ export default function OrderPage() {
          </div>
 
          <Footer />
+         {selectedOrderId !== null && (
+            <ReturnRequestModal
+               isOpen={returnModalOpen}
+               onClose={() => setReturnModalOpen(false)}
+               onSubmit={handleReturnRequestSubmit}
+               orderId={selectedOrderId} type={'exchange'} />
+         )}
+         {/* Return Request Modal */}
+         {selectedOrderId && (
+            <ReturnRequestModal
+               isOpen={returnModalOpen}
+               orderId={selectedOrderId}
+               type={returnType}
+               onClose={() => setReturnModalOpen(false)}
+               onSubmit={handleReturnRequestSubmit}
+            />
+         )}
       </div>
    );
 }

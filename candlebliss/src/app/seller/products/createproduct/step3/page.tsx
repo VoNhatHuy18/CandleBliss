@@ -29,7 +29,6 @@ export default function Step3() {
    const [endDate, setEndDate] = useState('');
    const [variants, setVariants] = useState<Variant[]>(formData.variants || []);
    const [isActive] = useState(true);
-   const [videoUrl, setVideoUrl] = useState(formData.videoUrl || '');
    const [promotion] = useState('');
    const [isLoading, setIsLoading] = useState(false);
    const [calculatedPrice, setCalculatedPrice] = useState('');

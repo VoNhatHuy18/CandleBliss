@@ -76,3 +76,53 @@ export async function updateOrderPaymentMethod(
       throw error;
    }
 }
+
+// Add this function to your existing orderUtils.ts file or create the file if it doesn't exist
+
+export const retryOrderPayment = async (orderId: number): Promise<string> => {
+   try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+         throw new Error('Phiên đăng nhập hết hạn, vui lòng đăng nhập lại');
+      }
+
+      // First update the order status back to "Đang chờ thanh toán" if needed
+      await fetch(`http://68.183.226.198:3000/api/orders/${orderId}/status`, {
+         method: 'PATCH',
+         headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+         },
+         body: JSON.stringify({
+            status: 'Đang chờ thanh toán',
+         }),
+      });
+
+      // Call API to create MOMO payment with orderId as query parameter
+      const momoResponse = await fetch(
+         `http://68.183.226.198:3000/api/payments/create?orderId=${orderId}`,
+         {
+            method: 'GET',
+            headers: {
+               Authorization: `Bearer ${token}`,
+            },
+         },
+      );
+
+      if (!momoResponse.ok) {
+         throw new Error('Không thể tạo thanh toán MoMo');
+      }
+
+      const momoData = await momoResponse.json();
+
+      if (momoData.resultCode === 0 && momoData.shortLink) {
+         // Return the payment link to be used for redirection
+         return momoData.shortLink;
+      } else {
+         throw new Error(momoData.message || 'Không thể tạo thanh toán MoMo');
+      }
+   } catch (error) {
+      console.error('Error creating MOMO payment:', error);
+      throw error;
+   }
+};
