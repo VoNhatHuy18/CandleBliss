@@ -74,10 +74,23 @@ const formatDate = (dateString: string): string => {
 // Trạng thái đơn hàng và màu sắc tương ứng
 const orderStatusColors: Record<string, { bg: string; text: string; border: string }> = {
    'Đơn hàng vừa được tạo': { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200' },
+   'Đang chờ thanh toán': { bg: 'bg-yellow-50', text: 'text-yellow-700', border: 'border-yellow-200' },
+   'Thanh toán thành công': { bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-200' },
+   'Thanh toán thất bại': { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200' },
    'Đang xử lý': { bg: 'bg-yellow-50', text: 'text-yellow-700', border: 'border-yellow-200' },
    'Đang giao hàng': { bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200' },
    'Đã giao hàng': { bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-200' },
+   'Hoàn thành': { bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-200' },
    'Đã hủy': { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200' },
+   'Đổi trả hàng': { bg: 'bg-orange-50', text: 'text-orange-700', border: 'border-orange-200' },
+   'Xác nhận đổi trả': { bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200' },
+   'Từ chối đổi trả': { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200' },
+   'Đổi trả thành công': { bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-200' },
+   'Đổi trả thất bại': { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200' },
+   'Trả hàng hoàn tiền': { bg: 'bg-orange-50', text: 'text-orange-700', border: 'border-orange-200' },
+   'Đang chờ hoàn tiền': { bg: 'bg-indigo-50', text: 'text-indigo-700', border: 'border-indigo-200' },
+   'Hoàn tiền thành công': { bg: 'bg-teal-50', text: 'text-teal-700', border: 'border-teal-200' },
+   'Hoàn tiền thất bại': { bg: 'bg-pink-50', text: 'text-pink-700', border: 'border-pink-200' },
 };
 
 export default function OrderDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -108,6 +121,12 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
          setToast((prev) => ({ ...prev, show: false }));
       }, 3000);
    }, []);
+
+   // Hàm tạo key cho localStorage
+   const getOrderStatusHistoryKey = (orderId: string, userId: number | null) => {
+      if (!userId) return null;
+      return `user_${userId}_order_${orderId}_status_history`;
+   };
 
    // Thêm hàm này vào phần đầu component (sau các khai báo hiện tại)
 
@@ -142,34 +161,282 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
       }
    };
 
-   // Add a function to process order status history
+   // Improved function to process order status history
    const processOrderStatusHistory = (order: Order) => {
-      // Start with the initial status
-      const statusUpdates = [
-         {
+      // Create a map to store unique status updates by their status value
+      const statusMap = new Map();
+
+      // Đọc lịch sử từ localStorage nếu có
+      const historyKey = getOrderStatusHistoryKey(order.id.toString(), userId);
+      let localStatusHistory: { status: string; updatedAt: string }[] = [];
+
+      if (historyKey) {
+         try {
+            const savedHistory = localStorage.getItem(historyKey);
+            if (savedHistory) {
+               localStatusHistory = JSON.parse(savedHistory);
+            }
+         } catch (error) {
+            console.error('Error reading status history from localStorage:', error);
+         }
+      }
+
+      // Nếu không có lịch sử trong localStorage, tạo lịch sử mặc định
+      if (localStatusHistory.length === 0 && (!order.statusUpdates || order.statusUpdates.length === 0)) {
+         localStatusHistory = generateDefaultStatusTimeline(order);
+
+         // Lưu lại lịch sử mặc định vào localStorage
+         if (historyKey) {
+            try {
+               localStorage.setItem(historyKey, JSON.stringify(localStatusHistory));
+            } catch (error) {
+               console.error('Error saving default status history to localStorage:', error);
+            }
+         }
+      }
+
+      // Thêm dữ liệu từ lịch sử đã lưu
+      localStatusHistory.forEach(update => {
+         // Đối với mỗi trạng thái, chỉ giữ lại phiên bản mới nhất nếu trùng
+         const existingUpdate = statusMap.get(update.status);
+         if (!existingUpdate || new Date(update.updatedAt) > new Date(existingUpdate.updatedAt)) {
+            statusMap.set(update.status, update);
+         }
+      });
+
+      // Xử lý các trạng thái đặc biệt
+      if (order.status === 'Đổi trả thành công' || order.status === 'Đổi trả thất bại') {
+         // Đảm bảo có các trạng thái đổi trả trước đó
+         const returnStatusFlow = [
+            'Đổi trả hàng',
+            order.status === 'Đổi trả thành công' ? 'Xác nhận đổi trả' : 'Từ chối đổi trả',
+            order.status
+         ];
+
+         // Đặt thời gian mặc định nếu không tìm thấy trong lịch sử
+         let latestTime = new Date(order.updatedAt);
+         for (let i = returnStatusFlow.length - 1; i >= 0; i--) {
+            const status = returnStatusFlow[i];
+            if (!statusMap.has(status)) {
+               latestTime = new Date(latestTime.getTime() - 24 * 60 * 60 * 1000); // trừ 1 ngày
+               statusMap.set(status, {
+                  status,
+                  updatedAt: latestTime.toISOString()
+               });
+            } else {
+               latestTime = new Date(statusMap.get(status).updatedAt);
+            }
+         }
+      }
+      else if (['Hoàn tiền thành công', 'Hoàn tiền thất bại'].includes(order.status)) {
+         // Đảm bảo có các trạng thái hoàn tiền trước đó
+         const refundStatusFlow = [
+            'Trả hàng hoàn tiền',
+            'Đang chờ hoàn tiền',
+            order.status
+         ];
+
+         // Đặt thời gian mặc định nếu không tìm thấy trong lịch sử
+         let latestTime = new Date(order.updatedAt);
+         for (let i = refundStatusFlow.length - 1; i >= 0; i--) {
+            const status = refundStatusFlow[i];
+            if (!statusMap.has(status)) {
+               latestTime = new Date(latestTime.getTime() - 24 * 60 * 60 * 1000); // trừ 1 ngày
+               statusMap.set(status, {
+                  status,
+                  updatedAt: latestTime.toISOString()
+               });
+            } else {
+               latestTime = new Date(statusMap.get(status).updatedAt);
+            }
+         }
+      }
+
+      // Đảm bảo có trạng thái đơn hàng vừa tạo
+      if (!statusMap.has('Đơn hàng vừa được tạo')) {
+         statusMap.set('Đơn hàng vừa được tạo', {
             status: 'Đơn hàng vừa được tạo',
             updatedAt: order.createdAt,
-         },
-      ];
-
-      // If the API provides status history, add those statuses
-      if (order.statusUpdates && order.statusUpdates.length > 0) {
-         // Sort status updates by date and filter out the initial status if it's already included
-         const additionalUpdates = order.statusUpdates
-            .filter(update => update.status !== 'Đơn hàng vừa được tạo')
-            .sort((a, b) => new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime());
-
-         statusUpdates.push(...additionalUpdates);
+         });
       }
-      // If API doesn't provide history but current status is different from initial
-      else if (order.status !== 'Đơn hàng vừa được tạo') {
-         statusUpdates.push({
+
+      // Đảm bảo trạng thái hiện tại được bao gồm
+      if (!statusMap.has(order.status)) {
+         statusMap.set(order.status, {
             status: order.status,
             updatedAt: order.updatedAt,
          });
       }
 
+      // Chuyển map về mảng và sắp xếp theo thời gian
+      const statusUpdates = Array.from(statusMap.values()).sort(
+         (a, b) => new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime()
+      );
+
       return statusUpdates;
+   };
+
+   // Hàm lưu trạng thái đơn hàng
+   const saveOrderStatusHistory = (orderId: string | number, userId: number | null, statusUpdates: { status: string; updatedAt: string }[]) => {
+      if (!userId) return;
+
+      const historyKey = getOrderStatusHistoryKey(orderId.toString(), userId);
+      if (historyKey) {
+         try {
+            localStorage.setItem(historyKey, JSON.stringify(statusUpdates));
+         } catch (error) {
+            console.error('Error saving status history to localStorage:', error);
+         }
+      }
+   };
+
+   // Hàm tạo timeline mặc định dựa trên trạng thái đơn hàng
+   const generateDefaultStatusTimeline = (order: Order) => {
+      // Định nghĩa các luồng trạng thái có thể
+      const orderStatusFlows = {
+         // COD flow
+         cod: [
+            'Đơn hàng vừa được tạo',
+            'Đang xử lý',
+            'Đang giao hàng',
+            'Hoàn thành'
+         ],
+         // Online payment successful flow
+         onlinePaymentSuccess: [
+            'Đơn hàng vừa được tạo',
+            'Đang chờ thanh toán',
+            'Thanh toán thành công',
+            'Đang giao hàng',
+            'Hoàn thành'
+         ],
+         // Online payment failed flow
+         onlinePaymentFailed: [
+            'Đơn hàng vừa được tạo',
+            'Đang chờ thanh toán',
+            'Thanh toán thất bại',
+            'Đã hủy'
+         ],
+         // Return success flow
+         returnSuccess: [
+            'Đơn hàng vừa được tạo',
+            'Đang xử lý',
+            'Đang giao hàng',
+            'Đã giao hàng',
+            'Đổi trả hàng',
+            'Xác nhận đổi trả',
+            'Đang giao hàng',
+            'Đổi trả thành công'
+         ],
+         // Return fail flow
+         returnFail: [
+            'Đơn hàng vừa được tạo',
+            'Đang xử lý',
+            'Đang giao hàng',
+            'Đã giao hàng',
+            'Đổi trả hàng',
+            'Từ chối đổi trả',
+            'Đổi trả thất bại'
+         ],
+         // Refund success flow
+         refundSuccess: [
+            'Đơn hàng vừa được tạo',
+            'Đang xử lý',
+            'Đang giao hàng',
+            'Đã giao hàng',
+            'Trả hàng hoàn tiền',
+            'Đang chờ hoàn tiền',
+            'Hoàn tiền thành công'
+         ],
+         // Refund fail flow
+         refundFail: [
+            'Đơn hàng vừa được tạo',
+            'Đang xử lý',
+            'Đang giao hàng',
+            'Đã giao hàng',
+            'Trả hàng hoàn tiền',
+            'Đang chờ hoàn tiền',
+            'Hoàn tiền thất bại'
+         ],
+      };
+
+      // Chọn luồng phù hợp dựa trên trạng thái hiện tại
+      let orderStatusFlow = orderStatusFlows.cod; // mặc định là luồng COD
+
+      // Xác định loại luồng dựa vào trạng thái hiện tại
+      if (order.status === 'Đã hủy') {
+         // Trường hợp đơn hàng đã hủy - tạo timeline đặc biệt
+         return [
+            {
+               status: 'Đơn hàng vừa được tạo',
+               updatedAt: order.createdAt
+            },
+            {
+               status: 'Đã hủy',
+               updatedAt: order.updatedAt
+            }
+         ];
+      }
+
+      // Kiểm tra các trạng thái đặc biệt để xác định luồng
+      if (['Đang chờ thanh toán', 'Thanh toán thành công'].includes(order.status)) {
+         orderStatusFlow = orderStatusFlows.onlinePaymentSuccess;
+      }
+      else if (order.status === 'Thanh toán thất bại') {
+         orderStatusFlow = orderStatusFlows.onlinePaymentFailed;
+      }
+      else if (['Đổi trả hàng', 'Xác nhận đổi trả', 'Đổi trả thành công'].includes(order.status)) {
+         orderStatusFlow = orderStatusFlows.returnSuccess;
+      }
+      else if (['Từ chối đổi trả', 'Đổi trả thất bại'].includes(order.status)) {
+         orderStatusFlow = orderStatusFlows.returnFail;
+      }
+      else if (['Trả hàng hoàn tiền', 'Đang chờ hoàn tiền', 'Hoàn tiền thành công'].includes(order.status)) {
+         orderStatusFlow = orderStatusFlows.refundSuccess;
+      }
+      else if (order.status === 'Hoàn tiền thất bại') {
+         orderStatusFlow = orderStatusFlows.refundFail;
+      }
+
+      // Tìm vị trí của trạng thái hiện tại trong luồng
+      const currentStatusIndex = orderStatusFlow.indexOf(order.status);
+
+      if (currentStatusIndex === -1) {
+         // Trường hợp trạng thái không nằm trong luồng
+         return [
+            {
+               status: 'Đơn hàng vừa được tạo',
+               updatedAt: order.createdAt
+            },
+            {
+               status: order.status,
+               updatedAt: order.updatedAt
+            }
+         ];
+      }
+
+      // Tính toán thời gian giữa ngày tạo và ngày cập nhật
+      const createTime = new Date(order.createdAt).getTime();
+      const updateTime = new Date(order.updatedAt).getTime();
+
+      // Tạo timeline giả từ tạo đơn đến trạng thái hiện tại
+      const timeline = [];
+
+      // Tính thời gian trung bình giữa các trạng thái
+      const timePerStatus = (updateTime - createTime) / (currentStatusIndex || 1);
+
+      // Thêm tất cả trạng thái từ đầu đến trạng thái hiện tại
+      for (let i = 0; i <= currentStatusIndex; i++) {
+         timeline.push({
+            status: orderStatusFlow[i],
+            updatedAt: i === 0
+               ? order.createdAt
+               : i === currentStatusIndex
+                  ? order.updatedAt
+                  : new Date(createTime + timePerStatus * i).toISOString()
+         });
+      }
+
+      return timeline;
    };
 
    // Then update your useEffect
@@ -222,6 +489,29 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                return;
             }
 
+            // Lưu trữ lịch sử trạng thái đơn hàng vào localStorage nếu có
+            if (data.statusUpdates && data.statusUpdates.length > 0) {
+               saveOrderStatusHistory(data.id, parsedUserId, data.statusUpdates);
+            } else {
+               // Nếu API không trả về lịch sử, tạo lịch sử cơ bản dựa trên trạng thái hiện tại
+               const basicHistory = [
+                  {
+                     status: 'Đơn hàng vừa được tạo',
+                     updatedAt: data.createdAt
+                  }
+               ];
+
+               // Thêm trạng thái hiện tại nếu khác với trạng thái ban đầu
+               if (data.status !== 'Đơn hàng vừa được tạo') {
+                  basicHistory.push({
+                     status: data.status,
+                     updatedAt: data.updatedAt
+                  });
+               }
+
+               saveOrderStatusHistory(data.id, parsedUserId, basicHistory);
+            }
+
             setOrder(data);
          } catch (error) {
             console.error('Error loading order detail:', error);
@@ -234,12 +524,50 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
       init();
    }, [orderId, router, showToastMessage]);
 
-   // Hàm xử lý hủy đơn hàng
+   // Hàm để kiểm tra trạng thái tiếp theo có hợp lệ không
+   const getValidNextStatuses = (currentStatus: string): string[] => {
+      // Map trạng thái hiện tại đến các trạng thái có thể chuyển tiếp
+      const statusTransitions: Record<string, string[]> = {
+         // Luồng chính
+         'Đơn hàng vừa được tạo': ['Đang xử lý', 'Đang chờ thanh toán', 'Đã hủy'],
+         'Đang xử lý': ['Đang giao hàng', 'Đã hủy'],
+         'Đang giao hàng': ['Đã giao hàng', 'Hoàn thành'],
+         'Đã giao hàng': ['Hoàn thành', 'Đổi trả hàng', 'Trả hàng hoàn tiền'],
+         'Hoàn thành': ['Đổi trả hàng', 'Trả hàng hoàn tiền'],
+
+         // Luồng thanh toán trực tuyến
+         'Đang chờ thanh toán': ['Thanh toán thành công', 'Thanh toán thất bại', 'Đã hủy'],
+         'Thanh toán thành công': ['Đang xử lý', 'Đang giao hàng'],
+         'Thanh toán thất bại': ['Đã hủy', 'Đang chờ thanh toán'],
+
+         // Luồng đổi trả hàng
+         'Đổi trả hàng': ['Xác nhận đổi trả', 'Từ chối đổi trả'],
+         'Xác nhận đổi trả': ['Đang giao hàng'],
+         'Đang giao hàng sau đổi trả': ['Đổi trả thành công'],
+         'Từ chối đổi trả': ['Đổi trả thất bại'],
+         'Đổi trả thành công': [],
+         'Đổi trả thất bại': [],
+
+         // Luồng trả hàng hoàn tiền
+         'Trả hàng hoàn tiền': ['Đang chờ hoàn tiền'],
+         'Đang chờ hoàn tiền': ['Hoàn tiền thành công', 'Hoàn tiền thất bại'],
+         'Hoàn tiền thành công': [],
+         'Hoàn tiền thất bại': ['Đang chờ hoàn tiền'],
+
+         // Trạng thái kết thúc
+         'Đã hủy': [],
+      };
+
+      return statusTransitions[currentStatus] || [];
+   };
+
+   // Hàm xử lý hủy đơn hàng với cập nhật timeline
    const handleCancelOrder = async () => {
       if (!order) return;
 
       // Check if order can be cancelled based on status
-      if (order.status !== 'Đơn hàng vừa được tạo' && order.status !== 'Đang xử lý') {
+      const validNextStatuses = getValidNextStatuses(order.status);
+      if (!validNextStatuses.includes('Đã hủy')) {
          showToastMessage('Đơn hàng này không thể hủy ở trạng thái hiện tại', 'error');
          return;
       }
@@ -262,7 +590,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
          const response = await fetch(
             `http://68.183.226.198:3000/api/orders/${order.id}/status`,
             {
-               method: 'PATCH', // Use PATCH instead of PUT
+               method: 'PATCH',
                headers: {
                   Authorization: `Bearer ${token}`,
                   'Content-Type': 'application/json',
@@ -278,22 +606,56 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
             throw new Error(errorData.message || 'Không thể hủy đơn hàng');
          }
 
-         // Update the state with both status and updatedAt
+         // Get current time for the new status
+         const currentTime = new Date().toISOString();
+
+         // Xác định các trạng thái hiện có
+         const existingStatusUpdates = order.statusUpdates || [];
+         const statusMap = new Map();
+
+         // Đảm bảo có trạng thái bắt đầu
+         statusMap.set('Đơn hàng vừa được tạo', {
+            status: 'Đơn hàng vừa được tạo',
+            updatedAt: order.createdAt
+         });
+
+         // Thêm các trạng thái hiện có vào map
+         existingStatusUpdates.forEach(update => {
+            statusMap.set(update.status, update);
+         });
+
+         // Thêm trạng thái hiện tại nếu khác trạng thái ban đầu và chưa có trong map
+         if (order.status !== 'Đơn hàng vừa được tạo' && !statusMap.has(order.status)) {
+            statusMap.set(order.status, {
+               status: order.status,
+               updatedAt: order.updatedAt
+            });
+         }
+
+         // Thêm trạng thái hủy mới
          const newStatusUpdate = {
             status: 'Đã hủy',
-            updatedAt: new Date().toISOString()
+            updatedAt: currentTime
          };
+         statusMap.set('Đã hủy', newStatusUpdate);
 
+         // Chuyển map thành mảng và sắp xếp theo thời gian
+         const updatedStatusHistory = Array.from(statusMap.values()).sort(
+            (a, b) => new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime()
+         );
+
+         // Lưu lịch sử vào localStorage
+         const historyKey = getOrderStatusHistoryKey(order.id.toString(), userId);
+         if (historyKey) {
+            localStorage.setItem(historyKey, JSON.stringify(updatedStatusHistory));
+         }
+
+         // Update order state
          setOrder({
             ...order,
             status: 'Đã hủy',
-            updatedAt: new Date().toISOString(),
-            statusUpdates: order.statusUpdates
-               ? [...order.statusUpdates, newStatusUpdate]
-               : [
-                  { status: 'Đơn hàng vừa được tạo', updatedAt: order.createdAt },
-                  newStatusUpdate
-               ]
+            updatedAt: currentTime,
+            statusUpdates: updatedStatusHistory
          });
 
          showToastMessage('Đơn hàng đã được hủy thành công', 'success');
@@ -311,6 +673,124 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
       } finally {
          setLoading(false);
       }
+   };
+
+   // Hàm chung để cập nhật trạng thái đơn hàng
+   const handleUpdateOrderStatus = async (newStatus: string) => {
+      if (!order) return;
+
+      // Kiểm tra tính hợp lệ của trạng thái mới
+      const validNextStatuses = getValidNextStatuses(order.status);
+      if (!validNextStatuses.includes(newStatus)) {
+         showToastMessage(`Không thể chuyển từ trạng thái ${order.status} sang ${newStatus}`, 'error');
+         return;
+      }
+
+      if (!confirm(`Bạn có chắc chắn muốn chuyển đơn hàng sang trạng thái ${newStatus} không?`)) {
+         return;
+      }
+
+      try {
+         setLoading(true);
+         const token = localStorage.getItem('token');
+
+         if (!token) {
+            showToastMessage('Phiên đăng nhập hết hạn, vui lòng đăng nhập lại', 'error');
+            router.push('/user/signin');
+            return;
+         }
+
+         // Gọi API cập nhật trạng thái
+         const response = await fetch(
+            `http://68.183.226.198:3000/api/orders/${order.id}/status`,
+            {
+               method: 'PATCH',
+               headers: {
+                  Authorization: `Bearer ${token}`,
+                  'Content-Type': 'application/json',
+               },
+               body: JSON.stringify({
+                  status: newStatus
+               }),
+            },
+         );
+
+         if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.message || `Không thể cập nhật trạng thái đơn hàng sang ${newStatus}`);
+         }
+
+         // Thời gian cập nhật mới
+         const currentTime = new Date().toISOString();
+
+         // Xác định các trạng thái hiện có
+         const existingStatusUpdates = order.statusUpdates || [];
+         const statusMap = new Map();
+
+         // Đảm bảo có trạng thái bắt đầu
+         statusMap.set('Đơn hàng vừa được tạo', {
+            status: 'Đơn hàng vừa được tạo',
+            updatedAt: order.createdAt
+         });
+
+         // Thêm các trạng thái hiện có vào map
+         existingStatusUpdates.forEach(update => {
+            statusMap.set(update.status, update);
+         })
+
+         // Thêm trạng thái hiện tại nếu khác trạng thái ban đầu và chưa có trong map
+         if (order.status !== 'Đơn hàng vừa được tạo' && !statusMap.has(order.status)) {
+            statusMap.set(order.status, {
+               status: order.status,
+               updatedAt: order.updatedAt
+            });
+         }
+
+         // Thêm trạng thái mới
+         const newStatusUpdate = {
+            status: newStatus,
+            updatedAt: currentTime
+         };
+         statusMap.set(newStatus, newStatusUpdate);
+
+         // Chuyển map thành mảng và sắp xếp theo thời gian
+         const updatedStatusHistory = Array.from(statusMap.values()).sort(
+            (a, b) => new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime()
+         );
+
+         // Lưu lịch sử vào localStorage
+         const historyKey = getOrderStatusHistoryKey(order.id.toString(), userId);
+         if (historyKey) {
+            localStorage.setItem(historyKey, JSON.stringify(updatedStatusHistory));
+         }
+
+         // Cập nhật state order
+         setOrder({
+            ...order,
+            status: newStatus,
+            updatedAt: currentTime,
+            statusUpdates: updatedStatusHistory
+         });
+
+         showToastMessage(`Đơn hàng đã được chuyển sang trạng thái ${newStatus}`, 'success');
+      } catch (error: unknown) {
+         console.error('Error updating order status:', error);
+
+         let errorMessage = `Không thể cập nhật trạng thái đơn hàng`;
+         if (error instanceof Error) {
+            errorMessage = error.message;
+         } else if (typeof error === 'object' && error && 'message' in error) {
+            errorMessage = String((error as { message: unknown }).message);
+         }
+
+         showToastMessage(errorMessage, 'error');
+      } finally {
+         setLoading(false);
+      }
+   };
+   // Hàm xác nhận đã nhận hàng
+   const handleConfirmDelivery = async () => {
+      await handleUpdateOrderStatus('Đã giao hàng');
    };
 
    // Hàm render trạng thái đơn hàng
@@ -441,47 +921,84 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
 
                            {/* Dynamic Status Timeline - Only show actual status updates */}
                            {processOrderStatusHistory(order).map((statusUpdate, index) => {
+                              const statusColor = orderStatusColors[statusUpdate.status] || {
+                                 bg: 'bg-gray-50',
+                                 text: 'text-gray-700',
+                                 border: 'border-gray-200'
+                              };
+
                               const isCancelled = statusUpdate.status === 'Đã hủy';
+                              const isCompleted = statusUpdate.status === 'Hoàn thành';
+                              const isPaymentFailed = statusUpdate.status === 'Thanh toán thất bại';
+                              const isRefundFailed = statusUpdate.status === 'Hoàn tiền thất bại';
+
+                              // Xác định icon phù hợp với trạng thái
+                              let statusIcon = (
+                                 <svg
+                                    xmlns='http://www.w3.org/2000/svg'
+                                    width='16'
+                                    height='16'
+                                    viewBox='0 0 24 24'
+                                    fill='none'
+                                    stroke='currentColor'
+                                    strokeWidth='2'
+                                    strokeLinecap='round'
+                                    strokeLinejoin='round'
+                                 >
+                                    <polyline points='20 6 9 17 4 12'></polyline>
+                                 </svg>
+                              );
+
+                              if (isCancelled || isPaymentFailed || isRefundFailed) {
+                                 statusIcon = (
+                                    <svg
+                                       xmlns='http://www.w3.org/2000/svg'
+                                       width='16'
+                                       height='16'
+                                       viewBox='0 0 24 24'
+                                       fill='none'
+                                       stroke='currentColor'
+                                       strokeWidth='2'
+                                       strokeLinecap='round'
+                                       strokeLinejoin='round'
+                                    >
+                                       <line x1='18' y1='6' x2='6' y2='18'></line>
+                                       <line x1='6' y1='6' x2='18' y2='18'></line>
+                                    </svg>
+                                 );
+                              } else if (isCompleted) {
+                                 statusIcon = (
+                                    <svg
+                                       xmlns='http://www.w3.org/2000/svg'
+                                       width='16'
+                                       height='16'
+                                       viewBox='0 0 24 24'
+                                       fill='none'
+                                       stroke='currentColor'
+                                       strokeWidth='2'
+                                       strokeLinecap='round'
+                                       strokeLinejoin='round'
+                                    >
+                                       <path d='M22 11.08V12a10 10 0 1 1-5.93-9.14'></path>
+                                       <polyline points='22 4 12 14.01 9 11.01'></polyline>
+                                    </svg>
+                                 );
+                              }
 
                               return (
                                  <div key={index} className='relative flex items-start mb-8'>
                                     <div
-                                       className={`flex items-center justify-center w-6 h-6 rounded-full z-10 
-              ${isCancelled ? 'bg-red-500 text-white' : 'bg-green-500 text-white'}`}
+                                       className={`flex items-center justify-center w-6 h-6 rounded-full z-10 ${statusColor.bg} ${statusColor.text} border ${statusColor.border}`}
                                     >
-                                       {isCancelled ? (
-                                          <svg
-                                             xmlns='http://www.w3.org/2000/svg'
-                                             width='16'
-                                             height='16'
-                                             viewBox='0 0 24 24'
-                                             fill='none'
-                                             stroke='currentColor'
-                                             strokeWidth='2'
-                                             strokeLinecap='round'
-                                             strokeLinejoin='round'
-                                          >
-                                             <line x1='18' y1='6' x2='6' y2='18'></line>
-                                             <line x1='6' y1='6' x2='18' y2='18'></line>
-                                          </svg>
-                                       ) : (
-                                          <svg
-                                             xmlns='http://www.w3.org/2000/svg'
-                                             width='16'
-                                             height='16'
-                                             viewBox='0 0 24 24'
-                                             fill='none'
-                                             stroke='currentColor'
-                                             strokeWidth='2'
-                                             strokeLinecap='round'
-                                             strokeLinejoin='round'
-                                          >
-                                             <polyline points='20 6 9 17 4 12'></polyline>
-                                          </svg>
-                                       )}
+                                       {statusIcon}
                                     </div>
                                     <div className='ml-4'>
-                                       <h3 className={`font-medium ${isCancelled ? 'text-red-600' : ''}`}>
+                                       <h3 className={`font-medium ${isCancelled || isPaymentFailed || isRefundFailed
+                                          ? 'text-red-600'
+                                          : isCompleted
+                                             ? 'text-green-600'
+                                             : ''
+                                          }`}>
                                           {statusUpdate.status}
                                        </h3>
                                        <p className='text-sm text-gray-500'>
@@ -491,8 +1008,6 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                                  </div>
                               );
                            })}
-
-                           {/* Remove the Future Status section completely */}
                         </div>
                      </div>
                   </div>
@@ -732,8 +1247,8 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                            Quay lại danh sách đơn hàng
                         </Link>
 
-                        {/* Only show cancel button for orders that can be cancelled */}
-                        {(order.status === 'Đơn hàng vừa được tạo' || order.status === 'Đang xử lý') && (
+                        {/* Nút hủy đơn chỉ hiển thị với các trạng thái cho phép hủy */}
+                        {getValidNextStatuses(order.status).includes('Đã hủy') && (
                            <button
                               onClick={handleCancelOrder}
                               className='block w-full py-2 text-center bg-red-600 rounded text-white hover:bg-red-700'
@@ -742,7 +1257,28 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                            </button>
                         )}
 
-                        {order.status === 'Đã giao hàng' && (
+                        {/* Nút thanh toán khi đơn hàng đang chờ thanh toán hoặc thanh toán thất bại */}
+                        {(['Đang chờ thanh toán', 'Thanh toán thất bại'].includes(order.status)) && (
+                           <button
+                              onClick={() => handleUpdateOrderStatus('Thanh toán thành công')}
+                              className='block w-full py-2 text-center bg-green-600 rounded text-white hover:bg-green-700'
+                           >
+                              Thanh toán ngay
+                           </button>
+                        )}
+
+                        {/* Nút xác nhận đã nhận hàng khi đơn đang giao hàng */}
+                        {order.status === 'Đang giao hàng' && (
+                           <button
+                              onClick={handleConfirmDelivery}
+                              className='block w-full py-2 text-center bg-blue-600 rounded text-white hover:bg-blue-700'
+                           >
+                              Xác nhận đã nhận hàng
+                           </button>
+                        )}
+
+                        {/* Nút đánh giá sản phẩm khi đơn hàng đã giao hoặc hoàn thành */}
+                        {(['Hoàn thành', 'Đã giao hàng'].includes(order.status)) && (
                            <Link
                               href={`/user/review?order=${order.id}`}
                               className='block w-full py-2 text-center bg-green-600 rounded text-white hover:bg-green-700'
@@ -751,25 +1287,29 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                            </Link>
                         )}
 
-                        <button
-                           onClick={() => {
-                              // Logic để mua lại đơn hàng
-                              router.push('/user/cart');
-                           }}
-                           className='block w-full py-2 text-center bg-orange-600 rounded text-white hover:bg-orange-700'
-                        >
-                           Mua lại
-                        </button>
 
+
+
+
+                        {/* Nút theo dõi đơn hàng */}
                         {order.status === 'Đang giao hàng' && (
                            <button
                               onClick={() => {
-                                 // Modal theo dõi đơn hàng hoặc chuyển hướng tới trang theo dõi
                                  showToastMessage('Tính năng đang được phát triển', 'info');
                               }}
                               className='block w-full py-2 text-center border border-blue-600 rounded text-blue-600 hover:bg-blue-50'
                            >
                               Theo dõi đơn hàng
+                           </button>
+                        )}
+
+                        {/* Nút mua lại luôn hiển thị trừ các trạng thái đặc biệt */}
+                        {!['Đang chờ thanh toán', 'Đổi trả hàng', 'Trả hàng hoàn tiền', 'Đang chờ hoàn tiền'].includes(order.status) && (
+                           <button
+                              onClick={() => router.push('/user/cart')}
+                              className='block w-full py-2 text-center bg-orange-600 rounded text-white hover:bg-orange-700'
+                           >
+                              Mua lại
                            </button>
                         )}
                      </div>

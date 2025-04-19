@@ -536,7 +536,7 @@ const InventoryFilters = ({
     tabCounts: Record<string, number>;
 }) => {
     const tabs = [
-        { id: 'Tất cả', label: 'Tất cả sản phẩm' },
+        { id: 'Tất cả', label: 'Tất cả sản phẩm' },    
         { id: 'Hoạt động', label: 'Đang bán' },
         { id: 'Sắp hết', label: 'Sắp hết hàng' },
         { id: 'Hết hàng', label: 'Hết hàng' },

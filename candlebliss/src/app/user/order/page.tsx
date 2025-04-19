@@ -98,29 +98,24 @@ const orderStatusColors: Record<string, { bg: string; text: string; border: stri
    'Đơn hàng vừa được tạo': { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200' },
    'Đang chờ thanh toán': { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200' },
    'Thanh toán thất bại': { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200' },
-   'Thanh toán thành công': {
-      bg: 'bg-green-50',
-      text: 'text-green-700',
-      border: 'border-green-200',
-   },
+   'Thanh toán thành công': { bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-200' },
    'Đang xử lý': { bg: 'bg-yellow-50', text: 'text-yellow-700', border: 'border-yellow-200' },
    'Đang giao hàng': { bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200' },
-   'Đã đặt hàng': { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200' },
-   'Đã giao hàng': { bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-200' },
    'Hoàn thành': { bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-200' },
    'Đã hủy': { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200' },
-   'Đang chờ hoàn tiền': {
-      bg: 'bg-yellow-50',
-      text: 'text-yellow-700',
-      border: 'border-yellow-200',
-   },
-   'Hoàn tiền thành công': {
-      bg: 'bg-green-50',
-      text: 'text-green-700',
-      border: 'border-green-200',
-   },
-   'Hoàn tiền thất bại': { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200' },
+
+   // Đổi trả hàng
    'Đổi trả hàng': { bg: 'bg-yellow-50', text: 'text-yellow-700', border: 'border-yellow-200' },
+   'Xác nhận đổi trả': { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200' },
+   'Đổi trả thành công': { bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-200' },
+   'Từ chối đổi trả': { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200' },
+   'Đổi trả thất bại': { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200' },
+
+   // Trả hàng hoàn tiền
+   'Trả hàng hoàn tiền': { bg: 'bg-yellow-50', text: 'text-yellow-700', border: 'border-yellow-200' },
+   'Đang chờ hoàn tiền': { bg: 'bg-yellow-50', text: 'text-yellow-700', border: 'border-yellow-200' },
+   'Hoàn tiền thành công': { bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-200' },
+   'Hoàn tiền thất bại': { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200' },
 };
 
 function OrderFilter({ onFilterChange }: { onFilterChange: (filterId: string | null) => void }) {
@@ -481,20 +476,26 @@ export default function OrderPage() {
             return;
          }
 
+         // Use query parameter for status
+         const encodedStatus = encodeURIComponent('Đã huỷ');
          // Call API to cancel the order
          const response = await fetch(
-            `http://68.183.226.198:3000/api/orders/${orderId}/status`,
+            `http://68.183.226.198:3000/api/orders/${orderId}/status?status=${encodedStatus}`,
             {
                method: 'PATCH',
                headers: {
                   Authorization: `Bearer ${token}`,
                   'Content-Type': 'application/json',
-               },
-               body: JSON.stringify({
-                  status: 'Đã hủy',
-               }),
+               }
             }
          );
+
+         // Handle specific error codes
+         if (response.status === 422) {
+            const errorData = await response.json();
+            showToastMessage(errorData.errors?.status || 'Trạng thái không hợp lệ', 'error');
+            return;
+         }
 
          if (!response.ok) {
             throw new Error('Không thể hủy đơn hàng');
@@ -502,7 +503,7 @@ export default function OrderPage() {
 
          // Update the state after successful API call
          setOrders((prevOrders) =>
-            prevOrders.map((order) => (order.id === orderId ? { ...order, status: 'Đã hủy' } : order))
+            prevOrders.map((order) => (order.id === orderId ? { ...order, status: 'Đã huỷ' } : order))
          );
 
          showToastMessage('Đơn hàng đã được hủy thành công', 'success');
@@ -596,20 +597,27 @@ export default function OrderPage() {
             return;
          }
 
+         // Use query parameter for status instead of JSON body
+         const encodedStatus = encodeURIComponent('Đổi trả hàng');
          // Call API to update the order status to "Đổi trả hàng"
          const response = await fetch(
-            `http://68.183.226.198:3000/api/orders/${orderId}/status`,
+            `http://68.183.226.198:3000/api/orders/${orderId}/status?status=${encodedStatus}`,
             {
                method: 'PATCH',
                headers: {
                   Authorization: `Bearer ${token}`,
                   'Content-Type': 'application/json',
                },
-               body: JSON.stringify({
-                  status: 'Đổi trả hàng',
-               }),
+               // No body needed since we're using query parameters
             }
          );
+
+         // Handle specific error codes
+         if (response.status === 422) {
+            const errorData = await response.json();
+            showToastMessage(errorData.errors?.status || 'Trạng thái không hợp lệ', 'error');
+            return;
+         }
 
          if (!response.ok) {
             throw new Error('Không thể cập nhật trạng thái đơn hàng');
@@ -623,6 +631,70 @@ export default function OrderPage() {
          showToastMessage('Yêu cầu đổi/trả hàng đã được gửi', 'success');
       } catch (error: unknown) {
          console.error('Error requesting return/exchange:', error);
+
+         let errorMessage = 'Không thể cập nhật trạng thái đơn hàng';
+         if (error instanceof Error) {
+            errorMessage = error.message;
+         } else if (typeof error === 'object' && error && 'message' in error) {
+            errorMessage = String((error as { message: unknown }).message);
+         }
+
+         showToastMessage(errorMessage, 'error');
+      } finally {
+         setLoading(false);
+      }
+   };
+
+   // Add this new function for handling the return and refund request
+   const handleReturnWithRefund = async (orderId: number) => {
+      if (!confirm('Bạn có chắc chắn muốn trả hàng và hoàn tiền không?')) {
+         return;
+      }
+
+      try {
+         setLoading(true);
+         const token = localStorage.getItem('token');
+
+         if (!token) {
+            showToastMessage('Phiên đăng nhập hết hạn, vui lòng đăng nhập lại', 'error');
+            router.push('/user/signin');
+            return;
+         }
+
+         // Use query parameter for status
+         const encodedStatus = encodeURIComponent('Trả hàng hoàn tiền');
+
+         // Call API to update the order status
+         const response = await fetch(
+            `http://68.183.226.198:3000/api/orders/${orderId}/status?status=${encodedStatus}`,
+            {
+               method: 'PATCH',
+               headers: {
+                  Authorization: `Bearer ${token}`,
+                  'Content-Type': 'application/json',
+               }
+            }
+         );
+
+         // Handle specific error codes
+         if (response.status === 422) {
+            const errorData = await response.json();
+            showToastMessage(errorData.errors?.status || 'Trạng thái không hợp lệ', 'error');
+            return;
+         }
+
+         if (!response.ok) {
+            throw new Error('Không thể cập nhật trạng thái đơn hàng');
+         }
+
+         // Update the state after successful API call
+         setOrders((prevOrders) =>
+            prevOrders.map((order) => (order.id === orderId ? { ...order, status: 'Trả hàng hoàn tiền' } : order))
+         );
+
+         showToastMessage('Yêu cầu trả hàng và hoàn tiền đã được gửi', 'success');
+      } catch (error: unknown) {
+         console.error('Error requesting return with refund:', error);
 
          let errorMessage = 'Không thể cập nhật trạng thái đơn hàng';
          if (error instanceof Error) {
@@ -691,7 +763,7 @@ export default function OrderPage() {
             const token = localStorage.getItem('token');
             if (!token) return;
 
-            // Gọi API để cập nhật trạng thái đơn hàng thành "Thanh toán thất bại"
+            // First update to "Thanh toán thất bại"
             const response = await fetch(
                `http://68.183.226.198:3000/api/orders/${orderId}/status`,
                {
@@ -713,6 +785,31 @@ export default function OrderPage() {
                      order.id === orderId ? { ...order, status: 'Thanh toán thất bại' } : order,
                   ),
                );
+
+               // Then update to "Đã hủy" after a short delay
+               setTimeout(async () => {
+                  const cancelResponse = await fetch(
+                     `http://68.183.226.198:3000/api/orders/${orderId}/status`,
+                     {
+                        method: 'PATCH',
+                        headers: {
+                           Authorization: `Bearer ${token}`,
+                           'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                           status: 'Đã hủy',
+                        }),
+                     },
+                  );
+
+                  if (cancelResponse.ok) {
+                     setOrders((prevOrders) =>
+                        prevOrders.map((order) =>
+                           order.id === orderId ? { ...order, status: 'Đã hủy' } : order,
+                        ),
+                     );
+                  }
+               }, 1000); // Wait 1 second before updating to cancelled
 
                // Hiển thị thông báo
                showToastMessage(`Đơn hàng #${orderId} đã hết thời gian thanh toán`, 'error');
@@ -765,6 +862,8 @@ export default function OrderPage() {
    }, [orders, checkPendingPayments]);
 
    // Fix the handleCODOrderStatus function
+   // Removed duplicate declaration of handleCODOrderStatus
+
    const handleCODOrderStatus = useCallback(async () => {
       // Find orders that are COD and have status "Đơn hàng vừa được tạo"
       const codOrdersToUpdate = orders.filter(
@@ -776,7 +875,7 @@ export default function OrderPage() {
       const token = localStorage.getItem('token');
       if (!token) return;
 
-      // Update each order's status
+      // Update each order's status to "Đang xử lý" (instead of "Đã đặt hàng")
       for (const order of codOrdersToUpdate) {
          try {
             const response = await fetch(
@@ -788,7 +887,7 @@ export default function OrderPage() {
                      'Content-Type': 'application/json',
                   },
                   body: JSON.stringify({
-                     status: 'Đã đặt hàng', // Change to an explicitly allowed value from the error list
+                     status: 'Đang xử lý', // Follow the proper timeline for COD orders
                   }),
                },
             );
@@ -796,7 +895,7 @@ export default function OrderPage() {
             if (response.ok) {
                // Update the state locally
                setOrders((prevOrders) =>
-                  prevOrders.map((o) => (o.id === order.id ? { ...o, status: 'Đã đặt hàng' } : o)),
+                  prevOrders.map((o) => (o.id === order.id ? { ...o, status: 'Đang xử lý' } : o)),
                );
             } else {
                console.error(`Failed to update order ${order.id} status:`, await response.text());
@@ -813,6 +912,7 @@ export default function OrderPage() {
          handleCODOrderStatus();
       }
    }, [orders, handleCODOrderStatus]);
+
 
    if (loading) {
       return (
@@ -1032,7 +1132,7 @@ export default function OrderPage() {
                               </span>
                            </div>
 
-                           <div className='flex justify-between  items-center mt-4'>
+                           <div className='flex justify-between items-center mt-4'>
                               <span className='text-sm text-gray-600'>
                                  Địa chỉ giao hàng: {order.address}
                               </span>
@@ -1044,36 +1144,48 @@ export default function OrderPage() {
                                     Chi tiết
                                  </Link>
 
-                                 {/* Only show Cancel button for orders in appropriate statuses */}
-                                 {(order.status === 'Đơn hàng vừa được tạo' || order.status === 'Đang xử lý') && (
+                                 {/* Cancel button for new or processing orders */}
+                                 {(order.status === 'Đơn hàng vừa được tạo' ||
+                                    order.status === 'Đang xử lý' ||
+                                    order.status === 'Đang chờ thanh toán') && (
+                                       <button
+                                          onClick={() => handleCancelOrder(order.id)}
+                                          className='text-sm text-red-600 border border-red-300 bg-white hover:bg-red-50 px-3 py-1 rounded'
+                                       >
+                                          Hủy đơn
+                                       </button>
+                                    )}
+
+                                 {/* Complete button for orders that have been delivered for 2+ days */}
+                                 {isDeliveredForTwoDays(order) && (
                                     <button
-                                       onClick={() => handleCancelOrder(order.id)}
-                                       className='text-sm text-red-600 border border-red-300 bg-white hover:bg-red-50 px-3 py-1 rounded'
+                                       onClick={() => handleCompleteOrder(order.id)}
+                                       className='text-sm text-green-600 border border-green-300 bg-white hover:bg-green-50 px-3 py-1 rounded'
                                     >
-                                       Hủy đơn
+                                       Hoàn thành
                                     </button>
                                  )}
 
-                                 {/* Show Complete and Return/Exchange buttons for orders that have been in "Đang giao hàng" status for 2+ days */}
+                                 {/* Return/Exchange buttons for orders that have been in "Đang giao hàng" status for 2+ days */}
                                  {isDeliveredForTwoDays(order) && (
-                                    <div className="flex space-x-2">
-                                       <button
-                                          onClick={() => handleCompleteOrder(order.id)}
-                                          className='text-sm text-green-600 border border-green-300 bg-white hover:bg-green-50 px-3 py-1 rounded'
-                                       >
-                                          Hoàn thành
-                                       </button>
+                                    <>
                                        <button
                                           onClick={() => handleReturnOrder(order.id)}
                                           className='text-sm text-purple-600 border border-purple-300 bg-white hover:bg-purple-50 px-3 py-1 rounded'
                                        >
                                           Đổi/Trả
                                        </button>
-                                    </div>
+                                       <button
+                                          onClick={() => handleReturnWithRefund(order.id)}
+                                          className='text-sm text-yellow-600 border border-yellow-300 bg-white hover:bg-yellow-50 px-3 py-1 rounded'
+                                       >
+                                          Trả hàng hoàn tiền
+                                       </button>
+                                    </>
                                  )}
 
-                                 {/* Show Review button for orders with status "Đã giao hàng" OR "Hoàn thành" */}
-                                 {(order.status === 'Đã giao hàng' || order.status === 'Hoàn thành') && (
+                                 {/* Show Review button for orders with status "Hoàn thành" or "Đổi trả thành công" */}
+                                 {(order.status === 'Hoàn thành' || order.status === 'Đổi trả thành công') && (
                                     <Link
                                        href={`/user/order/rating`}
                                        className='text-sm text-green-600 border border-green-300 bg-white hover:bg-green-50 px-3 py-1 rounded'
@@ -1082,32 +1194,7 @@ export default function OrderPage() {
                                     </Link>
                                  )}
 
-                                 {/* Show Return button for orders with status "Đã giao hàng" */}
-                                 {order.status === 'Đã giao hàng' && (
-                                    <button
-                                       onClick={() => handleReturnOrder(order.id)}
-                                       className='text-sm text-yellow-600 border border-yellow-300 bg-white hover:bg-yellow-50 px-3 py-1 rounded'
-                                    >
-                                       Đổi trả
-                                    </button>
-                                 )}
 
-                                 {(order.status === 'Đã hủy' ||
-                                    order.status === 'Đã giao hàng') && (
-                                       <button
-                                          onClick={() => {
-                                             // Lưu thông tin sản phẩm vào localStorage để mua lại
-                                             // Đây chỉ là giả định, bạn cần thực hiện logic riêng
-                                             showToastMessage(
-                                                'Đang thêm sản phẩm vào giỏ hàng...',
-                                                'info',
-                                             );
-                                          }}
-                                          className='text-sm text-blue-600 border border-blue-300 bg-white hover:bg-blue-50 px-3 py-1 rounded'
-                                       >
-                                          Mua lại
-                                       </button>
-                                    )}
                               </div>
                            </div>
                         </div>

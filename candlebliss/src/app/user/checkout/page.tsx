@@ -1978,47 +1978,7 @@ export default function CheckoutPage() {
                         </div>
                      </div>
 
-                     {/* Thêm phần checkbox in hóa đơn */}
-                     <div className="mt-6 border-t border-gray-200 pt-4">
-                        <div className="flex items-center">
-                           <input
-                              type="checkbox"
-                              id="needInvoice"
-                              checked={needInvoice}
-                              onChange={(e) => setNeedInvoice(e.target.checked)}
-                              className="h-4 w-4 text-orange-600 focus:ring-orange-500 border-gray-300 rounded"
-                           />
-                           <label htmlFor="needInvoice" className="ml-2 block text-sm text-gray-900">
-                              Yêu cầu xuất hóa đơn
-                           </label>
-                           {needInvoice && (
-                              <button
-                                 type="button"
-                                 onClick={() => setShowInvoiceModal(true)}
-                                 className="ml-auto text-sm text-orange-600 hover:text-orange-700 font-medium"
-                              >
-                                 {invoiceInfo.name ? 'Chỉnh sửa thông tin' : 'Nhập thông tin'}
-                              </button>
-                           )}
-                        </div>
 
-                        {needInvoice && invoiceInfo.name && (
-                           <div className="mt-3 p-3 bg-orange-50 rounded-lg border border-orange-200 text-sm">
-                              <p className="font-medium">
-                                 {invoiceInfo.type === 'personal' ? 'Hóa đơn cá nhân' : 'Hóa đơn công ty'}
-                              </p>
-                              {invoiceInfo.type === 'company' && (
-                                 <>
-                                    <p>Công ty: <span className="font-medium">{invoiceInfo.companyName}</span></p>
-                                    <p>Mã số thuế: <span className="font-medium">{invoiceInfo.taxCode}</span></p>
-                                 </>
-                              )}
-                              <p>Người nhận: <span className="font-medium">{invoiceInfo.name}</span></p>
-                              <p>Địa chỉ: <span className="font-medium">{invoiceInfo.address}</span></p>
-                              <p>Email: <span className="font-medium">{invoiceInfo.email}</span></p>
-                           </div>
-                        )}
-                     </div>
                   </div>
                </div>
 
@@ -2234,6 +2194,47 @@ export default function CheckoutPage() {
                         </Link>{' '}
                         của chúng tôi
                      </p>
+                     {/* Thêm phần checkbox in hóa đơn */}
+                     <div className="mt-6 border-t border-gray-200 pt-4">
+                        <div className="flex items-center">
+                           <input
+                              type="checkbox"
+                              id="needInvoice"
+                              checked={needInvoice}
+                              onChange={(e) => setNeedInvoice(e.target.checked)}
+                              className="h-4 w-4 text-orange-600 focus:ring-orange-500 border-gray-300 rounded"
+                           />
+                           <label htmlFor="needInvoice" className="ml-2 block text-sm text-gray-900">
+                              Yêu cầu xuất hóa đơn
+                           </label>
+                           {needInvoice && (
+                              <button
+                                 type="button"
+                                 onClick={() => setShowInvoiceModal(true)}
+                                 className="ml-auto text-sm text-orange-600 hover:text-orange-700 font-medium"
+                              >
+                                 {invoiceInfo.name ? 'Chỉnh sửa thông tin' : 'Nhập thông tin'}
+                              </button>
+                           )}
+                        </div>
+
+                        {needInvoice && invoiceInfo.name && (
+                           <div className="mt-3 p-3 bg-orange-50 rounded-lg border border-orange-200 text-sm">
+                              <p className="font-medium">
+                                 {invoiceInfo.type === 'personal' ? 'Hóa đơn cá nhân' : 'Hóa đơn công ty'}
+                              </p>
+                              {invoiceInfo.type === 'company' && (
+                                 <>
+                                    <p>Công ty: <span className="font-medium">{invoiceInfo.companyName}</span></p>
+                                    <p>Mã số thuế: <span className="font-medium">{invoiceInfo.taxCode}</span></p>
+                                 </>
+                              )}
+                              <p>Người nhận: <span className="font-medium">{invoiceInfo.name}</span></p>
+                              <p>Địa chỉ: <span className="font-medium">{invoiceInfo.address}</span></p>
+                              <p>Email: <span className="font-medium">{invoiceInfo.email}</span></p>
+                           </div>
+                        )}
+                     </div>
                   </div>
                </div>
             </div>

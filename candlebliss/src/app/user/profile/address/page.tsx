@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { FaSpinner, FaExclamationTriangle, FaAddressBook, FaPlus } from 'react-icons/fa';
 
@@ -84,6 +84,9 @@ export default function AddressPage() {
    const router = useRouter();
    const [userId, setUserId] = useState<number | null>(null);
 
+   const initialized = useRef(false);
+   const addressesLoaded = useRef(false);
+
    const showToastMessage = useCallback((message: string, type: 'success' | 'error' | 'info') => {
       setToast({
          show: true,
@@ -104,7 +107,6 @@ export default function AddressPage() {
             throw new Error('No authentication token found');
          }
 
-         // Use relative URL path instead of hardcoded IP
          const response = await fetch(`/api/v1/users/${userId}`, {
             headers: {
                Authorization: `Bearer ${token}`,
@@ -294,8 +296,8 @@ export default function AddressPage() {
                      (data.user
                         ? `${data.user.firstName || ''} ${data.user.lastName || ''}`.trim()
                         : userInfo
-                        ? `${userInfo.firstName || ''} ${userInfo.lastName || ''}`.trim()
-                        : '');
+                           ? `${userInfo.firstName || ''} ${userInfo.lastName || ''}`.trim()
+                           : '');
 
                   const receiverPhone =
                      data.phone ||
@@ -347,10 +349,11 @@ export default function AddressPage() {
             if (validAddresses.length > 0) {
                setAddresses(validAddresses);
                setShowAddAddressForm(false);
-
+               addressesLoaded.current = true;
                showToastMessage(`Đã tìm thấy ${validAddresses.length} địa chỉ`, 'info');
             } else {
                setAddresses([]);
+               addressesLoaded.current = true;
 
                if (userId) {
                   try {
@@ -378,15 +381,19 @@ export default function AddressPage() {
                ...prev,
                isDefault: true,
             }));
-            setShowAddAddressForm(true);
+            if (addresses.length === 0) {
+               setShowAddAddressForm(true);
+            }
          }
       },
-      [findAddressesByUserId, getUserNameAndPhone, showToastMessage],
+      [findAddressesByUserId, getUserNameAndPhone, showToastMessage, addresses.length],
    );
 
    useEffect(() => {
       const initialize = async () => {
          try {
+            if (initialized.current) return;
+
             setIsLoading(true);
 
             const storedUserId = localStorage.getItem('userId');
@@ -399,12 +406,11 @@ export default function AddressPage() {
             const userIdNum = parseInt(storedUserId);
             setUserId(userIdNum);
 
-            // Kiểm tra nếu đã có dữ liệu địa chỉ thì không cần tải lại
-            if (addresses.length === 0) {
-               await loadUserInfo(userIdNum);
-               await loadUserAddresses(userIdNum);
-               await fetchProvinces();
-            }
+            await loadUserInfo(userIdNum);
+            await loadUserAddresses(userIdNum);
+            await fetchProvinces();
+
+            initialized.current = true;
          } catch (err) {
             if (err instanceof Error && err.message === 'Unauthorized') {
                router.push('/user/signin?redirect=/user/profile/address');
@@ -412,21 +418,23 @@ export default function AddressPage() {
             }
             setError('Không thể tải dữ liệu địa chỉ. Vui lòng thử lại sau.');
             showToastMessage('Không thể tải dữ liệu địa chỉ.', 'error');
+
+            if (!addresses.length) {
+               setShowAddAddressForm(true);
+            }
          } finally {
             setIsLoading(false);
          }
       };
 
       initialize();
-      // Đảm bảo dependencies không gây render lại liên tục
-   }, [
-      router,
-      loadUserInfo,
-      loadUserAddresses,
-      fetchProvinces,
-      showToastMessage,
-      addresses.length,
-   ]);
+   }, [router, loadUserInfo, loadUserAddresses, fetchProvinces, showToastMessage]);
+
+   useEffect(() => {
+      if (!isLoading && addresses.length === 0 && initialized.current) {
+         setShowAddAddressForm(true);
+      }
+   }, [addresses.length, isLoading]);
 
    useEffect(() => {
       const token = localStorage.getItem('token');
@@ -729,18 +737,15 @@ export default function AddressPage() {
       try {
          setIsLoading(true);
 
-         // Tạo một bản sao của địa chỉ hiện tại để chỉnh sửa
          setCurrentAddress({ ...address });
          setNewAddress({ ...address });
 
-         // Tìm và cập nhật provinces, districts, wards cho địa chỉ hiện tại
          const matchedProvince = provinces.find(
             (p) => p.name.toLowerCase() === address.province.toLowerCase(),
          );
 
          if (matchedProvince) {
             try {
-               // Lấy districts trước
                const distResponse = await fetch(
                   `https://provinces.open-api.vn/api/p/${matchedProvince.id}?depth=2`,
                );
@@ -752,7 +757,6 @@ export default function AddressPage() {
                   }));
                   setDistricts(distList);
 
-                  // Tìm district phù hợp và lấy wards
                   const matchedDistrict = distList.find(
                      (d: { name: string; id: string }) =>
                         d.name.toLowerCase() === address.district.toLowerCase(),
@@ -829,7 +833,7 @@ export default function AddressPage() {
             ward: String(newAddress.ward).toLowerCase(),
             street: String(newAddress.streetAddress),
             userId: userId || parseInt(localStorage.getItem('userId') || '0'),
-            isDefault: Boolean(newAddress.isDefault), // Convert to boolean
+            isDefault: Boolean(newAddress.isDefault),
          };
 
          console.log('Sending address data:', addressData);
@@ -1153,11 +1157,10 @@ export default function AddressPage() {
                                  type='button'
                                  onClick={handleCancelAddAddress}
                                  className={`flex-1 py-2 border border-gray-300 rounded-md text-gray-700 
-                                            ${
-                                               addresses.length === 0 && !newAddress.id
-                                                  ? 'opacity-50 cursor-not-allowed bg-gray-100'
-                                                  : 'hover:bg-gray-50'
-                                            }`}
+                                            ${addresses.length === 0 && !newAddress.id
+                                       ? 'opacity-50 cursor-not-allowed bg-gray-100'
+                                       : 'hover:bg-gray-50'
+                                    }`}
                                  disabled={addresses.length === 0 && !newAddress.id}
                               >
                                  Hủy

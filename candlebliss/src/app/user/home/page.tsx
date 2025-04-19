@@ -113,9 +113,8 @@ export default function HomePage() {
 
             {/* Accessories Section */}
             <div className='px-4 lg:px-0 py-8'>
-               <p className='text-center text-[#555659] text-lg font-mont'>Phụ kiện</p>
                <p className='text-center font-mont font-semibold text-xl lg:text-3xl pb-4'>
-                  PHỤ KIỆN NẾN
+                  Nến Thơm
                </p>
                <Suspense fallback={<LoadingSpinner />}>
                   <AccessoriesCarousel />

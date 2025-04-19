@@ -124,11 +124,11 @@ export default function MenuSideBar() {
                </div>
                <div className='px-4 py-2'>
                   <Link
-                     href='/payments'
+                     href='/seller/exchange'
                      className='flex items-center p-2 text-gray-600 hover:bg-gray-100 rounded'
                   >
                      <CreditCard size={18} className='mr-2' />
-                     <span>Quản Lý Đối trả</span>
+                     <span>Quản Lý Đổi trả</span>
                   </Link>
                </div>
                <div className='px-4 py-2'>
