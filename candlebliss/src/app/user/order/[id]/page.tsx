@@ -13,10 +13,28 @@ interface OrderItem {
    status: string;
    unit_price: string;
    product_detail_id: number;
+   product_id?: string; // Add this field
    quantity: number;
    totalPrice: string;
    product?: {
+      id?: number; // Add this field
       name: string;
+      images: string[];
+   };
+   product_detail?: {
+      id: number;
+      size: string;
+      type: string;
+      values: string;
+      images: string[];
+   };
+   productDetailData?: { // Add this field for detailed product info
+      id: number;
+      size: string;
+      type: string;
+      values: string;
+      quantities: number;
+      isActive: boolean;
       images: string[];
    };
    __entity: string;
@@ -439,6 +457,89 @@ export default function OrderDetailPage() {
       return timeline;
    };
 
+   // Add fetchProductDetails function inside OrderDetailPage component
+   const fetchProductDetails = useCallback(
+      async (order: Order | null) => {
+         if (!order) return;
+
+         const token = localStorage.getItem('token');
+         if (!token) return;
+
+         let hasUpdates = false;
+         const updatedOrder = { ...order };
+
+         // Process all items in the order
+         for (const item of updatedOrder.item) {
+            // Get the product data directly if we have product_id
+            if (item.product_id && (!item.product || !item.product.images || item.product.images.length === 0)) {
+               try {
+                  console.log(`Fetching product with ID: ${item.product_id}`);
+                  const productResponse = await fetch(
+                     `http://68.183.226.198:3000/api/products/${item.product_id}`,
+                     {
+                        headers: {
+                           Authorization: `Bearer ${token}`,
+                        },
+                     },
+                  );
+
+                  if (productResponse.ok) {
+                     const productData = await productResponse.json();
+                     console.log(`Product data fetched:`, productData);
+
+                     // Find the matching product detail
+                     const matchingDetail = productData.details?.find(
+                        (detail: { id: number }) => detail.id === item.product_detail_id
+                     );
+
+                     // Set the product information
+                     item.product = {
+                        id: productData.id,
+                        name: productData.name || "Sản phẩm không tên",
+                        images: productData.images?.map((img: { path: string }) => img.path) || []
+                     };
+
+                     // If we found matching detail, store it
+                     if (matchingDetail) {
+                        item.productDetailData = {
+                           id: matchingDetail.id,
+                           size: matchingDetail.size,
+                           type: matchingDetail.type,
+                           values: matchingDetail.values,
+                           quantities: matchingDetail.quantities,
+                           isActive: matchingDetail.isActive,
+                           images: matchingDetail.images?.map((img: { path: string }) => img.path) || []
+                        };
+
+                        // Set product_detail as well for compatibility
+                        if (!item.product_detail) {
+                           item.product_detail = {
+                              id: matchingDetail.id,
+                              size: matchingDetail.size,
+                              type: matchingDetail.type,
+                              values: matchingDetail.values,
+                              images: matchingDetail.images?.map((img: { path: string }) => img.path) || []
+                           };
+                        }
+                     }
+
+                     hasUpdates = true;
+                  } else {
+                     console.error(`Error fetching product ${item.product_id}, status: ${productResponse.status}`);
+                  }
+               } catch (productError) {
+                  console.error(`Failed to fetch product for product_id ${item.product_id}:`, productError);
+               }
+            }
+         }
+
+         if (hasUpdates) {
+            setOrder(updatedOrder);
+         }
+      },
+      []
+   );
+
    // Then update your useEffect
    useEffect(() => {
       const init = async () => {
@@ -513,6 +614,10 @@ export default function OrderDetailPage() {
             }
 
             setOrder(data);
+
+            // Fetch product details after setting the order
+            fetchProductDetails(data);
+
          } catch (error) {
             console.error('Error loading order detail:', error);
             showToastMessage('Không thể tải chi tiết đơn hàng', 'error');
@@ -522,7 +627,7 @@ export default function OrderDetailPage() {
       };
 
       init();
-   }, [orderId, router, showToastMessage]);
+   }, [orderId, router, showToastMessage, fetchProductDetails]);
 
    // Hàm để kiểm tra trạng thái tiếp theo có hợp lệ không
    const getValidNextStatuses = (currentStatus: string): string[] => {
@@ -919,7 +1024,7 @@ export default function OrderDetailPage() {
                            {/* Timeline Line */}
                            <div className='absolute left-3 top-0 h-full w-0.5 bg-gray-200'></div>
 
-                           {/* Dynamic Status Timeline - Only show actual status updates */}
+                           {/* Modified Status Timeline - Display based on status names */}
                            {processOrderStatusHistory(order).map((statusUpdate, index) => {
                               const statusColor = orderStatusColors[statusUpdate.status] || {
                                  bg: 'bg-gray-50',
@@ -932,7 +1037,7 @@ export default function OrderDetailPage() {
                               const isPaymentFailed = statusUpdate.status === 'Thanh toán thất bại';
                               const isRefundFailed = statusUpdate.status === 'Hoàn tiền thất bại';
 
-                              // Xác định icon phù hợp với trạng thái
+                              // Determine appropriate icon for the status
                               let statusIcon = (
                                  <svg
                                     xmlns='http://www.w3.org/2000/svg'
@@ -1023,9 +1128,15 @@ export default function OrderDetailPage() {
                            <div key={item.id} className='flex py-3 border-b border-gray-100'>
                               <div className='relative w-20 h-20 bg-gray-100 rounded'>
                                  <Image
-                                    src={item.product?.images?.[0] || '/images/placeholder.jpg'}
+                                    src={
+                                       item.product?.images?.[0] ||
+                                       item.productDetailData?.images?.[0] ||
+                                       item.product_detail?.images?.[0] ||
+                                       '/images/placeholder.jpg'
+                                    }
                                     alt={
-                                       item.product?.name || `Sản phẩm #${item.product_detail_id}`
+                                       item.product?.name ||
+                                       `Sản phẩm #${item.product_detail_id}`
                                     }
                                     layout='fill'
                                     objectFit='contain'
@@ -1036,8 +1147,13 @@ export default function OrderDetailPage() {
                                  <div className='flex justify-between'>
                                     <div>
                                        <p className='font-medium'>
-                                          {item.product?.name ||
-                                             `Sản phẩm #${item.product_detail_id}`}
+                                          {item.product?.name || `Sản phẩm #${item.product_detail_id}`}
+                                       </p>
+                                       <p className='text-sm text-gray-500 mt-1'>
+                                          {item.productDetailData?.size || item.product_detail?.size ?
+                                             `${item.productDetailData?.size || item.product_detail?.size} - ` :
+                                             ''}
+                                          {item.productDetailData?.values || item.product_detail?.values || ''}
                                        </p>
                                        <p className='text-sm text-gray-500 mt-1'>
                                           Đơn giá: {formatPrice(item.unit_price)}
@@ -1303,15 +1419,7 @@ export default function OrderDetailPage() {
                            </button>
                         )}
 
-                        {/* Nút mua lại luôn hiển thị trừ các trạng thái đặc biệt */}
-                        {!['Đang chờ thanh toán', 'Đổi trả hàng', 'Trả hàng hoàn tiền', 'Đang chờ hoàn tiền'].includes(order.status) && (
-                           <button
-                              onClick={() => router.push('/user/cart')}
-                              className='block w-full py-2 text-center bg-orange-600 rounded text-white hover:bg-orange-700'
-                           >
-                              Mua lại
-                           </button>
-                        )}
+
                      </div>
                   </div>
                </div>
