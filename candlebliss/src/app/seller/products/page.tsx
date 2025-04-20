@@ -160,6 +160,7 @@ const ProductTable = ({
    handleEditProduct,
    handleDeleteProduct,
    getCategoryNameById,
+   showToast, // Đảm bảo thêm tham số này vào định nghĩa
 }: {
    products: ProductViewModel[];
    loading: boolean;
@@ -167,7 +168,7 @@ const ProductTable = ({
    handleEditProduct: (productId: number) => void;
    handleDeleteProduct: (productId: number) => void;
    getCategoryNameById: (categoryId: number | undefined) => Promise<string>;
-   showToast: (message: string, type: 'success' | 'error' | 'info') => void;
+   showToast: (message: string, type: 'success' | 'error' | 'info') => void; // Đảm bảo có dòng này
 }) => {
    const [expandedProduct, setExpandedProduct] = useState<number | null>(null);
    const [detailPrices, setDetailPrices] = useState<
@@ -190,17 +191,115 @@ const ProductTable = ({
       detailId: number;
       images: Image[];
       currentImageIndex: number;
+      isLoading?: boolean;
    } | null>(null);
 
-   // Add this function to show detail images
-   const showDetailImages = (detailId: number, images: Image[]) => {
-      if (images && images.length > 0) {
+   // 1. Thêm state để lưu cache hình ảnh
+   const [detailImagesCache, setDetailImagesCache] = useState<Record<number, Image[]>>({});
+
+   // Add function to fetch detail images directly from API
+   const fetchDetailImages = async (detailId: number) => {
+      console.log('Fetching images for detail ID:', detailId);
+      try {
+         const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+         if (!token) {
+            console.log('No token found');
+            return null;
+         }
+
          setDetailImagesModal({
             detailId,
-            images,
-            currentImageIndex: 0
+            images: [],
+            currentImageIndex: 0,
+            isLoading: true
          });
+
+         console.log('Making API request to:', `http://68.183.226.198:3000/api/product-details/${detailId}`);
+
+         const response = await fetch(
+            `http://68.183.226.198:3000/api/product-details/${detailId}`,
+            {
+               headers: {
+                  Authorization: `Bearer ${token}`,
+               },
+            }
+         );
+
+         console.log('API response status:', response.status);
+
+         if (!response.ok) {
+            throw new Error(`Failed to fetch detail images: ${response.status}`);
+         }
+
+         const detailData = await response.json();
+         console.log('Received detail data:', detailData);
+
+         if (detailData && detailData.images && detailData.images.length > 0) {
+            console.log('Found images:', detailData.images.length);
+            setDetailImagesModal({
+               detailId,
+               images: detailData.images,
+               currentImageIndex: 0,
+               isLoading: false
+            });
+         } else {
+            console.log('No images found in detail data');
+            showToast('Không tìm thấy hình ảnh cho phiên bản này', 'info');
+            setDetailImagesModal(null);
+         }
+      } catch (error) {
+         console.error('Error fetching detail images:', error);
+         showToast('Không thể tải hình ảnh phiên bản', 'error');
+         setDetailImagesModal(null);
       }
+   };
+
+   // 2. Thêm hàm preload hình ảnh
+   const preloadDetailImages = async (detailId: number) => {
+      // Bỏ qua nếu đã có trong cache
+      if (detailImagesCache[detailId]?.length > 0) return;
+
+      console.log('Preloading images for detail ID:', detailId);
+
+      try {
+         const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+         if (!token) return;
+
+         const response = await fetch(
+            `http://68.183.226.198:3000/api/product-details/${detailId}`,
+            {
+               headers: {
+                  Authorization: `Bearer ${token}`,
+               },
+            }
+         );
+
+         if (!response.ok) {
+            console.error(`Failed to fetch detail images for ID ${detailId}: ${response.status}`);
+            return;
+         }
+
+         const detailData = await response.json();
+         console.log('Preloaded detail data:', detailData);
+
+         if (detailData && detailData.images && detailData.images.length > 0) {
+            console.log(`Found ${detailData.images.length} images for detail ID ${detailId}`);
+            // Cập nhật cache với hình ảnh vừa tải
+            setDetailImagesCache(prev => ({
+               ...prev,
+               [detailId]: detailData.images
+            }));
+         } else {
+            console.log(`No images found for detail ID ${detailId}`);
+         }
+      } catch (error) {
+         console.error('Error preloading detail images:', error);
+      }
+   };
+
+   // Update the showDetailImages function to use the API
+   const showDetailImages = (detailId: number) => {
+      fetchDetailImages(detailId);
    };
 
    // Filter products based on search term
@@ -370,6 +469,22 @@ const ProductTable = ({
          return false;
       }
    };
+
+   // 3. Sửa useEffect khi mở rộng sản phẩm
+   useEffect(() => {
+      if (expandedProduct !== null) {
+         // Tải giá sản phẩm
+         fetchProductDetailPrices(expandedProduct);
+
+         // Tải hình ảnh cho tất cả chi tiết sản phẩm
+         const product = products.find(p => p.id === expandedProduct);
+         if (product && product.details) {
+            product.details.forEach(detail => {
+               preloadDetailImages(detail.id);
+            });
+         }
+      }
+   }, [expandedProduct, products]);
 
    return (
       <div className='bg-white rounded-lg shadow overflow-hidden'>
@@ -763,14 +878,14 @@ const ProductTable = ({
                                                    <td className='px-6 py-4 whitespace-nowrap'>
                                                       <div className='flex items-center'>
                                                          <button
-                                                            onClick={() => detail.images?.length > 0 && showDetailImages(detail.id, detail.images)}
+                                                            onClick={() => showDetailImages(detail.id)}
                                                             className='h-10 w-10 flex-shrink-0 mr-3 border rounded-md overflow-hidden hover:opacity-80 transition-opacity'
-                                                            disabled={!detail.images || detail.images.length === 0}
                                                          >
-                                                            {detail.images && detail.images.length > 0 ? (
+                                                            {detailImagesCache[detail.id]?.length > 0 ? (
+                                                               // Sử dụng hình ảnh từ cache nếu có
                                                                <div className='relative h-full w-full'>
                                                                   <Image
-                                                                     src={detail.images[0].path}
+                                                                     src={detailImagesCache[detail.id][0].path}
                                                                      alt={`${product.name} - ${detail.size || ''} ${detail.type || ''}`}
                                                                      width={40}
                                                                      height={40}
@@ -780,15 +895,28 @@ const ProductTable = ({
                                                                         target.src = '/placeholder.png';
                                                                      }}
                                                                   />
-                                                                  {detail.images.length > 1 && (
+                                                                  {detailImagesCache[detail.id].length > 1 && (
                                                                      <div className='absolute bottom-0 right-0 bg-black bg-opacity-50 text-white text-xs rounded-tl-sm px-1'>
-                                                                        +{detail.images.length - 1}
+                                                                        +{detailImagesCache[detail.id].length - 1}
                                                                      </div>
                                                                   )}
                                                                </div>
                                                             ) : (
                                                                <div className='flex items-center justify-center h-full w-full text-gray-400 bg-gray-100'>
-                                                                  <PlusIcon className='h-5 w-5' />
+                                                                  <svg
+                                                                     xmlns="http://www.w3.org/2000/svg"
+                                                                     className="h-5 w-5"
+                                                                     fill="none"
+                                                                     viewBox="0 0 24 24"
+                                                                     stroke="currentColor"
+                                                                  >
+                                                                     <path
+                                                                        strokeLinecap="round"
+                                                                        strokeLinejoin="round"
+                                                                        strokeWidth={1.5}
+                                                                        d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                                                                     />
+                                                                  </svg>
                                                                </div>
                                                             )}
                                                          </button>
@@ -945,50 +1073,59 @@ const ProductTable = ({
                   </div>
 
                   <div className='flex flex-col items-center'>
-                     {/* Main image */}
-                     <div className='relative w-full h-64 md:h-96 mb-4 bg-gray-100 rounded-lg overflow-hidden'>
-                        <Image
-                           src={detailImagesModal.images[detailImagesModal.currentImageIndex].path}
-                           alt={`Product detail image`}
-                           fill
-                           className='object-contain'
-                           onError={(e) => {
-                              const target = e.target as HTMLImageElement;
-                              target.src = '/placeholder.png';
-                           }}
-                        />
-                     </div>
-
-                     {/* Thumbnails */}
-                     {detailImagesModal.images.length > 1 && (
-                        <div className='flex space-x-2 overflow-x-auto max-w-full py-2'>
-                           {detailImagesModal.images.map((image, index) => (
-                              <button
-                                 key={image.id}
-                                 onClick={() => setDetailImagesModal({
-                                    ...detailImagesModal,
-                                    currentImageIndex: index
-                                 })}
-                                 className={`h-16 w-16 flex-shrink-0 rounded border-2 ${detailImagesModal.currentImageIndex === index
-                                       ? 'border-amber-600'
-                                       : 'border-transparent hover:border-gray-300'
-                                    }`}
-                              >
-                                 <div className='relative h-full w-full'>
-                                    <Image
-                                       src={image.path}
-                                       alt={`Thumbnail ${index + 1}`}
-                                       fill
-                                       className='object-cover rounded'
-                                       onError={(e) => {
-                                          const target = e.target as HTMLImageElement;
-                                          target.src = '/placeholder.png';
-                                       }}
-                                    />
-                                 </div>
-                              </button>
-                           ))}
+                     {detailImagesModal.isLoading ? (
+                        <div className='py-20 flex flex-col items-center justify-center'>
+                           <div className='animate-spin rounded-full h-12 w-12 border-b-2 border-amber-700 mb-4'></div>
+                           <p className='text-gray-500'>Đang tải hình ảnh...</p>
                         </div>
+                     ) : (
+                        <>
+                           {/* Main image */}
+                           <div className='relative w-full h-64 md:h-96 mb-4 bg-gray-100 rounded-lg overflow-hidden'>
+                              <Image
+                                 src={detailImagesModal.images[detailImagesModal.currentImageIndex].path}
+                                 alt={`Product detail image`}
+                                 fill
+                                 className='object-contain'
+                                 onError={(e) => {
+                                    const target = e.target as HTMLImageElement;
+                                    target.src = '/placeholder.png';
+                                 }}
+                              />
+                           </div>
+
+                           {/* Thumbnails */}
+                           {detailImagesModal.images.length > 1 && (
+                              <div className='flex space-x-2 overflow-x-auto max-w-full py-2'>
+                                 {detailImagesModal.images.map((image, index) => (
+                                    <button
+                                       key={image.id}
+                                       onClick={() => setDetailImagesModal({
+                                          ...detailImagesModal,
+                                          currentImageIndex: index
+                                       })}
+                                       className={`h-16 w-16 flex-shrink-0 rounded border-2 ${detailImagesModal.currentImageIndex === index
+                                          ? 'border-amber-600'
+                                          : 'border-transparent hover:border-gray-300'
+                                          }`}
+                                    >
+                                       <div className='relative h-full w-full'>
+                                          <Image
+                                             src={image.path}
+                                             alt={`Thumbnail ${index + 1}`}
+                                             fill
+                                             className='object-cover rounded'
+                                             onError={(e) => {
+                                                const target = e.target as HTMLImageElement;
+                                                target.src = '/placeholder.png';
+                                             }}
+                                          />
+                                       </div>
+                                    </button>
+                                 ))}
+                              </div>
+                           )}
+                        </>
                      )}
                   </div>
 
@@ -1565,3 +1702,5 @@ export default function ProductManagement() {
       </div>
    );
 }
+
+

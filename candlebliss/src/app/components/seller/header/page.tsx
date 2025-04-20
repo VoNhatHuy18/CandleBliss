@@ -88,7 +88,7 @@ export default function Header() {
       const days = ['Chủ Nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy'];
       const day = days[currentDateTime.getDay()];
       const date = currentDateTime.getDate();
-      const month = currentDateTime.getMonth();
+      const month = currentDateTime.getMonth() + 1; 
       const year = currentDateTime.getFullYear();
 
       return `${day}, ${date} ${month} ${year}`;

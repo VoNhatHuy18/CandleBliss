@@ -28,8 +28,10 @@ interface OrderItem {
     status: string;
     unit_price: string;
     product_detail_id: number;
+    product_id?: string; // Add this field to match data structure
     quantity: number;
     totalPrice: string;
+
     product?: {
         id: number;
         name: string;
@@ -64,8 +66,6 @@ interface OrderItem {
             public_id: string;
         }>;
     };
-    exchange_reason?: string;
-    exchange_date?: string;
 }
 
 interface Order {
@@ -76,6 +76,7 @@ interface Order {
     address: string;
     total_quantity: number;
     total_price: string;
+    cancelReason: string;
     discount: string;
     ship_price: string;
     voucher_id: string;
@@ -132,11 +133,12 @@ const orderStatusColors: Record<string, { bg: string; text: string; border: stri
 
 // Danh sách các trạng thái đơn hàng có thể chuyển đến tiếp theo
 const nextPossibleStatuses: Record<string, string[]> = {
-    'Đổi trả hàng': ['Hoàn thành', 'Đang chờ hoàn tiền'],
+    'Đổi trả hàng': ['Đã chấp nhận đổi trả'],
     'Đổi hàng hoàn tiền': ['Đang chờ hoàn tiền', 'Hoàn thành'],
     'Đang chờ hoàn tiền': ['Hoàn tiền thành công', 'Hoàn tiền thất bại'],
     'Hoàn tiền thành công': ['Hoàn thành'],
     'Hoàn tiền thất bại': ['Đang chờ hoàn tiền', 'Đã hủy'],
+    'Đã chấp nhận đổi trả': ['Đã hoàn thành đổi trả và hoàn tiền'],
     'Hoàn thành': [], // Không thể chuyển tiếp
     'Đã hủy': [], // Không thể chuyển tiếp
 };
@@ -262,9 +264,81 @@ export default function ExchangePage() {
                     }
                 }
 
-                // Fetch product details for each item
+                // Process all items in the order
                 for (const item of order.item) {
-                    if (!fetchedDetails[item.product_detail_id] && item.product_detail_id) {
+                    // Get the product data directly if we have product_id
+                    if (item.product_id && (!item.product || !item.product.images || item.product.images.length === 0)) {
+                        try {
+                            console.log(`Fetching product with ID: ${item.product_id}`);
+                            const productResponse = await fetch(
+                                `http://68.183.226.198:3000/api/products/${item.product_id}`,
+                                {
+                                    headers: {
+                                        Authorization: `Bearer ${token}`,
+                                    },
+                                },
+                            );
+
+                            if (productResponse.ok) {
+                                const productData = await productResponse.json();
+                                console.log(`Product data fetched:`, productData);
+
+                                // Find the matching product detail
+                                const matchingDetail = productData.details?.find(
+                                    (detail: { id: number; size: string; type: string; values: string; quantities: number; isActive: boolean; images: Array<{ id: string; path: string; public_id: string }> }) => detail.id === item.product_detail_id
+                                );
+
+                                // Set the product information
+                                item.product = {
+                                    id: productData.id,
+                                    name: productData.name || "Sản phẩm không tên",
+                                    images: productData.images || []
+                                };
+
+                                // If we found matching detail, store it
+                                if (matchingDetail) {
+                                    item.productDetailData = {
+                                        id: matchingDetail.id,
+                                        size: matchingDetail.size,
+                                        type: matchingDetail.type,
+                                        values: matchingDetail.values,
+                                        quantities: matchingDetail.quantities,
+                                        isActive: matchingDetail.isActive,
+                                        images: matchingDetail.images || []
+                                    };
+
+                                    // Set product_detail as well for compatibility
+                                    if (!item.product_detail) {
+                                        item.product_detail = {
+                                            id: matchingDetail.id,
+                                            size: matchingDetail.size,
+                                            type: matchingDetail.type,
+                                            values: matchingDetail.values,
+                                            images: matchingDetail.images || []
+                                        };
+                                    }
+
+                                    // Mark detail as fetched
+                                    setFetchedDetails((prev) => ({
+                                        ...prev,
+                                        [item.product_detail_id]: true,
+                                    }));
+                                }
+
+                                hasUpdates = true;
+                            } else {
+                                console.error(`Error fetching product ${item.product_id}, status: ${productResponse.status}`);
+                            }
+                        } catch (productError) {
+                            console.error(`Failed to fetch product for product_id ${item.product_id}:`, productError);
+                        }
+                    }
+                    // If we don't have product_id but have product_detail_id, try to get product through the detail
+                    else if (
+                        item.product_detail_id &&
+                        !fetchedDetails[item.product_detail_id] &&
+                        (!item.productDetailData || !item.product)
+                    ) {
                         try {
                             const detailResponse = await fetch(
                                 `http://68.183.226.198:3000/api/product-details/${item.product_detail_id}`,
@@ -278,15 +352,15 @@ export default function ExchangePage() {
                             if (detailResponse.ok) {
                                 const detailData = await detailResponse.json();
                                 item.productDetailData = detailData;
-                                hasUpdates = true;
 
+                                // Mark detail as fetched
                                 setFetchedDetails((prev) => ({
                                     ...prev,
                                     [item.product_detail_id]: true,
                                 }));
 
-                                // Fetch product information
-                                if (detailData.product_id) {
+                                // If we have a product_id from the detail, fetch the product
+                                if (detailData.product_id && (!item.product || !item.product.name)) {
                                     try {
                                         const productResponse = await fetch(
                                             `http://68.183.226.198:3000/api/products/${detailData.product_id}`,
@@ -303,35 +377,9 @@ export default function ExchangePage() {
                                             if (!item.product) {
                                                 item.product = {
                                                     id: productData.id,
-                                                    name: productData.name,
-                                                    images: productData.images || [],
+                                                    name: productData.name || "Sản phẩm không tên",
+                                                    images: productData.images || []
                                                 };
-                                            }
-
-                                            const matchingDetail = productData.details?.find(
-                                                (detail: { id: number }) =>
-                                                    detail.id === item.product_detail_id,
-                                            );
-
-                                            if (
-                                                matchingDetail &&
-                                                matchingDetail.images &&
-                                                matchingDetail.images.length > 0
-                                            ) {
-                                                if (!item.product_detail) {
-                                                    item.product_detail = {
-                                                        id: matchingDetail.id,
-                                                        size: matchingDetail.size,
-                                                        type: matchingDetail.type,
-                                                        values: matchingDetail.values,
-                                                        images: matchingDetail.images,
-                                                    };
-                                                } else if (
-                                                    !item.product_detail.images ||
-                                                    item.product_detail.images.length === 0
-                                                ) {
-                                                    item.product_detail.images = matchingDetail.images;
-                                                }
                                             }
 
                                             hasUpdates = true;
@@ -343,6 +391,8 @@ export default function ExchangePage() {
                                         );
                                     }
                                 }
+
+                                hasUpdates = true;
                             }
                         } catch (error) {
                             console.error(
@@ -491,12 +541,14 @@ export default function ExchangePage() {
     // Update the list of valid statuses to match exactly what the API expects
     const validOrderStatuses = [
         'Đổi trả hàng',
-        'Đổi hàng hoàn tiền',
         'Đang chờ hoàn tiền',
         'Hoàn tiền thành công',
         'Hoàn tiền thất bại',
         'Hoàn thành',
-        'Đã hủy'
+        'Đã hủy',
+        'Đã chấp nhận đổi trả',  // Add this
+        'Đã hoàn thành đổi trả và hoàn tiền',
+        'Đã từ chối đổi trả'
     ];
 
     // Handle status update
@@ -1098,11 +1150,7 @@ export default function ExchangePage() {
                                                                 {formatPrice(item.unit_price)} × {item.quantity}
                                                             </span>
                                                         </div>
-                                                        {item.exchange_reason && (
-                                                            <p className='text-[10px] text-red-500 italic mt-0.5'>
-                                                                Lý do: {item.exchange_reason}
-                                                            </p>
-                                                        )}
+
                                                     </div>
                                                 </div>
                                             ))}
@@ -1132,6 +1180,13 @@ export default function ExchangePage() {
                                                     </span>
                                                 </div>
                                             </div>
+
+                                            {/* Add cancellation reason if available */}
+                                            {order.cancelReason && (order.status === 'Đã huỷ' || order.status === 'Đổi trả hàng') && (
+                                                <div className='mt-1 text-xs text-red-500'>
+                                                    <span className='font-medium'>{order.status === 'Đổi trả hàng' ? 'Lý do đổi trả:' : 'Lý do hủy:'}</span> {order.cancelReason}
+                                                </div>
+                                            )}
                                         </div>
 
                                         {/* Actions */}
@@ -1193,6 +1248,13 @@ export default function ExchangePage() {
                                         {selectedOrder.status}
                                     </p>
                                 </div>
+                                {/* Show cancelReason for both "Đã huỷ" and "Đổi trả hàng" statuses */}
+                                {selectedOrder.cancelReason && (selectedOrder.status === 'Đã huỷ' || selectedOrder.status === 'Đổi trả hàng') && (
+                                    <div className='mt-1 border-t border-gray-200 pt-1'>
+                                        <p className='text-xs text-gray-600'>{selectedOrder.status === 'Đổi trả hàng' ? 'Lý do đổi trả:' : 'Lý do huỷ:'}</p>
+                                        <p className='text-xs text-red-500 mt-0.5'>{selectedOrder.cancelReason}</p>
+                                    </div>
+                                )}
                             </div>
 
                             <div>

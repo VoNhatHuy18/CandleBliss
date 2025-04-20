@@ -7,8 +7,8 @@ import { useRouter, useSearchParams } from 'next/navigation'; // Add useSearchPa
 import Header from '@/app/components/user/nav/page';
 import Footer from '@/app/components/user/footer/page';
 import Toast from '@/app/components/ui/toast/Toast';
-import ReturnRequestModal from '@/app/components/user/returnrequest/ReturnRequest';
 import { retryOrderPayment } from '@/app/utils/orderUtils';
+import OrderActionModal from '@/app/components/user/orderactionmodals/OrderActionModals';
 
 // Interfaces
 interface OrderItem {
@@ -96,23 +96,23 @@ const formatDate = (dateString: string): string => {
    });
 };
 
-// Trạng thái đơn hàng và màu sắc tương ứng
+// Cập nhật trạng thái đơn hàng và màu sắc tương ứng
 const orderStatusColors: Record<string, { bg: string; text: string; border: string }> = {
    'Đơn hàng vừa được tạo': { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200' },
    'Đang chờ thanh toán': { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200' },
    'Thanh toán thất bại': { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200' },
    'Thanh toán thành công': { bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-200' },
    'Đang xử lý': { bg: 'bg-yellow-50', text: 'text-yellow-700', border: 'border-yellow-200' },
+   'Đã đặt hàng': { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200' },
    'Đang giao hàng': { bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200' },
    'Hoàn thành': { bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-200' },
-   'Đã hủy': { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200' },
+   'Đã huỷ': { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200' },
 
    // Đổi trả hàng
    'Đổi trả hàng': { bg: 'bg-yellow-50', text: 'text-yellow-700', border: 'border-yellow-200' },
-   'Xác nhận đổi trả': { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200' },
-   'Đổi trả thành công': { bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-200' },
-   'Từ chối đổi trả': { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200' },
-   'Đổi trả thất bại': { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200' },
+   'Đã chấp nhận đổi trả': { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200' },
+   'Đã hoàn thành đổi trả và hoàn tiền': { bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-200' },
+   'Đã từ chối đổi trả': { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200' },
 
    // Trả hàng hoàn tiền
    'Trả hàng hoàn tiền': { bg: 'bg-yellow-50', text: 'text-yellow-700', border: 'border-yellow-200' },
@@ -203,19 +203,6 @@ const PaymentCountdown = ({
    );
 };
 
-// Add this helper function before the OrderPage component
-const isDeliveredForTwoDays = (order: Order): boolean => {
-   // Check if order is in "Đang giao hàng" status
-   if (order.status !== 'Đang giao hàng') return false;
-
-   // Calculate if it's been at least 2 days since the order was updated
-   const updatedDate = new Date(order.updatedAt).getTime();
-   const now = new Date().getTime();
-   const twoDaysInMs = 2 * 24 * 60 * 60 * 1000; // 2 days in milliseconds
-
-   return now - updatedDate >= twoDaysInMs;
-};
-
 export default function OrderPage() {
    const router = useRouter();
    const [loading, setLoading] = useState(true);
@@ -234,12 +221,16 @@ export default function OrderPage() {
    // Add a new state to track which products have been fetched
    const [fetchedProducts, setFetchedProducts] = useState<Record<string, boolean>>({});
 
-   const [returnModalOpen, setReturnModalOpen] = useState(false);
-   const [returnType, setReturnType] = useState<'exchange' | 'refund'>('exchange');
+
    const [selectedOrderId, setSelectedOrderId] = useState<number | null>(null);
 
    // Add this state to track which order is currently processing payment
    const [processingPaymentOrderId, setProcessingPaymentOrderId] = useState<number | null>(null);
+
+   // Add these new states inside your OrderPage component right after the existing state declarations
+   const [actionModalOpen, setActionModalOpen] = useState(false);
+   const [actionType, setActionType] = useState<'cancel' | 'exchange' | 'refund'>('cancel');
+   const [actionLoading, setActionLoading] = useState(false);
 
    // Wrap with useCallback
    const showToastMessage = useCallback((message: string, type: 'success' | 'error' | 'info') => {
@@ -299,7 +290,6 @@ export default function OrderPage() {
       [router, showToastMessage],
    );
 
-   // Add a function to fetch product details
    const fetchProductDetails = useCallback(
       async (orders: Order[]) => {
          const token = localStorage.getItem('token');
@@ -310,9 +300,7 @@ export default function OrderPage() {
 
          for (const order of updatedOrders) {
             for (const item of order.item) {
-               console.log(`Processing item with product_id: ${item.product_id}, product_detail_id: ${item.product_detail_id}`);
-
-               // First try to fetch product directly using product_id
+               // First fetch the product data if needed
                if (item.product_id && !fetchedProducts[item.product_id]) {
                   try {
                      console.log(`Fetching product with ID: ${item.product_id}`);
@@ -329,12 +317,36 @@ export default function OrderPage() {
                         const productData = await productResponse.json();
                         console.log(`Product data fetched:`, productData);
 
-                        // Set the product information, handle both array and object formats for images
+                        // Find the matching product detail
+                        const matchingDetail = productData.details?.find(
+                           (detail: { id: number; size: string; type: string; values: string; quantities: number; isActive: boolean; images: Array<{ id: string; path: string; public_id: string }> }) => detail.id === item.product_detail_id
+                        );
+
+                        // Set the product information
                         item.product = {
                            id: productData.id,
                            name: productData.name || "Sản phẩm không tên",
-                           images: processProductImages(productData.images),
+                           images: productData.images || []
                         };
+
+                        // If we found matching detail, store it
+                        if (matchingDetail) {
+                           item.productDetailData = {
+                              id: matchingDetail.id,
+                              size: matchingDetail.size,
+                              type: matchingDetail.type,
+                              values: matchingDetail.values,
+                              quantities: matchingDetail.quantities,
+                              isActive: matchingDetail.isActive,
+                              images: matchingDetail.images || []
+                           };
+
+                           // Mark detail as fetched
+                           setFetchedDetails((prev) => ({
+                              ...prev,
+                              [item.product_detail_id]: true,
+                           }));
+                        }
 
                         // Mark product as fetched
                         setFetchedProducts((prev) => ({
@@ -343,45 +355,11 @@ export default function OrderPage() {
                         }));
 
                         hasUpdates = true;
-                        console.log(`Updated item with product data:`, item.product);
                      } else {
                         console.error(`Error fetching product ${item.product_id}, status: ${productResponse.status}`);
                      }
                   } catch (productError) {
                      console.error(`Failed to fetch product for product_id ${item.product_id}:`, productError);
-                  }
-               }
-
-               // Then fetch product detail info if needed
-               if (!fetchedDetails[item.product_detail_id] && item.product_detail_id) {
-                  try {
-                     console.log(`Fetching product detail with ID: ${item.product_detail_id}`);
-                     const detailResponse = await fetch(
-                        `http://68.183.226.198:3000/api/product-details/${item.product_detail_id}`,
-                        {
-                           headers: {
-                              Authorization: `Bearer ${token}`,
-                           },
-                        },
-                     );
-
-                     if (detailResponse.ok) {
-                        const detailData = await detailResponse.json();
-                        console.log(`Product detail data fetched:`, detailData);
-                        item.productDetailData = detailData;
-
-                        // Mark detail as fetched
-                        setFetchedDetails((prev) => ({
-                           ...prev,
-                           [item.product_detail_id]: true,
-                        }));
-
-                        hasUpdates = true;
-                     } else {
-                        console.error(`Error fetching product detail ${item.product_detail_id}, status: ${detailResponse.status}`);
-                     }
-                  } catch (detailError) {
-                     console.error(`Failed to fetch details for product_detail_id ${item.product_detail_id}:`, detailError);
                   }
                }
             }
@@ -398,23 +376,8 @@ export default function OrderPage() {
       },
       [fetchedDetails, fetchedProducts, statusFilter],
    );
-   
-   // Helper function to process product images in different formats
-   const processProductImages = (images: Array<{ id: string; path: string; public_id: string }> | { id: string; path: string; public_id: string } | null | undefined) => {
-      if (!images) return [];
 
-      // If images is an array
-      if (Array.isArray(images)) {
-         return images;
-      }
 
-      // If images is a single object
-      if (typeof images === 'object' && images.path) {
-         return [images];
-      }
-
-      return [];
-   };
 
    // Update useEffect with all dependencies
    useEffect(() => {
@@ -451,82 +414,7 @@ export default function OrderPage() {
    }, [orders, fetchProductDetails]);
 
    // Modified handleCancelOrder function to only allow cancellation in specific statuses
-   const handleCancelOrder = async (orderId: number) => {
-      if (!confirm('Bạn có chắc chắn muốn hủy đơn hàng này không?')) {
-         return;
-      }
 
-      // Find the order
-      const orderToCancel = orders.find(order => order.id === orderId);
-
-      // Check if order exists and is in a status that can be cancelled
-      if (!orderToCancel) {
-         showToastMessage('Không tìm thấy đơn hàng', 'error');
-         return;
-      }
-
-      // Only allow cancellation for orders in "Đơn hàng vừa được tạo" or "Đang xử lý" status
-      if (orderToCancel.status !== 'Đơn hàng vừa được tạo' && orderToCancel.status !== 'Đang xử lý') {
-         showToastMessage('Đơn hàng này không thể hủy ở trạng thái hiện tại', 'error');
-         return;
-      }
-
-      try {
-         setLoading(true);
-         const token = localStorage.getItem('token');
-
-         if (!token) {
-            showToastMessage('Phiên đăng nhập hết hạn, vui lòng đăng nhập lại', 'error');
-            router.push('/user/signin');
-            return;
-         }
-
-         // Use query parameter for status
-         const encodedStatus = encodeURIComponent('Đã huỷ');
-         // Call API to cancel the order
-         const response = await fetch(
-            `http://68.183.226.198:3000/api/orders/${orderId}/status?status=${encodedStatus}`,
-            {
-               method: 'PATCH',
-               headers: {
-                  Authorization: `Bearer ${token}`,
-                  'Content-Type': 'application/json',
-               }
-            }
-         );
-
-         // Handle specific error codes
-         if (response.status === 422) {
-            const errorData = await response.json();
-            showToastMessage(errorData.errors?.status || 'Trạng thái không hợp lệ', 'error');
-            return;
-         }
-
-         if (!response.ok) {
-            throw new Error('Không thể hủy đơn hàng');
-         }
-
-         // Update the state after successful API call
-         setOrders((prevOrders) =>
-            prevOrders.map((order) => (order.id === orderId ? { ...order, status: 'Đã huỷ' } : order))
-         );
-
-         showToastMessage('Đơn hàng đã được hủy thành công', 'success');
-      } catch (error: unknown) {
-         console.error('Error canceling order:', error);
-
-         let errorMessage = 'Không thể hủy đơn hàng';
-         if (error instanceof Error) {
-            errorMessage = error.message;
-         } else if (typeof error === 'object' && error && 'message' in error) {
-            errorMessage = String((error as { message: unknown }).message);
-         }
-
-         showToastMessage(errorMessage, 'error');
-      } finally {
-         setLoading(false);
-      }
-   };
 
    // Within the OrderPage component, add this new function to handle completing the order
    const handleCompleteOrder = async (orderId: number) => {
@@ -545,18 +433,16 @@ export default function OrderPage() {
             return;
          }
 
-         // Call API to update the order status to "Hoàn thành"
+         // Use query parameter format instead of request body
+         const encodedStatus = encodeURIComponent('Hoàn thành');
          const response = await fetch(
-            `http://68.183.226.198:3000/api/orders/${orderId}/status`,
+            `http://68.183.226.198:3000/api/orders/${orderId}/status?status=${encodedStatus}`,
             {
                method: 'PATCH',
                headers: {
                   Authorization: `Bearer ${token}`,
                   'Content-Type': 'application/json',
-               },
-               body: JSON.stringify({
-                  status: 'Hoàn thành',
-               }),
+               }
             }
          );
 
@@ -586,106 +472,10 @@ export default function OrderPage() {
       }
    };
 
-   // Add the handleReturnOrder function
-   const handleReturnOrder = (orderId: number) => {
-      setSelectedOrderId(orderId);
-      setReturnType('exchange');
-      setReturnModalOpen(true);
-   };
 
-   // Add this new function for handling the return and refund request
-   const handleReturnWithRefund = (orderId: number) => {
-      setSelectedOrderId(orderId);
-      setReturnType('refund');
-      setReturnModalOpen(true);
-   };
 
-   // Add this new function to handle the form submission from the modal:
-   const handleReturnRequestSubmit = async (data: { reason: string; images: File[] }, orderId: number) => {
-      try {
-         setLoading(true);
-         const token = localStorage.getItem('token');
 
-         if (!token) {
-            showToastMessage('Phiên đăng nhập hết hạn, vui lòng đăng nhập lại', 'error');
-            router.push('/user/signin');
-            return;
-         }
 
-         // Create FormData to handle file uploads
-         const formData = new FormData();
-         formData.append('reason', data.reason);
-         formData.append('order_id', orderId.toString());
-         formData.append('type', returnType === 'exchange' ? 'exchange' : 'refund');
-
-         // Add each image to the formData
-         data.images.forEach((image) => {
-            formData.append(`images`, image);
-         });
-
-         // First, upload the return request with images
-         const uploadResponse = await fetch(
-            `http://68.183.226.198:3000/api/return-requests`,
-            {
-               method: 'POST',
-               headers: {
-                  Authorization: `Bearer ${token}`,
-               },
-               body: formData,
-            }
-         );
-
-         if (!uploadResponse.ok) {
-            throw new Error('Không thể tạo yêu cầu đổi/trả hàng');
-         }
-
-         // Then update the order status
-         const newStatus = returnType === 'exchange' ? 'Đổi trả hàng' : 'Trả hàng hoàn tiền';
-         const encodedStatus = encodeURIComponent(newStatus);
-
-         const statusResponse = await fetch(
-            `http://68.183.226.198:3000/api/orders/${orderId}/status?status=${encodedStatus}`,
-            {
-               method: 'PATCH',
-               headers: {
-                  Authorization: `Bearer ${token}`,
-                  'Content-Type': 'application/json',
-               }
-            }
-         );
-
-         if (!statusResponse.ok) {
-            throw new Error('Không thể cập nhật trạng thái đơn hàng');
-         }
-
-         // Update the state after successful API call
-         setOrders((prevOrders) =>
-            prevOrders.map((order) => (order.id === orderId ? { ...order, status: newStatus } : order))
-         );
-
-         showToastMessage(
-            returnType === 'exchange'
-               ? 'Yêu cầu đổi/trả hàng đã được gửi'
-               : 'Yêu cầu trả hàng và hoàn tiền đã được gửi',
-            'success'
-         );
-      } catch (error: unknown) {
-         console.error('Error submitting return request:', error);
-
-         let errorMessage = 'Có lỗi xảy ra khi gửi yêu cầu';
-         if (error instanceof Error) {
-            errorMessage = error.message;
-         } else if (typeof error === 'object' && error && 'message' in error) {
-            errorMessage = String((error as { message: unknown }).message);
-         }
-
-         showToastMessage(errorMessage, 'error');
-      } finally {
-         setLoading(false);
-      }
-   };
-
-   // Handle filter change
    const handleFilterChange = useCallback((filterStatus: string | null) => {
       setStatusFilter(filterStatus);
    }, []);
@@ -840,9 +630,8 @@ export default function OrderPage() {
       }
    }, [orders, checkPendingPayments]);
 
-   // Fix the handleCODOrderStatus function
-   // Removed duplicate declaration of handleCODOrderStatus
-
+   // Thêm hàm này để xử lý trạng thái đơn hàng COD
+   // Hàm này sẽ tự động cập nhật trạng thái đơn hàng COD thành "Đang xử lý"
    const handleCODOrderStatus = useCallback(async () => {
       // Find orders that are COD and have status "Đơn hàng vừa được tạo"
       const codOrdersToUpdate = orders.filter(
@@ -854,21 +643,20 @@ export default function OrderPage() {
       const token = localStorage.getItem('token');
       if (!token) return;
 
-      // Update each order's status to "Đang xử lý" (instead of "Đã đặt hàng")
+      // Update each order's status to "Đang xử lý" using query parameter
       for (const order of codOrdersToUpdate) {
          try {
+            // Use query parameter for status with proper URL encoding
+            const encodedStatus = encodeURIComponent('Đang xử lý');
             const response = await fetch(
-               `http://68.183.226.198:3000/api/orders/${order.id}/status`,
+               `http://68.183.226.198:3000/api/orders/${order.id}/status?status=${encodedStatus}`,
                {
                   method: 'PATCH',
                   headers: {
                      Authorization: `Bearer ${token}`,
                      'Content-Type': 'application/json',
-                  },
-                  body: JSON.stringify({
-                     status: 'Đang xử lý', // Follow the proper timeline for COD orders
-                  }),
-               },
+                  }
+               }
             );
 
             if (response.ok) {
@@ -876,6 +664,7 @@ export default function OrderPage() {
                setOrders((prevOrders) =>
                   prevOrders.map((o) => (o.id === order.id ? { ...o, status: 'Đang xử lý' } : o)),
                );
+               console.log(`Successfully updated COD order ${order.id} status to "Đang xử lý"`);
             } else {
                console.error(`Failed to update order ${order.id} status:`, await response.text());
             }
@@ -976,6 +765,184 @@ export default function OrderPage() {
 
       checkMomoPayment();
    }, []);
+
+
+   // Sửa hàm uploadFile để thêm token authorization
+   const uploadFile = async (file: File): Promise<string | null> => {
+      try {
+         const token = localStorage.getItem('token');
+         if (!token) {
+            showToastMessage('Phiên đăng nhập hết hạn, vui lòng đăng nhập lại', 'error');
+            router.push('/user/signin');
+            return null;
+         }
+
+         const formData = new FormData();
+         formData.append('file', file);
+
+         const response = await fetch('http://68.183.226.198:3000/api/v1/files/upload', {
+            method: 'POST',
+            headers: {
+               'Authorization': `Bearer ${token}`,
+               // Lưu ý: Không thêm Content-Type khi sử dụng FormData vì browser sẽ tự động thêm boundary
+            },
+            body: formData,
+         });
+
+         if (!response.ok) {
+            console.error('File upload failed with status:', response.status);
+            throw new Error('File upload failed');
+         }
+
+         const data = await response.json();
+         return data.file?.path || null;
+      } catch (error) {
+         console.error('Error uploading file:', error);
+         return null;
+      }
+   };
+
+   // Function to handle cancel order
+   const handleCancelOrder = (orderId: number) => {
+      setSelectedOrderId(orderId);
+      setActionType('cancel');
+      setActionModalOpen(true);
+   };
+
+   // Function to handle return/exchange order
+   const handleReturnOrder = (orderId: number) => {
+      setSelectedOrderId(orderId);
+      setActionType('exchange');
+      setActionModalOpen(true);
+   };
+
+   // Function to handle return with refund
+   const handleReturnWithRefund = (orderId: number) => {
+      setSelectedOrderId(orderId);
+      setActionType('refund');
+      setActionModalOpen(true);
+   };
+
+   // Cập nhật hàm handleActionSubmit để kiểm tra trạng thái hợp lệ
+   const handleActionSubmit = async (reason: string, files: File[]) => {
+      if (!selectedOrderId) return;
+
+      try {
+         setActionLoading(true);
+
+         // Tìm đơn hàng hiện tại
+         const currentOrder = orders.find(order => order.id === selectedOrderId);
+         if (!currentOrder) {
+            showToastMessage('Không tìm thấy thông tin đơn hàng', 'error');
+            setActionLoading(false);
+            return;
+         }
+
+         // Kiểm tra các trạng thái hợp lệ cho từng loại hành động
+         const validStatuses = {
+            'cancel': ['Đơn hàng vừa được tạo', 'Đang xử lý', 'Đang chờ thanh toán'],
+            'exchange': ['Đang giao hàng'],
+            'refund': ['Đang giao hàng']
+         };
+
+         // Kiểm tra xem trạng thái hiện tại có cho phép thực hiện hành động không
+         if (!validStatuses[actionType].includes(currentOrder.status)) {
+            showToastMessage(
+               `Không thể thực hiện hành động này với đơn hàng ở trạng thái ${currentOrder.status}`,
+               'error'
+            );
+            setActionLoading(false);
+            return;
+         }
+
+         // Cập nhật status theo luồng xác định
+         let status = '';
+         if (actionType === 'cancel') {
+            status = 'Đã huỷ';
+         } else if (actionType === 'exchange') {
+            status = 'Đổi trả hàng';
+         } else if (actionType === 'refund') {
+            status = 'Đang chờ hoàn tiền'; // Thay đổi thành "Đang chờ hoàn tiền" thay vì "Trả hàng hoàn tiền"
+         }
+
+         // First, upload files if present (for return/exchange or refund)
+         let filePaths: string[] = [];
+         if (actionType !== 'cancel' && files.length > 0) {
+            // Upload each file and collect paths
+            const uploadPromises = files.map(file => uploadFile(file));
+            const results = await Promise.all(uploadPromises);
+
+            // Filter out failed uploads
+            filePaths = results.filter(path => path !== null) as string[];
+
+            if (filePaths.length < files.length) {
+               showToastMessage('Một số hình ảnh không thể tải lên', 'error');
+            }
+         }
+
+         // Prepare images data if we have file paths
+         const imagesData = filePaths.length > 0 ? { images: filePaths } : {};
+
+         const token = localStorage.getItem('token');
+         if (!token) {
+            showToastMessage('Phiên đăng nhập hết hạn, vui lòng đăng nhập lại', 'error');
+            router.push('/user/signin');
+            return;
+         }
+
+         // Encode parameters for URL
+         const encodedReason = encodeURIComponent(reason);
+         const encodedStatus = encodeURIComponent(status);
+
+         // Make API call to cancel or return the order
+         const apiUrl = `http://68.183.226.198:3000/api/orders/cancel-or-return/${selectedOrderId}?reason=${encodedReason}&status=${encodedStatus}`;
+
+         const response = await fetch(apiUrl, {
+            method: 'PATCH',
+            headers: {
+               'Authorization': `Bearer ${token}`,
+               'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(imagesData),
+         });
+
+         // Xử lý phản hồi từ API
+         if (!response.ok) {
+            // Nếu có lỗi HTTP, phân tích nội dung lỗi
+            const errorData = await response.json();
+            throw new Error(errorData.message || `API request failed with status ${response.status}`);
+         }
+
+         // Update local state to reflect the change
+         setOrders(prevOrders =>
+            prevOrders.map(order =>
+               order.id === selectedOrderId ? { ...order, status } : order
+            )
+         );
+
+         setActionModalOpen(false);
+         showToastMessage(
+            actionType === 'cancel'
+               ? 'Đơn hàng đã được hủy thành công'
+               : actionType === 'exchange'
+                  ? 'Yêu cầu đổi/trả hàng đã được gửi'
+                  : 'Yêu cầu trả hàng hoàn tiền đã được gửi',
+            'success'
+         );
+      } catch (error) {
+         console.error('Error processing action:', error);
+
+         // Hiển thị thông báo lỗi cụ thể từ API nếu có
+         let errorMessage = 'Có lỗi xảy ra khi xử lý yêu cầu';
+         if (error instanceof Error) {
+            errorMessage = error.message;
+         }
+
+         showToastMessage(errorMessage, 'error');
+      } finally {
+         setActionLoading(false);
+      }
+   };
 
    if (loading) {
       return (
@@ -1194,6 +1161,7 @@ export default function OrderPage() {
                               </span>
                            </div>
 
+                           {/* Order actions */}
                            <div className='flex justify-between items-center mt-4'>
                               <span className='text-sm text-gray-600'>
                                  Địa chỉ giao hàng: {order.address}
@@ -1206,13 +1174,12 @@ export default function OrderPage() {
                                     Chi tiết
                                  </Link>
 
-                                 {/* Add Retry Payment button for waiting orders */}
+                                 {/* Retry Payment button - chỉ hiển thị khi đơn hàng đang chờ thanh toán và còn trong thời gian cho phép */}
                                  {order.status === 'Đang chờ thanh toán' && (() => {
-                                    // Calculate if it's still within 15 minutes
                                     const createdTime = new Date(order.createdAt).getTime();
                                     const now = new Date().getTime();
                                     const timePassed = now - createdTime;
-                                    const timeoutMs = 15 * 60 * 1000; // 15 minutes
+                                    const timeoutMs = 15 * 60 * 1000; // 15 phút
 
                                     if (timePassed < timeoutMs) {
                                        return (
@@ -1238,7 +1205,7 @@ export default function OrderPage() {
                                     return null;
                                  })()}
 
-                                 {/* Cancel button for new or processing or waiting for payment orders */}
+                                 {/* Nút hủy đơn - chỉ hiển thị ở các trạng thái phù hợp */}
                                  {(order.status === 'Đơn hàng vừa được tạo' ||
                                     order.status === 'Đang xử lý' ||
                                     order.status === 'Đang chờ thanh toán') && (
@@ -1250,8 +1217,8 @@ export default function OrderPage() {
                                        </button>
                                     )}
 
-                                 {/* Rest of your buttons... */}
-                                 {isDeliveredForTwoDays(order) && (
+                                 {/* Show Complete button for any order in "Đang giao hàng" status */}
+                                 {order.status === 'Đang giao hàng' && (
                                     <button
                                        onClick={() => handleCompleteOrder(order.id)}
                                        className='text-sm text-green-600 border border-green-300 bg-white hover:bg-green-50 px-3 py-1 rounded'
@@ -1260,19 +1227,23 @@ export default function OrderPage() {
                                     </button>
                                  )}
 
-                                 {/* Return/Exchange buttons */}
-                                 <button
-                                    onClick={() => handleReturnOrder(order.id)}
-                                    className='text-sm text-purple-600 border border-purple-300 bg-white hover:bg-purple-50 px-3 py-1 rounded'
-                                 >
-                                    Đổi/Trả
-                                 </button>
-                                 <button
-                                    onClick={() => handleReturnWithRefund(order.id)}
-                                    className='text-sm text-yellow-600 border border-yellow-300 bg-white hover:bg-yellow-50 px-3 py-1 rounded'
-                                 >
-                                    Trả hàng hoàn tiền
-                                 </button>
+                                 {/* Nút Đổi/Trả và Trả hàng hoàn tiền - chỉ hiển thị ở trạng thái Đang giao hàng */}
+                                 {order.status === 'Đang giao hàng' && (
+                                    <>
+                                       <button
+                                          onClick={() => handleReturnOrder(order.id)}
+                                          className='text-sm text-purple-600 border border-purple-300 bg-white hover:bg-purple-50 px-3 py-1 rounded'
+                                       >
+                                          Đổi/Trả
+                                       </button>
+                                       <button
+                                          onClick={() => handleReturnWithRefund(order.id)}
+                                          className='text-sm text-yellow-600 border border-yellow-300 bg-white hover:bg-yellow-50 px-3 py-1 rounded'
+                                       >
+                                          Trả hàng hoàn tiền
+                                       </button>
+                                    </>
+                                 )}
 
                                  {/* Show Review button */}
                                  {(order.status === 'Hoàn thành' || order.status === 'Đổi trả thành công') && (
@@ -1293,23 +1264,22 @@ export default function OrderPage() {
          </div>
 
          <Footer />
-         {selectedOrderId !== null && (
-            <ReturnRequestModal
-               isOpen={returnModalOpen}
-               onClose={() => setReturnModalOpen(false)}
-               onSubmit={handleReturnRequestSubmit}
-               orderId={selectedOrderId} type={'exchange'} />
-         )}
-         {/* Return Request Modal */}
-         {selectedOrderId && (
-            <ReturnRequestModal
-               isOpen={returnModalOpen}
-               orderId={selectedOrderId}
-               type={returnType}
-               onClose={() => setReturnModalOpen(false)}
-               onSubmit={handleReturnRequestSubmit}
-            />
-         )}
+
+         {/* Order Action Modal */}
+         <OrderActionModal
+            isOpen={actionModalOpen}
+            onClose={() => setActionModalOpen(false)}
+            title={
+               actionType === 'cancel'
+                  ? 'Hủy đơn hàng'
+                  : actionType === 'exchange'
+                     ? 'Yêu cầu đổi/trả hàng'
+                     : 'Yêu cầu trả hàng hoàn tiền'
+            }
+            actionType={actionType}
+            onSubmit={handleActionSubmit}
+            isLoading={actionLoading}
+         />
       </div>
    );
 }

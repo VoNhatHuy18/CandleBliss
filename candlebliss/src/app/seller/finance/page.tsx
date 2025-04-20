@@ -154,20 +154,27 @@ export default function FinancePage() {
       }
    }, [timeFilter, timeValue, year, chartView]);
 
+   // Modify the fetchStatisticsData function to properly filter orders
    const fetchStatisticsData = async () => {
       setLoading(true);
       try {
-         const response = await fetch(`/api/orders/statistics?timeFilter=${timeFilter}&timeValue=${timeValue}&year=${year}`);
-         if (!response.ok) {
-            throw new Error('Failed to fetch statistics data');
-         }
-         const data = await response.json();
-         setStatsData(data);
+         // Filter orders with valid statuses for revenue calculation
+         const validOrders = orders.filter(order => isRevenueCountableStatus(order.status));
 
-         // Cập nhật dữ liệu cho biểu đồ
-         updateChartData(data);
+         // Calculate statistics based on filtered orders
+         const statsData = {
+            totalRevenue: validOrders.reduce((sum, order) => sum + parseInt(order.total_price), 0),
+            totalOrderValue: validOrders.reduce((sum, order) => sum + parseInt(order.total_price), 0),
+            totalShippingFee: validOrders.reduce((sum, order) => sum + parseInt(order.ship_price), 0),
+            totalOrders: validOrders.length
+         };
+
+         setStatsData(statsData);
+
+         // Update chart data
+         updateChartData(statsData);
       } catch (error) {
-         console.error('Error fetching statistics data:', error);
+         console.error('Error processing statistics data:', error);
       } finally {
          setLoading(false);
       }
@@ -232,8 +239,10 @@ export default function FinancePage() {
 
       if (hasUpdates) {
          setOrders(updatedOrders);
-         // Cập nhật filteredOrders nếu cần
-         const filtered = updatedOrders.filter(order => order.status === 'Hoàn thành');
+
+         // Filter orders by valid statuses before mapping to completedOrders
+         const filtered = updatedOrders.filter(order => isRevenueCountableStatus(order.status));
+
          const mappedOrders = filtered.map((order) => {
             // Format date for display
             const date = new Date(order.createdAt);
@@ -251,6 +260,7 @@ export default function FinancePage() {
                date: formattedDate,
             };
          });
+
          setCompletedOrders(mappedOrders);
       }
    }, [fetchedUserIds]);
@@ -260,6 +270,13 @@ export default function FinancePage() {
          fetchUserData(orders);
       }
    }, [orders, fetchUserData]);
+
+   // Add this useEffect to recalculate statistics when orders change
+   useEffect(() => {
+      if (orders.length > 0) {
+         fetchStatisticsData();
+      }
+   }, [orders]);
 
    const handleTimeFilterChange = (event: { target: { value: SetStateAction<string>; }; }) => {
       setTimeFilter(event.target.value);
@@ -422,6 +439,8 @@ export default function FinancePage() {
 
    // Nếu không có API lịch sử, chúng ta có thể tạo dữ liệu mẫu:
    const generateSampleHistoricalData = () => {
+      // Ghi chú: Đã lọc theo các trạng thái hợp lệ: 
+      // 'Hoàn thành', 'Đã hoàn thành đổi trả và hoàn tiền', 'Hoàn tiền thất bại', 'Đã từ chối đổi trả'
       let sampleData = [];
 
       if (timeFilter === 'month') {
@@ -557,6 +576,17 @@ export default function FinancePage() {
             }
          ]
       });
+   };
+
+   // Helper function to check if order status should be counted for revenue
+   const isRevenueCountableStatus = (status: string) => {
+      const validStatuses = [
+         'Hoàn thành',
+         'Đã hoàn thành đổi trả và hoàn tiền',
+         'Hoàn tiền thất bại',
+         'Đã từ chối đổi trả'
+      ];
+      return validStatuses.includes(status);
    };
 
    return (
@@ -869,9 +899,13 @@ export default function FinancePage() {
                                                    {order.total.toLocaleString()} VND
                                                 </td>
                                                 <td className='py-3 px-4 text-sm'>
-                                                   <span className={`px-2 py-1 rounded-full text-xs font-medium ${order.status === 'Đơn hàng vừa được tạo'
-                                                      ? 'bg-blue-100 text-blue-700'
-                                                      : 'bg-green-100 text-green-700'
+                                                   <span className={`px-2 py-1 rounded-full text-xs font-medium ${order.status === 'Hoàn thành'
+                                                      ? 'bg-green-100 text-green-700'
+                                                      : order.status === 'Đã hoàn thành đổi trả và hoàn tiền'
+                                                         ? 'bg-blue-100 text-blue-700'
+                                                         : order.status === 'Hoàn tiền thất bại'
+                                                            ? 'bg-yellow-100 text-yellow-700'
+                                                            : 'bg-red-100 text-red-700'
                                                       }`}>
                                                       {order.status}
                                                    </span>

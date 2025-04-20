@@ -381,6 +381,16 @@ export default function ProductDetailPage() {
                console.log('Dữ liệu sản phẩm:', productData);
 
                processProductData(productData);
+
+               // Tải hình ảnh chi tiết cho tất cả các phiên bản sản phẩm
+               if (productData.details && productData.details.length > 0) {
+                  // Tải tuần tự để tránh đồng thời quá nhiều request
+                  for (const detail of productData.details) {
+                     if (detail.isActive) {
+                        await fetchProductDetailImages(detail.id);
+                     }
+                  }
+               }
             } catch (fetchErr) {
                console.error('Lỗi khi lấy thông tin sản phẩm:', fetchErr);
                setError(fetchErr instanceof Error ? fetchErr.message : 'Lỗi kết nối tới máy chủ');
@@ -529,6 +539,53 @@ export default function ProductDetailPage() {
          fetchProductRatings(productId);
       }
    }, [activeTab, productId, fetchProductRatings]);
+
+   // Thêm hàm để tải chi tiết sản phẩm từ API
+   const fetchProductDetailImages = async (detailId: number) => {
+      try {
+         console.log('Tải hình ảnh chi tiết cho ID:', detailId);
+
+         // Gọi API lấy chi tiết sản phẩm
+         const response = await fetch(
+            `http://68.183.226.198:3000/api/product-details/${detailId}`
+         );
+
+         if (!response.ok) {
+            console.error('Lỗi khi tải chi tiết sản phẩm:', response.status);
+            return null;
+         }
+
+         const detailData = await response.json();
+         console.log('Dữ liệu chi tiết sản phẩm:', detailData);
+
+         if (detailData && detailData.images && detailData.images.length > 0) {
+            // Cập nhật chi tiết sản phẩm
+            setProductDetails(prev =>
+               prev.map(detail =>
+                  detail.id === detailId
+                     ? { ...detail, images: detailData.images }
+                     : detail
+               )
+            );
+            return detailData.images;
+         }
+
+         return null;
+      } catch (error) {
+         console.error('Lỗi khi tải hình ảnh chi tiết:', error);
+         return null;
+      }
+   };
+
+   // Khi người dùng chọn phiên bản sản phẩm, tải hình ảnh chi tiết nếu chưa có
+   useEffect(() => {
+      if (selectedDetailId !== null) {
+         const currentDetail = productDetails.find(d => d.id === selectedDetailId);
+         if (currentDetail && (!currentDetail.images || currentDetail.images.length === 0)) {
+            fetchProductDetailImages(selectedDetailId);
+         }
+      }
+   }, [selectedDetailId]);
 
    const selectedPriceInfo =
       selectedDetailId && detailPrices[selectedDetailId]
@@ -727,6 +784,7 @@ export default function ProductDetailPage() {
                         (detail) =>
                            detail.isActive &&
                            detail.images &&
+                           detail.images.length > 0 &&
                            detail.images.map((img, detailImgIndex) => (
                               <div
                                  key={`detail-${detail.id}-${detailImgIndex}`}

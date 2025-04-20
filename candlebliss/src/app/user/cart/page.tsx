@@ -16,7 +16,9 @@ interface CartItem {
    quantity: number;
    image: string;
    type: string;
-   options: { name: string; value: string }[];
+   size: string;
+   value: string;
+   options: { name: string; value: string, type: string }[];
    productDetailId?: number;
    totalPrice?: number;
 }
@@ -628,9 +630,8 @@ export default function CartPage() {
             {/* Sync message */}
             {syncMessage && (
                <div
-                  className={`mb-4 p-3 bg-blue-50 text-blue-700 rounded-md flex items-center ${
-                     syncing ? 'justify-between' : 'justify-center'
-                  }`}
+                  className={`mb-4 p-3 bg-blue-50 text-blue-700 rounded-md flex items-center ${syncing ? 'justify-between' : 'justify-center'
+                     }`}
                >
                   <span>{syncMessage}</span>
                   {syncing && (
@@ -733,56 +734,36 @@ export default function CartPage() {
                                                 )}
 
                                              {/* Extract fragrance/value from options */}
-                                             {item.options &&
-                                                item.options.find(
-                                                   (opt) =>
-                                                      opt.name === 'Giá trị' ||
-                                                      opt.name === 'Mùi hương',
-                                                ) && (
-                                                   <div className='flex items-center'>
-                                                      <span className='text-gray-500'>
-                                                         Mùi hương:
-                                                      </span>
-                                                      <span className='text-gray-700 ml-1'>
-                                                         {
-                                                            item.options.find(
-                                                               (opt) =>
-                                                                  opt.name === 'Giá trị' ||
-                                                                  opt.name === 'Mùi hương',
-                                                            )?.value
-                                                         }
-                                                      </span>
-                                                   </div>
-                                                )}
 
-                                             {/* Show type without "Loại:" prefix if no specific options found */}
-                                             {item.type &&
-                                                !item.options?.some(
-                                                   (opt) =>
-                                                      opt.name === 'Giá trị' ||
-                                                      opt.name === 'Mùi hương',
-                                                ) && (
-                                                   <div className='flex items-center'>
-                                                      <span className='text-gray-500'>
-                                                         Mùi hương:
-                                                      </span>
-                                                      <span className='text-gray-700 ml-1'>
-                                                         {item.type.replace('Loại: ', '')}
-                                                      </span>
-                                                   </div>
-                                                )}
+                                             <div className='flex items-center'>
+                                                <span className='text-gray-500'>
+                                                   {item.type}
+                                                </span>
+                                                <span className='text-gray-700 ml-1'>
+                                                   {
+                                                      item.options.find(
+                                                         (opt) =>
+                                                            opt.name === 'Giá trị' ||
+                                                            opt.name === 'Chất liệu' ||
+                                                            opt.name === 'Mùi hương',
+                                                      )?.value
+                                                   }
+                                                </span>
+                                             </div>
+
+
+
                                              {/* Add stock information if available in product details */}
                                              {productDetails[item.detailId] && (
                                                 <div className='text-sm mt-1'>
                                                    <span
-                                                      className={`${
-                                                         productDetails[item.detailId].stock > 10
-                                                            ? 'text-green-600'
-                                                            : productDetails[item.detailId].stock >
-                                                              0
+                                                      className={`${productDetails[item.detailId].stock > 10
+                                                         ? 'text-green-600'
+                                                         : productDetails[item.detailId].stock >
+                                                            0
                                                             ? 'text-orange-600'
                                                             : 'text-red-600'
-                                                      }`}
+                                                         }`}
                                                    ></span>
                                                 </div>
                                              )}
@@ -889,11 +870,10 @@ export default function CartPage() {
                         </div>
 
                         <button
-                           className={`w-full py-3 ${
-                              syncing
-                                 ? 'bg-gray-400 cursor-not-allowed'
-                                 : 'bg-orange-700 hover:bg-orange-800'
-                           } text-white rounded transition`}
+                           className={`w-full py-3 ${syncing
+                              ? 'bg-gray-400 cursor-not-allowed'
+                              : 'bg-orange-700 hover:bg-orange-800'
+                              } text-white rounded transition`}
                            onClick={handleCheckout}
                            disabled={syncing}
                         >

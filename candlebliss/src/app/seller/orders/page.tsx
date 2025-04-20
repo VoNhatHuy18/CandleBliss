@@ -28,6 +28,7 @@ interface OrderItem {
    status: string;
    unit_price: string;
    product_detail_id: number;
+   product_id?: string; // Add this field to match data structure
    quantity: number;
    totalPrice: string;
    product?: {
@@ -66,6 +67,7 @@ interface OrderItem {
    };
 }
 
+
 interface Order {
    id: number;
    order_code: string;
@@ -80,6 +82,7 @@ interface Order {
    method_payment: string;
    createdAt: string;
    updatedAt: string;
+   cancelReason?: string | null; // Add this field
    item: OrderItem[];
    __entity: string;
    user?: {
@@ -89,6 +92,8 @@ interface Order {
       email: string;
    };
 }
+
+// ...existing code...
 
 // Format price helper function
 const formatPrice = (price: string | number): string => {
@@ -117,29 +122,24 @@ const orderStatusColors: Record<string, { bg: string; text: string; border: stri
    'Đơn hàng vừa được tạo': { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200' },
    'Đang chờ thanh toán': { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200' },
    'Thanh toán thất bại': { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200' },
-   'Thanh toán thành công': {
-      bg: 'bg-green-50',
-      text: 'text-green-700',
-      border: 'border-green-200',
-   },
+   'Thanh toán thành công': { bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-200' },
    'Đang xử lý': { bg: 'bg-yellow-50', text: 'text-yellow-700', border: 'border-yellow-200' },
-   'Đang giao hàng': { bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200' },
    'Đã đặt hàng': { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200' },
-   'Đã giao hàng': { bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-200' },
+   'Đang giao hàng': { bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200' },
    'Hoàn thành': { bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-200' },
    'Đã huỷ': { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200' },
-   'Đang chờ hoàn tiền': {
-      bg: 'bg-yellow-50',
-      text: 'text-yellow-700',
-      border: 'border-yellow-200',
-   },
-   'Hoàn tiền thành công': {
-      bg: 'bg-green-50',
-      text: 'text-green-700',
-      border: 'border-green-200',
-   },
-   'Hoàn tiền thất bại': { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200' },
+
+   // Đổi trả hàng
    'Đổi trả hàng': { bg: 'bg-yellow-50', text: 'text-yellow-700', border: 'border-yellow-200' },
+   'Đã chấp nhận đổi trả': { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200' },
+   'Đã hoàn thành đổi trả và hoàn tiền': { bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-200' },
+   'Đã từ chối đổi trả': { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200' },
+
+   // Trả hàng hoàn tiền
+   'Trả hàng hoàn tiền': { bg: 'bg-yellow-50', text: 'text-yellow-700', border: 'border-yellow-200' },
+   'Đang chờ hoàn tiền': { bg: 'bg-yellow-50', text: 'text-yellow-700', border: 'border-yellow-200' },
+   'Hoàn tiền thành công': { bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-200' },
+   'Hoàn tiền thất bại': { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200' },
 };
 
 // Danh sách các trạng thái đơn hàng có thể chuyển đến tiếp theo
@@ -151,12 +151,14 @@ const nextPossibleStatuses: Record<string, string[]> = {
    'Đang xử lý': ['Đang giao hàng', 'Đã huỷ'],
    'Đang giao hàng': ['Hoàn thành', 'Đổi trả hàng'],
    'Đã đặt hàng': ['Đang xử lý', 'Đã huỷ'],
-   'Đổi trả hàng': ['Hoàn thành', 'Đang chờ hoàn tiền'],
+   'Đổi trả hàng': ['Đã chấp nhận đổi trả', 'Đã từ chối đổi trả'],
+   'Đã chấp nhận đổi trả': ['Đã hoàn thành đổi trả và hoàn tiền'],
    'Đang chờ hoàn tiền': ['Hoàn tiền thành công', 'Hoàn tiền thất bại'],
-   'Hoàn tiền thành công': ['Hoàn thành'],
+   'Hoàn tiền thành công': ['Đã hoàn thành đổi trả và hoàn tiền'],
    'Hoàn tiền thất bại': ['Đổi trả hàng'],
    'Đã huỷ': [], // Không thể chuyển tiếp
    'Hoàn thành': [], // Không thể chuyển tiếp
+   'Đã từ chối đổi trả': [], // Không thể chuyển tiếp
 };
 
 export default function OrdersPage() {
@@ -179,6 +181,17 @@ export default function OrdersPage() {
    });
    const [sortOption, setSortOption] = useState('newest');
 
+   // Define statuses to exclude from display
+   const excludedStatuses = [
+      'Đổi trả hàng',
+      'Đã chấp nhận đổi trả',
+      'Đã từ chối đổi trả',
+      'Đã hoàn thành đổi trả và hoàn tiền',
+      'Đang chờ hoàn tiền',
+      'Hoàn tiền thành công',
+      'Hoàn tiền thất bại'
+   ];
+
    // Toast message function
    const showToastMessage = useCallback((message: string, type: 'success' | 'error' | 'info') => {
       setToast({
@@ -192,7 +205,7 @@ export default function OrdersPage() {
       }, 3000);
    }, []);
 
-   // Load all orders
+   // Load all orders (modified to filter out excluded statuses)
    const loadOrders = useCallback(async () => {
       try {
          const token = localStorage.getItem('token');
@@ -214,8 +227,13 @@ export default function OrdersPage() {
 
          const data = await response.json();
 
+         // Filter out excluded statuses and sort orders
+         const filteredData = data.filter(
+            (order: Order) => !excludedStatuses.includes(order.status)
+         );
+
          // Sort orders by createdAt date (newest first)
-         const sortedOrders = data.sort((a: Order, b: Order) => {
+         const sortedOrders = filteredData.sort((a: Order, b: Order) => {
             return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
          });
 
@@ -257,7 +275,6 @@ export default function OrdersPage() {
                      const userData = await userResponse.json();
                      order.user = {
                         id: userData.id,
-                        // Xử lý tên đầy đủ từ firstName và lastName
                         name:
                            userData.firstName && userData.lastName
                               ? `${userData.firstName} ${userData.lastName}`
@@ -274,20 +291,87 @@ export default function OrdersPage() {
 
             // Fetch product details for each item
             for (const item of order.item) {
-               if (!fetchedDetails[item.product_detail_id] && item.product_detail_id) {
+               // If we have a product_id but no product data yet
+               if (item.product_id && !item.product) {
+                  try {
+                     const productResponse = await fetch(
+                        `http://68.183.226.198:3000/api/products/${item.product_id}`,
+                        {
+                           headers: { Authorization: `Bearer ${token}` },
+                        },
+                     );
+
+                     if (productResponse.ok) {
+                        const productData = await productResponse.json();
+
+                        // Set product information
+                        item.product = {
+                           id: productData.id,
+                           name: productData.name || "Sản phẩm không tên",
+                           images: productData.images || []
+                        };
+
+                        // Find matching product detail
+                        const matchingDetail = productData.details?.find(
+                           (detail: { id: number }) => detail.id === item.product_detail_id
+                        );
+
+                        if (matchingDetail) {
+                           item.product_detail = {
+                              id: matchingDetail.id,
+                              size: matchingDetail.size,
+                              type: matchingDetail.type,
+                              values: matchingDetail.values,
+                              images: matchingDetail.images || []
+                           };
+
+                           // Also store full detail data
+                           item.productDetailData = {
+                              id: matchingDetail.id,
+                              size: matchingDetail.size,
+                              type: matchingDetail.type,
+                              values: matchingDetail.values,
+                              quantities: matchingDetail.quantities,
+                              isActive: matchingDetail.isActive,
+                              images: matchingDetail.images || []
+                           };
+
+                           // Mark this detail as fetched
+                           setFetchedDetails((prev) => ({
+                              ...prev,
+                              [item.product_detail_id]: true,
+                           }));
+                        }
+
+                        hasUpdates = true;
+                     }
+                  } catch (error) {
+                     console.error(`Failed to fetch product for product_id ${item.product_id}:`, error);
+                  }
+               }
+               // If we still don't have detail information and haven't fetched it yet
+               else if (!fetchedDetails[item.product_detail_id] && item.product_detail_id && !item.product_detail) {
                   try {
                      const detailResponse = await fetch(
                         `http://68.183.226.198:3000/api/product-details/${item.product_detail_id}`,
                         {
-                           headers: {
-                              Authorization: `Bearer ${token}`,
-                           },
+                           headers: { Authorization: `Bearer ${token}` },
                         },
                      );
 
                      if (detailResponse.ok) {
                         const detailData = await detailResponse.json();
                         item.productDetailData = detailData;
+
+                        // Also set product_detail for consistent access
+                        item.product_detail = {
+                           id: detailData.id,
+                           size: detailData.size,
+                           type: detailData.type,
+                           values: detailData.values,
+                           images: detailData.images || []
+                        };
+
                         hasUpdates = true;
 
                         setFetchedDetails((prev) => ({
@@ -295,55 +379,23 @@ export default function OrdersPage() {
                            [item.product_detail_id]: true,
                         }));
 
-                        // Fetch product information
-                        if (detailData.product_id) {
+                        // If we have product_id from the detail but no product data yet
+                        if (!item.product && detailData.product_id) {
                            try {
                               const productResponse = await fetch(
                                  `http://68.183.226.198:3000/api/products/${detailData.product_id}`,
                                  {
-                                    headers: {
-                                       Authorization: `Bearer ${token}`,
-                                    },
+                                    headers: { Authorization: `Bearer ${token}` },
                                  },
                               );
 
                               if (productResponse.ok) {
                                  const productData = await productResponse.json();
-
-                                 if (!item.product) {
-                                    item.product = {
-                                       id: productData.id,
-                                       name: productData.name,
-                                       images: productData.images || [],
-                                    };
-                                 }
-
-                                 const matchingDetail = productData.details?.find(
-                                    (detail: { id: number }) =>
-                                       detail.id === item.product_detail_id,
-                                 );
-
-                                 if (
-                                    matchingDetail &&
-                                    matchingDetail.images &&
-                                    matchingDetail.images.length > 0
-                                 ) {
-                                    if (!item.product_detail) {
-                                       item.product_detail = {
-                                          id: matchingDetail.id,
-                                          size: matchingDetail.size,
-                                          type: matchingDetail.type,
-                                          values: matchingDetail.values,
-                                          images: matchingDetail.images,
-                                       };
-                                    } else if (
-                                       !item.product_detail.images ||
-                                       item.product_detail.images.length === 0
-                                    ) {
-                                       item.product_detail.images = matchingDetail.images;
-                                    }
-                                 }
-
+                                 item.product = {
+                                    id: productData.id,
+                                    name: productData.name || "Sản phẩm không tên",
+                                    images: productData.images || []
+                                 };
                                  hasUpdates = true;
                               }
                            } catch (error) {
@@ -371,6 +423,8 @@ export default function OrdersPage() {
       },
       [fetchedDetails],
    );
+
+
 
    // Thêm hàm sắp xếp đơn hàng
    const sortOrders = useCallback(
@@ -403,17 +457,20 @@ export default function OrdersPage() {
       [sortOption],
    );
 
-   // Apply all filters to the orders
+   // Apply all filters to the orders (modified to respect excluded statuses)
    const applyFilters = useCallback(
       (ordersList: Order[] = orders) => {
          let result = [...ordersList];
+
+         // Filter out excluded statuses (ensure they don't appear even after other filters)
+         result = result.filter(order => !excludedStatuses.includes(order.status));
 
          // Apply status filter
          if (statusFilter) {
             result = result.filter((order) => order.status === statusFilter);
          }
 
-         // Apply search filter (search by order code, address, user name, etc.)
+         // Apply search filter and other filters...
          if (searchTerm.trim()) {
             const term = searchTerm.trim().toLowerCase();
             result = result.filter(
@@ -482,7 +539,7 @@ export default function OrdersPage() {
    // Apply filters when filter conditions change
    useEffect(() => {
       applyFilters();
-   }, [statusFilter, searchTerm, dateRange, priceRange, applyFilters]);
+   }, [statusFilter, searchTerm, dateRange, priceRange, sortOption, applyFilters]);
 
 
    // Get payment method icon
@@ -794,11 +851,14 @@ export default function OrdersPage() {
                                  className='w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#442C08] focus:border-[#442C08] text-xs'
                               >
                                  <option value=''>Tất cả trạng thái</option>
-                                 {Object.keys(orderStatusColors).map((status) => (
-                                    <option key={status} value={status}>
-                                       {status}
-                                    </option>
-                                 ))}
+                                 {Object.keys(orderStatusColors)
+                                    .filter(status => !excludedStatuses.includes(status))
+                                    .map((status) => (
+                                       <option key={status} value={status}>
+                                          {status}
+                                       </option>
+                                    ))
+                                 }
                               </select>
                            </div>
 
@@ -882,7 +942,7 @@ export default function OrdersPage() {
                   )}
                </div>
 
-               {/* Status tabs - cải tiến */}
+               {/* Status tabs - updated to exclude return/refund statuses */}
                <div className='bg-white rounded-lg shadow-sm border border-gray-100 px-2 py-1 mb-4'>
                   <div className='flex overflow-x-auto gap-2 no-scrollbar'>
                      <button
@@ -895,76 +955,22 @@ export default function OrdersPage() {
                         Tất cả đơn hàng
                      </button>
 
-                     {/* Nhóm theo category để làm gọn */}
-                     <button
-                        onClick={() => setStatusFilter('Đơn hàng vừa được tạo')}
-                        className={`px-3 py-1.5 whitespace-nowrap transition-colors text-xs ${statusFilter === 'Đơn hàng vừa được tạo'
-                           ? 'bg-[#442C08] text-white rounded-md font-medium'
-                           : 'text-gray-700 hover:text-[#442C08]'
-                           }`}
-                     >
-                        Đơn mới
-                     </button>
-
-                     <button
-                        onClick={() => setStatusFilter('Đang xử lý')}
-                        className={`px-3 py-1.5 whitespace-nowrap transition-colors text-xs ${statusFilter === 'Đang xử lý'
-                           ? 'bg-[#442C08] text-white rounded-md font-medium'
-                           : 'text-gray-700 hover:text-[#442C08]'
-                           }`}
-                     >
-                        Đang xử lý
-                     </button>
-
-                     <button
-                        onClick={() => setStatusFilter('Đang giao hàng')}
-                        className={`px-3 py-1.5 whitespace-nowrap transition-colors text-xs ${statusFilter === 'Đang giao hàng'
-                           ? 'bg-[#442C08] text-white rounded-md font-medium'
-                           : 'text-gray-700 hover:text-[#442C08]'
-                           }`}
-                     >
-                        Đang giao hàng
-                     </button>
-
-                     <button
-                        onClick={() => setStatusFilter('Đã giao hàng')}
-                        className={`px-3 py-1.5 whitespace-nowrap transition-colors text-xs ${statusFilter === 'Đã giao hàng'
-                           ? 'bg-[#442C08] text-white rounded-md font-medium'
-                           : 'text-gray-700 hover:text-[#442C08]'
-                           }`}
-                     >
-                        Đã giao hàng
-                     </button>
-
-                     <button
-                        onClick={() => setStatusFilter('Hoàn thành')}
-                        className={`px-3 py-1.5 whitespace-nowrap transition-colors text-xs ${statusFilter === 'Hoàn thành'
-                           ? 'bg-[#442C08] text-white rounded-md font-medium'
-                           : 'text-gray-700 hover:text-[#442C08]'
-                           }`}
-                     >
-                        Hoàn thành
-                     </button>
-
-                     <button
-                        onClick={() => setStatusFilter('Đã huỷ')}
-                        className={`px-3 py-1.5 whitespace-nowrap transition-colors text-xs ${statusFilter === 'Đã huỷ'
-                           ? 'bg-[#442C08] text-white rounded-md font-medium'
-                           : 'text-gray-700 hover:text-[#442C08]'
-                           }`}
-                     >
-                        Đã hủy
-                     </button>
-
-                     <button
-                        onClick={() => setStatusFilter('Đổi trả hàng')}
-                        className={`px-3 py-1.5 whitespace-nowrap transition-colors text-xs ${statusFilter === 'Đổi trả hàng'
-                           ? 'bg-[#442C08] text-white rounded-md font-medium'
-                           : 'text-gray-700 hover:text-[#442C08]'
-                           }`}
-                     >
-                        Đổi/Trả
-                     </button>
+                     {/* Display only relevant status tabs */}
+                     {Object.keys(orderStatusColors)
+                        .filter(status => !excludedStatuses.includes(status))
+                        .map(status => (
+                           <button
+                              key={status}
+                              onClick={() => setStatusFilter(status)}
+                              className={`px-3 py-1.5 whitespace-nowrap transition-colors text-xs ${statusFilter === status
+                                 ? 'bg-[#442C08] text-white rounded-md font-medium'
+                                 : 'text-gray-700 hover:text-[#442C08]'
+                                 }`}
+                           >
+                              {status}
+                           </button>
+                        ))
+                     }
                   </div>
                </div>
 
@@ -1061,6 +1067,19 @@ export default function OrdersPage() {
                                  </div>
                               </div>
                            </div>
+
+                           {/* Show cancellation reason if order is cancelled */}
+                           {order.status === 'Đã huỷ' && order.cancelReason && (
+                              <div className='p-2 bg-red-50 border-b border-red-100'>
+                                 <div className='flex items-start'>
+
+                                    <div>
+                                       <p className='text-[10px] text-red-600 font-medium'>Lý do hủy đơn:</p>
+                                       <p className='text-xs text-gray-700'>{order.cancelReason}</p>
+                                    </div>
+                                 </div>
+                              </div>
+                           )}
 
                            {/* Customer section */}
                            <div className='p-3 bg-gray-50 border-b border-gray-100'>
@@ -1233,8 +1252,17 @@ export default function OrdersPage() {
                               {selectedOrder.status}
                            </p>
                         </div>
+
+                        {/* Display cancellation reason if available */}
+                        {selectedOrder.status === 'Đã huỷ' && selectedOrder.cancelReason && (
+                           <div className='mt-1'>
+                              <p className='text-xs text-gray-600'>Lý do huỷ đơn:</p>
+                              <p className='text-xs text-red-600 mt-0.5'>{selectedOrder.cancelReason}</p>
+                           </div>
+                        )}
                      </div>
 
+                     {/* Rest of the modal content */}
                      <div>
                         <label className='block text-xs font-medium text-gray-700 mb-1'>
                            Chọn trạng thái mới:

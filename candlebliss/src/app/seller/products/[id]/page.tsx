@@ -112,11 +112,65 @@ const ProductDetailSkeleton = () => {
    );
 };
 
+// Component hiển thị hình ảnh chi tiết sản phẩm
+const DetailImagesPreview = ({ detailId, detailImagesCache }: { detailId: number; detailImagesCache: Record<number, Image[]> }) => {
+   const images = detailImagesCache[detailId] || [];
+
+   if (images.length === 0) {
+      return (
+         <div className="flex justify-center items-center h-20 w-20 bg-gray-100 rounded border">
+            <svg
+               xmlns="http://www.w3.org/2000/svg"
+               className="h-6 w-6 text-gray-400"
+               fill="none"
+               viewBox="0 0 24 24"
+               stroke="currentColor"
+            >
+               <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={1.5}
+                  d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+               />
+            </svg>
+         </div>
+      );
+   }
+
+   return (
+      <div className="flex space-x-2 overflow-x-auto">
+         {images.map((image, index) => (
+            <div
+               key={image.id}
+               className="relative h-20 w-20 flex-shrink-0 border rounded overflow-hidden"
+            >
+               <Image
+                  src={image.path}
+                  alt={`Chi tiết sản phẩm ${detailId}`}
+                  fill
+                  className="object-cover"
+                  onError={(e) => {
+                     const target = e.target as HTMLImageElement;
+                     target.src = '/placeholder.png';
+                  }}
+               />
+               {images.length > 1 && index === 0 && (
+                  <div className="absolute bottom-0 right-0 bg-black bg-opacity-50 text-white text-xs px-1 rounded-tl">
+                     +{images.length - 1}
+                  </div>
+               )}
+            </div>
+         ))}
+      </div>
+   );
+};
+
 export default function ProductDetail() {
    const [product, setProduct] = useState<Product | null>(null);
    const [loading, setLoading] = useState<boolean>(true);
    const [error, setError] = useState<string | null>(null);
    const [expandedSection, setExpandedSection] = useState<string>('details');
+   const [detailImagesCache, setDetailImagesCache] = useState<Record<number, Image[]>>({});
    const [detailPrices, setDetailPrices] = useState<
       Record<
          number,
@@ -200,9 +254,16 @@ export default function ProductDetail() {
                setCategoryName(normalizedProduct.categories[0].name);
             }
 
-            // If product details exist, fetch their prices
+            // If product details exist, fetch their prices and images
             if (normalizedProduct.details && normalizedProduct.details.length > 0) {
                fetchProductDetailPrices(normalizedProduct.details);
+
+               // Tải hình ảnh cho tất cả chi tiết sản phẩm
+               for (const detail of normalizedProduct.details) {
+                  if (detail.isActive) {
+                     await fetchDetailImages(detail.id);
+                  }
+               }
             }
          } catch (err) {
             console.error('Error fetching product details:', err);
@@ -326,6 +387,62 @@ export default function ProductDetail() {
             allDetailsNotLoading[detail.id] = false;
          });
          setDetailLoading(allDetailsNotLoading);
+      }
+   };
+
+   // Thêm hàm để tải hình ảnh cho chi tiết sản phẩm
+   const fetchDetailImages = async (detailId: number) => {
+      console.log('Đang tải hình ảnh cho chi tiết ID:', detailId);
+
+      try {
+         // Bỏ qua nếu đã có trong cache
+         if (detailImagesCache[detailId]?.length > 0) {
+            console.log('Đã có hình ảnh trong cache cho chi tiết ID:', detailId);
+            return detailImagesCache[detailId];
+         }
+
+         const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+         if (!token) {
+            console.log('Không tìm thấy token xác thực');
+            return null;
+         }
+
+         const response = await fetch(
+            `http://68.183.226.198:3000/api/product-details/${detailId}`,
+            {
+               headers: {
+                  Authorization: `Bearer ${token}`,
+               },
+            }
+         );
+
+         console.log('Phản hồi API chi tiết sản phẩm:', response.status);
+
+         if (!response.ok) {
+            console.error(`Không thể tải hình ảnh chi tiết: ${response.status}`);
+            return null;
+         }
+
+         const detailData = await response.json();
+         console.log('Dữ liệu chi tiết sản phẩm:', detailData);
+
+         if (detailData && detailData.images && detailData.images.length > 0) {
+            console.log(`Đã tìm thấy ${detailData.images.length} hình ảnh cho chi tiết ID ${detailId}`);
+
+            // Cập nhật cache
+            setDetailImagesCache(prev => ({
+               ...prev,
+               [detailId]: detailData.images
+            }));
+
+            return detailData.images;
+         } else {
+            console.log('Không tìm thấy hình ảnh cho chi tiết sản phẩm');
+            return [];
+         }
+      } catch (error) {
+         console.error('Lỗi khi tải hình ảnh chi tiết:', error);
+         return null;
       }
    };
 
@@ -508,8 +625,8 @@ export default function ProductDetail() {
                         <div className='w-full md:w-1/3'>
                            <div className='bg-gray-100 rounded-lg mb-4 aspect-square overflow-hidden'>
                               {product.images &&
-                              Array.isArray(product.images) &&
-                              product.images.length > 0 ? (
+                                 Array.isArray(product.images) &&
+                                 product.images.length > 0 ? (
                                  <Image
                                     src={product.images[activeImageIndex].path}
                                     alt={product.name}
@@ -548,11 +665,10 @@ export default function ProductDetail() {
                                     {product.images.map((image, index) => (
                                        <div
                                           key={image.id}
-                                          className={`w-20 h-20 flex-shrink-0 rounded-md overflow-hidden border-2 cursor-pointer ${
-                                             index === activeImageIndex
-                                                ? 'border-amber-500'
-                                                : 'border-transparent'
-                                          }`}
+                                          className={`w-20 h-20 flex-shrink-0 rounded-md overflow-hidden border-2 cursor-pointer ${index === activeImageIndex
+                                             ? 'border-amber-500'
+                                             : 'border-transparent'
+                                             }`}
                                           onClick={() => setActiveImageIndex(index)}
                                        >
                                           <Image
@@ -645,6 +761,12 @@ export default function ProductDetail() {
                                              scope='col'
                                              className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'
                                           >
+                                             Hình ảnh
+                                          </th>
+                                          <th
+                                             scope='col'
+                                             className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'
+                                          >
                                              Phiên bản
                                           </th>
                                           <th
@@ -700,6 +822,9 @@ export default function ProductDetail() {
                                                    index % 2 === 0 ? 'bg-white' : 'bg-gray-50'
                                                 }
                                              >
+                                                <td className='px-6 py-4 whitespace-nowrap'>
+                                                   <DetailImagesPreview detailId={detail.id} detailImagesCache={detailImagesCache} />
+                                                </td>
                                                 <td className='px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900'>
                                                    {detail.values || `Phiên bản ${index + 1}`}
                                                 </td>
@@ -720,16 +845,16 @@ export default function ProductDetail() {
                                                    {isLoading ? (
                                                       <div className='h-4 w-16 bg-gray-200 rounded animate-pulse'></div>
                                                    ) : priceInfo.discount_price &&
-                                                     isPromotionActive(
-                                                        priceInfo.promotion_deadline,
-                                                     ) ? (
+                                                      isPromotionActive(
+                                                         priceInfo.promotion_deadline,
+                                                      ) ? (
                                                       <div>
                                                          <span className='font-medium text-red-600'>
                                                             {formatPrice(
                                                                priceInfo.base_price *
-                                                                  (1 -
-                                                                     priceInfo.discount_price /
-                                                                        100),
+                                                               (1 -
+                                                                  priceInfo.discount_price /
+                                                                  100),
                                                             )}
                                                          </span>
                                                          <span className='ml-2 text-xs line-through text-gray-400'>
@@ -751,9 +876,9 @@ export default function ProductDetail() {
                                                          )}
                                                       </div>
                                                    ) : priceInfo.discount_price &&
-                                                     !isPromotionActive(
-                                                        priceInfo.promotion_deadline,
-                                                     ) ? (
+                                                      !isPromotionActive(
+                                                         priceInfo.promotion_deadline,
+                                                      ) ? (
                                                       <div>
                                                          <span className='font-medium text-gray-900'>
                                                             {formatPrice(priceInfo.base_price)}
@@ -778,13 +903,12 @@ export default function ProductDetail() {
                                                 <td className='px-6 py-4 whitespace-nowrap'>
                                                    <span
                                                       className={`px-2 inline-flex text-xs leading-5 font-medium rounded-full
-                                  ${
-                                     detail.quantities > 10
-                                        ? 'bg-green-100 text-green-800'
-                                        : detail.quantities > 0
-                                        ? 'bg-yellow-100 text-yellow-800'
-                                        : 'bg-red-100 text-red-800'
-                                  }
+                                  ${detail.quantities > 10
+                                                            ? 'bg-green-100 text-green-800'
+                                                            : detail.quantities > 0
+                                                               ? 'bg-yellow-100 text-yellow-800'
+                                                               : 'bg-red-100 text-red-800'
+                                                         }
                                 `}
                                                    >
                                                       {detail.quantities} sản phẩm
@@ -793,11 +917,10 @@ export default function ProductDetail() {
                                                 <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-500'>
                                                    <span
                                                       className={`px-2 py-1 inline-flex text-xs leading-5 font-medium rounded-full
-                                  ${
-                                     detail.isActive
-                                        ? 'bg-green-100 text-green-800'
-                                        : 'bg-gray-100 text-gray-800'
-                                  }
+                                  ${detail.isActive
+                                                            ? 'bg-green-100 text-green-800'
+                                                            : 'bg-gray-100 text-gray-800'
+                                                         }
                                 `}
                                                    >
                                                       {detail.isActive ? 'Đang bán' : 'Tạm ngừng'}

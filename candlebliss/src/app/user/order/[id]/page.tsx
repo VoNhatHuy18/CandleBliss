@@ -1,9 +1,9 @@
 'use client';
 
-import React, { useState, useEffect, use, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import Header from '@/app/components/user/nav/page';
 import Footer from '@/app/components/user/footer/page';
 import Toast from '@/app/components/ui/toast/Toast';
@@ -93,12 +93,12 @@ const orderStatusColors: Record<string, { bg: string; text: string; border: stri
    'Hoàn tiền thất bại': { bg: 'bg-pink-50', text: 'text-pink-700', border: 'border-pink-200' },
 };
 
-export default function OrderDetailPage({ params }: { params: Promise<{ id: string }> }) {
-   // Unwrap the params Promise using React.use()
-   const resolvedParams = use(params);
-   const orderId = resolvedParams.id;
-
+export default function OrderDetailPage() {
    const router = useRouter();
+   const pathname = usePathname();
+   // Lấy orderId từ pathname thay vì params
+   const orderId = pathname ? pathname.split('/').pop() : '';
+
    const [loading, setLoading] = useState(true);
    const [order, setOrder] = useState<Order | null>(null);
    const [userId, setUserId] = useState<number | null>(null);
@@ -1159,7 +1159,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                                     {(() => {
                                        // Thử lấy thông tin từ localStorage trước
                                        const shippingInfo = getShippingInfoFromLocalStorage(
-                                          orderId,
+                                          orderId || '',
                                           userId,
                                        );
                                        if (shippingInfo?.fullName) {
@@ -1189,7 +1189,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                                     {(() => {
                                        // Thử lấy thông tin từ localStorage trước
                                        const shippingInfo = getShippingInfoFromLocalStorage(
-                                          orderId,
+                                          orderId || '',
                                           userId,
                                        );
                                        if (shippingInfo?.phone) {
