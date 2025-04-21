@@ -196,6 +196,38 @@ export default function OrderDetailPage() {
          }
       }
 
+      // Special case: If the current order status is "Đổi trả hàng" but timeline doesn't start with it
+      if (order.status === 'Đổi trả hàng' && (statusHistory.length === 0 || statusHistory[0].status !== 'Đổi trả hàng')) {
+         // Create new timeline with just this status
+         statusHistory = [{
+            status: 'Đổi trả hàng',
+            updatedAt: order.updatedAt
+         }];
+
+         // Save the new history to localStorage
+         if (historyKey) {
+            localStorage.setItem(historyKey, JSON.stringify(statusHistory));
+         }
+
+         return statusHistory;
+      }
+
+      // Special case: If the current order status is "Đang chờ hoàn tiền" but timeline doesn't start with it
+      if (order.status === 'Đang chờ hoàn tiền' && (statusHistory.length === 0 || statusHistory[0].status !== 'Đang chờ hoàn tiền')) {
+         // Create new timeline with just this status
+         statusHistory = [{
+            status: 'Đang chờ hoàn tiền',
+            updatedAt: order.updatedAt
+         }];
+
+         // Save the new history to localStorage
+         if (historyKey) {
+            localStorage.setItem(historyKey, JSON.stringify(statusHistory));
+         }
+
+         return statusHistory;
+      }
+
       // Nếu không có lịch sử trong localStorage, tạo lịch sử mặc định
       if (statusHistory.length === 0) {
          statusHistory = generateDefaultStatusTimeline(order);
@@ -809,7 +841,79 @@ export default function OrderDetailPage() {
             }
          }
 
-         // Tạo map để lưu trạng thái theo tên, đảm bảo không bị trùng lặp
+         // Check if the new status is "Đổi trả hàng"
+         if (newStatus === 'Đổi trả hàng') {
+            // Clear the old timeline and create new one with only this status
+            statusHistory = [{
+               status: 'Đổi trả hàng',
+               updatedAt: currentTime
+            }];
+
+            // Create map with just this new status
+            const statusMap = new Map();
+            statusMap.set('Đổi trả hàng', {
+               status: 'Đổi trả hàng',
+               updatedAt: currentTime
+            });
+
+            // Convert map to array
+            const updatedStatusHistory = Array.from(statusMap.values());
+
+            // Save the updated history to localStorage
+            if (historyKey) {
+               localStorage.setItem(historyKey, JSON.stringify(updatedStatusHistory));
+            }
+
+            // Update order state with new timeline
+            setOrder({
+               ...order,
+               status: newStatus,
+               updatedAt: currentTime,
+               statusUpdates: updatedStatusHistory
+            });
+
+            showToastMessage(`Đơn hàng đã được chuyển sang trạng thái ${newStatus}`, 'success');
+            setLoading(false);
+            return;
+         }
+
+         // Check if the new status is "Đang chờ hoàn tiền"
+         if (newStatus === 'Đang chờ hoàn tiền') {
+            // Clear the old timeline and create new one with only this status
+            statusHistory = [{
+               status: 'Đang chờ hoàn tiền',
+               updatedAt: currentTime
+            }];
+
+            // Create map with just this new status
+            const statusMap = new Map();
+            statusMap.set('Đang chờ hoàn tiền', {
+               status: 'Đang chờ hoàn tiền',
+               updatedAt: currentTime
+            });
+
+            // Convert map to array
+            const updatedStatusHistory = Array.from(statusMap.values());
+
+            // Save the updated history to localStorage
+            if (historyKey) {
+               localStorage.setItem(historyKey, JSON.stringify(updatedStatusHistory));
+            }
+
+            // Update order state with new timeline
+            setOrder({
+               ...order,
+               status: newStatus,
+               updatedAt: currentTime,
+               statusUpdates: updatedStatusHistory
+            });
+
+            showToastMessage(`Đơn hàng đã được chuyển sang trạng thái ${newStatus}`, 'success');
+            setLoading(false);
+            return;
+         }
+
+         // For other statuses, continue with normal flow
          const statusMap = new Map();
          statusHistory.forEach((update: { status: string; }) => {
             statusMap.set(update.status, update);

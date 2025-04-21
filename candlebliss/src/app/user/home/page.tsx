@@ -4,7 +4,7 @@ import { ChevronRightIcon } from '@heroicons/react/24/outline';
 import Image from 'next/image';
 import Link from 'next/link';
 import Carousel from '@/app/components/user/carousel/page';
-import AccessoriesCarousel from '@/app/components/user/accessoriescarousel/page';
+import CandlesCarousel from '@/app/components/user/candlescarousel/page';
 import TrendingCarousel from '@/app/components/user/trendingcarousel/page';
 import RotatingImages from '@/app/components/user/rotatingimages/page';
 import NavBar from '@/app/components/user/nav/page';
@@ -45,10 +45,10 @@ export default function HomePage() {
                      Tìm kiếm sản phẩm yêu thích trong bộ sưu tập nến thơm đặc biệt của chúng tôi!
                   </p>
                   <Link href='/user/products'>
-                  <button className='font-mont h-8 w-36 bg-[#553C26] text-white rounded-2xl hover:animate-pulse'>
-                     Xem thêm
-                     <ChevronRightIcon className='h-4 w-5 inline' />
-                  </button>
+                     <button className='font-mont h-8 w-36 bg-[#553C26] text-white rounded-2xl hover:animate-pulse'>
+                        Xem thêm
+                        <ChevronRightIcon className='h-4 w-5 inline' />
+                     </button>
                   </Link>
                </div>
             </div>
@@ -113,11 +113,9 @@ export default function HomePage() {
 
             {/* Accessories Section */}
             <div className='px-4 lg:px-0 py-8'>
-               <p className='text-center font-mont font-semibold text-xl lg:text-3xl pb-4'>
-                  Nến Thơm
-               </p>
+
                <Suspense fallback={<LoadingSpinner />}>
-                  <AccessoriesCarousel />
+                  <CandlesCarousel />
                </Suspense>
             </div>
 

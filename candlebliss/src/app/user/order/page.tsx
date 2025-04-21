@@ -8,6 +8,7 @@ import Header from '@/app/components/user/nav/page';
 import Footer from '@/app/components/user/footer/page';
 import Toast from '@/app/components/ui/toast/Toast';
 import { retryOrderPayment } from '@/app/utils/orderUtils';
+import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
 import OrderActionModal from '@/app/components/user/orderactionmodals/OrderActionModals';
 
 // Interfaces
@@ -209,6 +210,8 @@ export default function OrderPage() {
    const [orders, setOrders] = useState<Order[]>([]);
    const [filteredOrders, setFilteredOrders] = useState<Order[]>([]);
    const [statusFilter, setStatusFilter] = useState<string | null>(null);
+   const [currentPage, setCurrentPage] = useState(1);
+   const [ordersPerPage] = useState(5);
    const [toast, setToast] = useState({
       show: false,
       message: '',
@@ -886,6 +889,20 @@ export default function OrderPage() {
       }
    };
 
+   // Calculate pagination indices
+   const indexOfLastOrder = currentPage * ordersPerPage;
+   const indexOfFirstOrder = indexOfLastOrder - ordersPerPage;
+   const currentOrders = filteredOrders.slice(indexOfFirstOrder, indexOfLastOrder);
+   const totalPages = Math.ceil(filteredOrders.length / ordersPerPage);
+
+   // Function to change page
+   const paginate = (pageNumber: number) => {
+      if (pageNumber > 0 && pageNumber <= totalPages) {
+         setCurrentPage(pageNumber);
+         // Scroll to top of orders section when changing page
+         window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+   };
 
    if (loading) {
       return (
@@ -963,7 +980,7 @@ export default function OrderPage() {
                </div>
             ) : (
                <div className='space-y-6'>
-                  {filteredOrders.map((order) => (
+                  {currentOrders.map((order) => (
                      <div key={order.id} className='bg-white rounded-lg shadow overflow-hidden'>
                         {/* Order header */}
                         <div className='p-4 border-b border-gray-100 flex justify-between items-center flex-wrap gap-2'>
@@ -1202,6 +1219,50 @@ export default function OrderPage() {
                         </div>
                      </div>
                   ))}
+               </div>
+            )}
+            {/* Pagination Controls */}
+            {filteredOrders.length > 0 && (
+               <div className="flex items-center justify-center mt-6 space-x-2">
+                  <button
+                     onClick={() => paginate(currentPage - 1)}
+                     disabled={currentPage === 1}
+                     className={`flex items-center px-3 py-1 rounded ${currentPage === 1
+                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                        : 'bg-white text-gray-700 hover:bg-gray-50'
+                        }`}
+                  >
+                     <ChevronLeftIcon className="w-4 h-4 mr-1" />
+                     Trước
+                  </button>
+
+                  {/* Page Numbers */}
+                  <div className="flex items-center space-x-1">
+                     {Array.from({ length: totalPages }, (_, i) => i + 1).map(pageNumber => (
+                        <button
+                           key={pageNumber}
+                           onClick={() => paginate(pageNumber)}
+                           className={`w-8 h-8 rounded-full flex items-center justify-center ${currentPage === pageNumber
+                              ? 'bg-orange-600 text-white'
+                              : 'bg-white hover:bg-gray-50 text-gray-700'
+                              }`}
+                        >
+                           {pageNumber}
+                        </button>
+                     ))}
+                  </div>
+
+                  <button
+                     onClick={() => paginate(currentPage + 1)}
+                     disabled={currentPage === totalPages}
+                     className={`flex items-center px-3 py-1 rounded ${currentPage === totalPages
+                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                        : 'bg-white text-gray-700 hover:bg-gray-50'
+                        }`}
+                  >
+                     Tiếp
+                     <ChevronRightIcon className="w-4 h-4 ml-1" />
+                  </button>
                </div>
             )}
          </div>

@@ -62,6 +62,18 @@ interface ProductCardProps {
    onAddToCart?: (productId: number, detailId?: number) => void;
 }
 
+// Add these interfaces before the ProductCard component
+interface PriceRange {
+   min: number;
+   max: number;
+   label: string;
+}
+
+interface SortOption {
+   value: string;
+   label: string;
+}
+
 // Update ProductCard component to better handle variants and their prices
 const ProductCard = ({
    id,
@@ -274,9 +286,13 @@ function ProductSearch({ onSearch }: { onSearch: (query: string) => void }) {
    const searchParams = useSearchParams();
    const searchQuery = searchParams.get('search') || '';
 
+   // Sửa useEffect này để ngăn vòng lặp vô hạn
    useEffect(() => {
-      onSearch(searchQuery);
-   }, [searchParams, onSearch]);
+      // Chỉ gọi onSearch khi searchQuery thực sự thay đổi
+      if (searchQuery !== undefined) {
+         onSearch(searchQuery);
+      }
+   }, [searchParams]); // Bỏ onSearch ra khỏi dependency array
 
    return null; // This component doesn't render anything, just processes the search
 }
@@ -325,8 +341,49 @@ export default function ProductPage() {
    const [error, setError] = useState<string | null>(null);
    const [searchQuery, setSearchQuery] = useState('');
 
+   // Add these new states for filtering and sorting
+   const [selectedPriceRange, setSelectedPriceRange] = useState<PriceRange | null>(null);
+   const [sortOption, setSortOption] = useState<string>('default');
+
    const [currentPage, setCurrentPage] = useState(1);
    const productsPerPage = 25;
+
+   // Thêm state để lưu trữ sản phẩm gốc theo đúng thứ tự ban đầu
+   const [originalProducts, setOriginalProducts] = useState<Array<{
+      id: number;
+      title: string;
+      description: string;
+      price: string;
+      discountPrice?: string;
+      rating: number;
+      imageUrl: string;
+      variants?: Array<{
+         detailId: number;
+         size: string;
+         type: string;
+         basePrice: string;
+         discountPrice?: string;
+         inStock: boolean;
+      }>;
+   }>>([]);
+
+   // Define price ranges for filtering
+   const priceRanges: PriceRange[] = [
+      { min: 0, max: 100000, label: 'Dưới 100K' },
+      { min: 100000, max: 300000, label: '100K - 300K' },
+      { min: 300000, max: 500000, label: '300K - 500K' },
+      { min: 500000, max: 1000000, label: '500K - 1 triệu' },
+      { min: 1000000, max: Infinity, label: 'Trên 1 triệu' },
+   ];
+
+   // Define sorting options
+   const sortOptions: SortOption[] = [
+      { value: 'default', label: 'Mặc định' },
+      { value: 'price-asc', label: 'Giá tăng dần' },
+      { value: 'price-desc', label: 'Giá giảm dần' },
+      { value: 'name-asc', label: 'Tên A-Z' },
+      { value: 'name-desc', label: 'Tên Z-A' },
+   ];
 
    const getPaginatedProducts = () => {
       const startIndex = (currentPage - 1) * productsPerPage;
@@ -336,6 +393,148 @@ export default function ProductPage() {
 
    const totalPages = Math.ceil(filteredProducts.length / productsPerPage);
 
+   // Sửa hàm applyFiltersAndSort để xử lý đúng việc sắp xếp mặc định
+   const applyFiltersAndSort = (
+      products: Array<{
+         id: number;
+         title: string;
+         description: string;
+         price: string;
+         discountPrice?: string;
+         rating: number;
+         imageUrl: string;
+         variants?: Array<{
+            detailId: number;
+            size: string;
+            type: string;
+            basePrice: string;
+            discountPrice?: string;
+            inStock: boolean;
+         }>;
+      }>,
+      originalList: Array<{
+         id: number;
+         title: string;
+         description: string;
+         price: string;
+         discountPrice?: string;
+         rating: number;
+         imageUrl: string;
+         variants?: Array<{
+            detailId: number;
+            size: string;
+            type: string;
+            basePrice: string;
+            discountPrice?: string;
+            inStock: boolean;
+         }>;
+      }>,
+      query: string,
+      priceRange: PriceRange | null,
+      sort: string
+   ) => {
+      // First filter by search query
+      let result;
+
+      // Nếu chọn sắp xếp mặc định, dùng thứ tự ban đầu từ originalProducts
+      if (sort === 'default') {
+         // Chỉ lọc originalProducts mà không sắp xếp
+         result = [...originalList];
+      } else {
+         // Nếu không phải mặc định, dùng sản phẩm hiện tại
+         result = [...products];
+      }
+
+      // Áp dụng bộ lọc tìm kiếm
+      if (query.trim()) {
+         const searchLower = query.toLowerCase();
+         result = result.filter((product) => {
+            return (
+               product.title.toLowerCase().includes(searchLower) ||
+               (product.description && product.description.toLowerCase().includes(searchLower))
+            );
+         });
+      }
+
+      // Áp dụng bộ lọc giá
+      if (priceRange) {
+         result = result.filter((product) => {
+            // Get actual price considering discounts
+            const productPrice = product.discountPrice
+               ? parseFloat(calculateDiscountedPrice(product.price, product.discountPrice).toString())
+               : parseFloat(product.price);
+
+            return productPrice >= priceRange.min && productPrice <= priceRange.max;
+         });
+      }
+
+      // Áp dụng sắp xếp (ngoại trừ mặc định)
+      if (sort !== 'default') {
+         switch (sort) {
+            case 'price-asc':
+               result.sort((a, b) => {
+                  const priceA = a.discountPrice
+                     ? calculateDiscountedPrice(a.price, a.discountPrice)
+                     : parseFloat(a.price);
+                  const priceB = b.discountPrice
+                     ? calculateDiscountedPrice(b.price, b.discountPrice)
+                     : parseFloat(b.price);
+                  return priceA - priceB;
+               });
+               break;
+            case 'price-desc':
+               result.sort((a, b) => {
+                  const priceA = a.discountPrice
+                     ? calculateDiscountedPrice(a.price, a.discountPrice)
+                     : parseFloat(a.price);
+                  const priceB = b.discountPrice
+                     ? calculateDiscountedPrice(b.price, b.discountPrice)
+                     : parseFloat(b.price);
+                  return priceB - priceA;
+               });
+               break;
+            case 'name-asc':
+               result.sort((a, b) => a.title.localeCompare(b.title));
+               break;
+            case 'name-desc':
+               result.sort((a, b) => b.title.localeCompare(a.title));
+               break;
+         }
+      }
+
+      return result;
+   };
+
+
+   // Helper function to calculate discounted price
+   const calculateDiscountedPrice = (basePrice: string, discountPercent: string) => {
+      const basePriceNum = parseFloat(basePrice);
+      const discountPercentNum = parseFloat(discountPercent);
+
+      if (isNaN(discountPercentNum) || discountPercentNum <= 0) return basePriceNum;
+
+      const discountedPrice = basePriceNum * (1 - discountPercentNum / 100);
+      return discountedPrice;
+   };
+
+   // Replace the existing search useEffect with this combined filtering and sorting useEffect
+   useEffect(() => {
+      // Reset to first page when filters change
+      setCurrentPage(1);
+
+      // Apply filters and sorting
+      const newFilteredProducts = applyFiltersAndSort(
+         products,
+         originalProducts,
+         searchQuery,
+         selectedPriceRange,
+         sortOption
+      );
+
+      setFilteredProducts(newFilteredProducts);
+   }, [searchQuery, selectedPriceRange, sortOption, products]);
+
+   // Sửa phần xử lý dữ liệu API để lưu sản phẩm gốc
    useEffect(() => {
       const fetchProducts = async () => {
          try {
@@ -492,6 +691,7 @@ export default function ProductPage() {
                   };
                }));
 
+               setOriginalProducts(mappedProducts); // Lưu trữ sản phẩm gốc với thứ tự ban đầu
                setProducts(mappedProducts);
                setFilteredProducts(mappedProducts);
             } catch (priceErr) {
@@ -522,26 +722,87 @@ export default function ProductPage() {
       fetchProducts();
    }, []);
 
-   useEffect(() => {
-      if (!searchQuery.trim()) {
-         setFilteredProducts(products);
-         return;
-      }
+   const handleSortChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
+      if (loading) return;
 
-      const filtered = products.filter((product) => {
-         const searchLower = searchQuery.toLowerCase();
-         return (
-            product.title.toLowerCase().includes(searchLower) ||
-            (product.description && product.description.toLowerCase().includes(searchLower))
+      const newSortOption = event.target.value;
+      setSortOption(newSortOption);
+
+      if (products.length > 0 && originalProducts.length > 0) {
+         const productsToSort = newSortOption === 'default' ? originalProducts : products;
+
+         const newFilteredProducts = applyFiltersAndSort(
+            productsToSort,
+            originalProducts,
+            searchQuery,
+            selectedPriceRange,
+            newSortOption
          );
-      });
 
-      setFilteredProducts(filtered);
-   }, [searchQuery, products]);
-
-   const handleSearch = (query: string) => {
-      setSearchQuery(query);
+         setFilteredProducts(newFilteredProducts);
+         setCurrentPage(1);
+      }
    };
+
+   // Do the same for price range changes to make them immediate too
+   const handlePriceRangeChange = (range: PriceRange | null) => {
+      if (loading) return;
+
+      setSelectedPriceRange(range);
+
+      if (products.length > 0 && originalProducts.length > 0) {
+         const productsToFilter = sortOption === 'default' ? originalProducts : products;
+
+         const newFilteredProducts = applyFiltersAndSort(
+            productsToFilter,
+            originalProducts,
+            searchQuery,
+            range,
+            sortOption
+         );
+
+         setFilteredProducts(newFilteredProducts);
+         setCurrentPage(1); // Reset to first page when filter changes
+      }
+   };
+
+   // Modify the search handler similarly
+   const handleSearch = (query: string) => {
+      if (loading) return;
+
+      setSearchQuery(query);
+
+      // Áp dụng bộ lọc trực tiếp thay vì thông qua useEffect
+      if (products.length > 0 && originalProducts.length > 0) {
+         const productsToFilter = sortOption === 'default' ? originalProducts : products;
+
+         const newFilteredProducts = applyFiltersAndSort(
+            productsToFilter,
+            originalProducts,
+            query,
+            selectedPriceRange,
+            sortOption
+         );
+
+         setFilteredProducts(newFilteredProducts);
+         setCurrentPage(1);
+      }
+   };
+
+   // Simplify the useEffect to only respond to changes in base products
+   // since we're now handling filtering and sorting directly in handlers
+   useEffect(() => {
+      if (products.length > 0 && originalProducts.length > 0) {
+         const newFilteredProducts = applyFiltersAndSort(
+            products,
+            originalProducts,
+            searchQuery,
+            selectedPriceRange,
+            sortOption
+         );
+         setFilteredProducts(newFilteredProducts);
+      }
+   }, [products, originalProducts]); // Only depend on products array, not filters/sort
 
    const handleViewDetail = (productId: number) => {
       console.log('View detail clicked for product ID:', productId);
@@ -577,7 +838,73 @@ export default function ProductPage() {
          </button>
 
          <div className='flex flex-col lg:flex-row max-w-7xl mx-auto'>
+            {/* Price Filter Sidebar - show/hide on mobile with animation */}
+            <div
+               className={`lg:w-64 lg:block fixed lg:relative top-0 left-0 h-full lg:h-auto z-40 bg-white lg:bg-transparent shadow-lg lg:shadow-none overflow-y-auto transition-all duration-300 transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+                  } px-4 pt-16 lg:pt-0 lg:px-8 mb-6`}
+            >
+               <div className='bg-white p-4 rounded-lg shadow-sm'>
+                  <h3 className='font-medium text-gray-800 mb-3'>Lọc sản phẩm</h3>
+
+                  <div className='mb-5'>
+                     <h4 className='text-sm font-medium text-gray-700 mb-2'>Khoảng giá</h4>
+                     <div className='space-y-2'>
+                        <div className='flex items-center'>
+                           <button
+                              onClick={() => handlePriceRangeChange(null)}
+                              className={`text-sm w-full py-2 px-3 text-left rounded-md transition-colors ${selectedPriceRange === null
+                                 ? 'bg-amber-100 text-amber-800'
+                                 : 'text-gray-700 hover:bg-gray-100'
+                                 }`}
+                           >
+                              Tất cả
+                           </button>
+                        </div>
+
+                        {priceRanges.map((range, idx) => (
+                           <div key={idx} className='flex items-center'>
+                              <button
+                                 onClick={() => handlePriceRangeChange(range)}
+                                 className={`text-sm w-full py-2 px-3 text-left rounded-md transition-colors ${selectedPriceRange === range
+                                    ? 'bg-amber-100 text-amber-800'
+                                    : 'text-gray-700 hover:bg-gray-100'
+                                    }`}
+                              >
+                                 {range.label}
+                              </button>
+                           </div>
+                        ))}
+                     </div>
+                  </div>
+               </div>
+            </div>
+
             <div className='flex-1 px-4 lg:px-8'>
+               {/* Add sorting dropdown and product count */}
+               <div className='flex justify-between items-center mb-6'>
+                  <p className='text-sm text-gray-600'>
+                     {filteredProducts.length} sản phẩm
+                     {searchQuery ? ` cho "${searchQuery}"` : ''}
+                     {selectedPriceRange ? ` trong khoảng giá ${selectedPriceRange.label}` : ''}
+                  </p>
+
+                  <div className='flex items-center'>
+                     <label htmlFor='sort' className='text-sm text-gray-600 mr-2'>Sắp xếp:</label>
+                     <select
+                        id='sort'
+                        className='text-sm border rounded-md py-1.5 px-3 bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-amber-500'
+                        value={sortOption}
+                        onChange={handleSortChange}
+                     >
+                        {sortOptions.map((option) => (
+                           <option key={option.value} value={option.value}>
+                              {option.label}
+                           </option>
+                        ))}
+                     </select>
+                  </div>
+               </div>
+
                {loading && (
                   <div className='flex justify-center items-center h-64'>
                      <div className='animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900'></div>
@@ -592,20 +919,23 @@ export default function ProductPage() {
 
                {!loading && !error && filteredProducts.length === 0 && (
                   <div className='text-center py-10'>
-                     {searchQuery ? (
-                        <div>
-                           <p className='text-gray-600 mb-4'>
-                              Không tìm thấy sản phẩm phù hợp với &ldquo;{searchQuery}&rdquo;
-                           </p>
-                           <Link href='/user/products'>
-                              <button className='px-6 py-2 bg-amber-100 hover:bg-amber-200 text-[#553C26] rounded-md transition-colors'>
-                                 Xem tất cả sản phẩm
-                              </button>
-                           </Link>
-                        </div>
-                     ) : (
-                        <p className='text-gray-500'>Không có sản phẩm nào</p>
-                     )}
+                     <div>
+                        <p className='text-gray-600 mb-4'>
+                           Không tìm thấy sản phẩm phù hợp
+                           {searchQuery ? ` với "${searchQuery}"` : ''}
+                           {selectedPriceRange ? ` trong khoảng giá ${selectedPriceRange.label}` : ''}
+                        </p>
+                        <button
+                           className='px-6 py-2 bg-amber-100 hover:bg-amber-200 text-[#553C26] rounded-md transition-colors'
+                           onClick={() => {
+                              setSearchQuery('');
+                              setSelectedPriceRange(null);
+                              setSortOption('default');
+                           }}
+                        >
+                           Xem tất cả sản phẩm
+                        </button>
+                     </div>
                   </div>
                )}
 
@@ -626,7 +956,7 @@ export default function ProductPage() {
                   ))}
                </div>
 
-               {!loading && !error && filteredProducts.length > productsPerPage && !searchQuery && (
+               {!loading && !error && filteredProducts.length > productsPerPage && (
                   <div className='flex justify-center items-center gap-2 mt-8 pb-8'>
                      {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
                         <button
@@ -642,6 +972,14 @@ export default function ProductPage() {
                )}
             </div>
          </div>
+
+         {/* Add a semi-transparent overlay when sidebar is open on mobile */}
+         {isSidebarOpen && (
+            <div
+               className="fixed inset-0 bg-black bg-opacity-50 z-30 lg:hidden"
+               onClick={() => setIsSidebarOpen(false)}
+            />
+         )}
 
          <Footer />
       </div>

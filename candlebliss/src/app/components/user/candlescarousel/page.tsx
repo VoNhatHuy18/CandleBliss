@@ -556,11 +556,11 @@ export default function CandlesCarousel() {
       console.log('View detail clicked for product ID:', productId);
    };
 
-   
-
+ 
    return (
       <div className='bg-[#F1EEE9] py-8'>
          <div className='max-w-7xl mx-auto px-4'>
+            <h2 className='text-2xl font-semibold text-[#553C26] mb-6 text-center'>Nến Thơm Nổi Bật</h2>
 
             {loading && (
                <div className='flex justify-center items-center h-64'>
@@ -657,9 +657,9 @@ export default function CandlesCarousel() {
 
             {/* View all products link */}
             <div className='text-center mt-8'>
-               <Link href='/user/products'>
+               <Link href='/user/products/candles'>
                   <button className='px-6 py-2 bg-[#553C26] text-white rounded-full  gap-2 hover:bg-amber-600 transition-colors font-mont font-medium'>
-                     Xem tất cả sản phẩm
+                     Xem tất cả nến thơm
                   </button>
                </Link>
             </div>

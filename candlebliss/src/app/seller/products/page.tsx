@@ -161,6 +161,7 @@ const ProductTable = ({
    handleDeleteProduct,
    getCategoryNameById,
    showToast, // Đảm bảo thêm tham số này vào định nghĩa
+   resetPagination, // Add this new prop
 }: {
    products: ProductViewModel[];
    loading: boolean;
@@ -168,7 +169,9 @@ const ProductTable = ({
    handleEditProduct: (productId: number) => void;
    handleDeleteProduct: (productId: number) => void;
    getCategoryNameById: (categoryId: number | undefined) => Promise<string>;
+
    showToast: (message: string, type: 'success' | 'error' | 'info') => void; // Đảm bảo có dòng này
+   resetPagination?: string; // Add this optional prop
 }) => {
    const [expandedProduct, setExpandedProduct] = useState<number | null>(null);
    const [detailPrices, setDetailPrices] = useState<
@@ -184,6 +187,7 @@ const ProductTable = ({
    const [searchTerm, setSearchTerm] = useState<string>('');
    const [detailLoading, setDetailLoading] = useState<Record<number, boolean>>({});
    const [categoryNames, setCategoryNames] = useState<Record<number, string>>({});
+   const [currentPage, setCurrentPage] = useState(1);
    const router = useRouter();
 
    // Add new state to track which detail images are being viewed
@@ -486,6 +490,37 @@ const ProductTable = ({
       }
    }, [expandedProduct, products]);
 
+   const [productsPerPage] = useState(10); // 10 sản phẩm mỗi trang
+
+   // Thêm các biến tính toán
+   const indexOfLastProduct = currentPage * productsPerPage;
+   const indexOfFirstProduct = indexOfLastProduct - productsPerPage;
+   const currentProducts = filteredProducts.slice(indexOfFirstProduct, indexOfLastProduct);
+   const totalPages = Math.ceil(filteredProducts.length / productsPerPage);
+
+   // Hàm chuyển trang
+   const paginate = (pageNumber: number) => {
+      if (pageNumber > 0 && pageNumber <= totalPages) {
+         setCurrentPage(pageNumber);
+      }
+   };
+
+   // Cập nhật hàm xử lý tìm kiếm để reset trang
+   const handleSearch = (term: string) => {
+      setSearchTerm(term);
+      setCurrentPage(1); // Reset về trang đầu tiên khi tìm kiếm
+   };
+
+   // Thêm useEffect này vào ProductTable component
+   useEffect(() => {
+      setCurrentPage(1);
+   }, [filteredProducts.length, searchTerm]);
+
+   // Add useEffect to reset pagination when resetPagination changes
+   useEffect(() => {
+      setCurrentPage(1);
+   }, [resetPagination]);
+
    return (
       <div className='bg-white rounded-lg shadow overflow-hidden'>
          {/* Table Header with search and actions */}
@@ -497,7 +532,7 @@ const ProductTable = ({
                         type='text'
                         placeholder='Tìm sản phẩm theo tên, ID, danh mục...'
                         value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
+                        onChange={(e) => handleSearch(e.target.value)}
                         className='pl-10 pr-4 py-2 w-full border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500'
                      />
                      <div className='absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400'>
@@ -505,7 +540,7 @@ const ProductTable = ({
                      </div>
                      {searchTerm && (
                         <button
-                           onClick={() => setSearchTerm('')}
+                           onClick={() => handleSearch('')}
                            className='absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600'
                         >
                            <svg
@@ -568,7 +603,7 @@ const ProductTable = ({
                      Không tìm thấy sản phẩm phù hợp với từ khóa: {searchTerm}
                   </p>
                   <button
-                     onClick={() => setSearchTerm('')}
+                     onClick={() => handleSearch('')}
                      className='mt-2 text-amber-600 hover:text-amber-800 font-medium'
                   >
                      Xóa từ khóa
@@ -593,7 +628,7 @@ const ProductTable = ({
                </div>
 
                {/* Product rows */}
-               {filteredProducts.map((product) => {
+               {currentProducts.map((product) => {
                   const totalVariants = product.details?.length || 0;
                   const activeVariants = product.details?.filter((d) => d.isActive)?.length || 0;
                   const isExpanded = expandedProduct === product.id;
@@ -1047,6 +1082,83 @@ const ProductTable = ({
                      </div>
                   );
                })}
+               {/* Pagination Controls - thêm vào cuối, ngay trước div đóng của phần hiển thị sản phẩm */}
+               {filteredProducts.length > productsPerPage && (
+                  <div className="flex justify-center items-center mt-8 pb-6">
+                     <div className="flex flex-col items-center">
+                        <div className="flex items-center space-x-1">
+                           {/* Nút Quay lại */}
+                           <button
+                              onClick={() => paginate(currentPage - 1)}
+                              disabled={currentPage === 1}
+                              className={`px-3 py-1.5 rounded-md ${currentPage === 1
+                                 ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                 : 'bg-white text-gray-700 hover:bg-amber-50 border border-gray-300'
+                                 }`}
+                              aria-label="Trang trước"
+                           >
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                              </svg>
+                           </button>
+
+                           {/* Các số trang */}
+                           <div className="flex items-center space-x-1">
+                              {Array.from({ length: totalPages }, (_, i) => {
+                                 const pageNum = i + 1;
+
+                                 // Hiển thị các nút trang: trang đầu, trang cuối, và 3 trang xung quanh trang hiện tại
+                                 if (
+                                    pageNum === 1 ||
+                                    pageNum === totalPages ||
+                                    (pageNum >= currentPage - 1 && pageNum <= currentPage + 1)
+                                 ) {
+                                    return (
+                                       <button
+                                          key={pageNum}
+                                          onClick={() => paginate(pageNum)}
+                                          className={`px-3 py-1.5 rounded-md ${currentPage === pageNum
+                                             ? 'bg-amber-600 text-white'
+                                             : 'bg-white text-gray-700 hover:bg-amber-50 border border-gray-300'
+                                             }`}
+                                       >
+                                          {pageNum}
+                                       </button>
+                                    );
+                                 } else if (
+                                    (pageNum === currentPage - 2 && currentPage > 3) ||
+                                    (pageNum === currentPage + 2 && currentPage < totalPages - 2)
+                                 ) {
+                                    // Hiển thị dấu chấm lửng
+                                    return <span key={pageNum} className="px-2 text-gray-500">...</span>;
+                                 }
+                                 return null;
+                              })}
+                           </div>
+
+                           {/* Nút Trang tiếp */}
+                           <button
+                              onClick={() => paginate(currentPage + 1)}
+                              disabled={currentPage === totalPages}
+                              className={`px-3 py-1.5 rounded-md ${currentPage === totalPages
+                                 ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                 : 'bg-white text-gray-700 hover:bg-amber-50 border border-gray-300'
+                                 }`}
+                              aria-label="Trang tiếp"
+                           >
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                              </svg>
+                           </button>
+                        </div>
+
+                        {/* Thông tin trang hiện tại */}
+                        <div className="text-sm text-gray-500 mt-3">
+                           Hiển thị {indexOfFirstProduct + 1}-{Math.min(indexOfLastProduct, filteredProducts.length)} của {filteredProducts.length} sản phẩm
+                        </div>
+                     </div>
+                  </div>
+               )}
             </div>
          )}
          {/* Modal for viewing product detail images */}
@@ -1164,7 +1276,6 @@ export default function ProductManagement() {
    const [activeTab, setActiveTab] = useState<string>('Tất cả');
    const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState<boolean>(false);
    const [productToDelete, setProductToDelete] = useState<number | null>(null);
-
    const [toast, setToast] = useState({
       show: false,
       message: '',
@@ -1529,6 +1640,13 @@ export default function ProductManagement() {
       };
    }, [products]);
 
+   // Thêm vào phần xử lý khi thay đổi tab
+   const handleTabChange = (tabId: string) => {
+      setActiveTab(tabId);
+   };
+
+   const resetPagination = activeTab; // Using activeTab as a dependency
+
    return (
       <div className='flex h-screen bg-gray-50'>
          <MenuSideBar />
@@ -1549,23 +1667,19 @@ export default function ProductManagement() {
                         {tabs.map((tab) => (
                            <button
                               key={tab.id}
-                              onClick={() => setActiveTab(tab.id)}
+                              onClick={() => handleTabChange(tab.id)} // Thay thế setActiveTab
                               className={`py-2 px-4 border-b-2 font-medium text-sm flex items-center mr-6 ${activeTab === tab.id
                                  ? 'border-amber-500 text-amber-600'
                                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                                  }`}
                            >
                               {tab.label}
-                              {!loading && (
-                                 <span
-                                    className={`ml-1.5 px-1.5 py-0.5 text-xs rounded-full ${activeTab === tab.id
-                                       ? 'bg-amber-100 text-amber-800'
-                                       : 'bg-gray-100 text-gray-600'
-                                       }`}
-                                 >
-                                    {tabCounts[tab.id]}
-                                 </span>
-                              )}
+                              <span className={`ml-2 px-1.5 py-0.5 text-xs rounded-full ${activeTab === tab.id
+                                 ? 'bg-amber-100 text-amber-800'
+                                 : 'bg-gray-100 text-gray-600'
+                                 }`}>
+                                 {tabCounts[tab.id]}
+                              </span>
                            </button>
                         ))}
                      </nav>
@@ -1619,6 +1733,7 @@ export default function ProductManagement() {
                   handleDeleteProduct={handleDeleteProduct}
                   getCategoryNameById={getCategoryNameById}
                   showToast={showToast} // Add this prop
+                  resetPagination={resetPagination} // Add this new prop
                />
             </main>
          </div>
@@ -1702,5 +1817,6 @@ export default function ProductManagement() {
       </div>
    );
 }
+
 
 
