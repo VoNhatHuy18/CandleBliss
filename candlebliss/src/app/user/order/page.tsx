@@ -766,42 +766,6 @@ export default function OrderPage() {
       checkMomoPayment();
    }, []);
 
-
-   // Sửa hàm uploadFile để thêm token authorization
-   const uploadFile = async (file: File): Promise<string | null> => {
-      try {
-         const token = localStorage.getItem('token');
-         if (!token) {
-            showToastMessage('Phiên đăng nhập hết hạn, vui lòng đăng nhập lại', 'error');
-            router.push('/user/signin');
-            return null;
-         }
-
-         const formData = new FormData();
-         formData.append('file', file);
-
-         const response = await fetch('http://68.183.226.198:3000/api/v1/files/upload', {
-            method: 'POST',
-            headers: {
-               'Authorization': `Bearer ${token}`,
-               // Lưu ý: Không thêm Content-Type khi sử dụng FormData vì browser sẽ tự động thêm boundary
-            },
-            body: formData,
-         });
-
-         if (!response.ok) {
-            console.error('File upload failed with status:', response.status);
-            throw new Error('File upload failed');
-         }
-
-         const data = await response.json();
-         return data.file?.path || null;
-      } catch (error) {
-         console.error('Error uploading file:', error);
-         return null;
-      }
-   };
-
    // Function to handle cancel order
    const handleCancelOrder = (orderId: number) => {
       setSelectedOrderId(orderId);
@@ -838,82 +802,60 @@ export default function OrderPage() {
             return;
          }
 
-         // Kiểm tra các trạng thái hợp lệ cho từng loại hành động
-         const validStatuses = {
-            'cancel': ['Đơn hàng vừa được tạo', 'Đang xử lý', 'Đang chờ thanh toán'],
-            'exchange': ['Đang giao hàng'],
-            'refund': ['Đang giao hàng']
-         };
-
-         // Kiểm tra xem trạng thái hiện tại có cho phép thực hiện hành động không
-         if (!validStatuses[actionType].includes(currentOrder.status)) {
-            showToastMessage(
-               `Không thể thực hiện hành động này với đơn hàng ở trạng thái ${currentOrder.status}`,
-               'error'
-            );
-            setActionLoading(false);
-            return;
-         }
-
-         // Cập nhật status theo luồng xác định
+         // Xác định status dựa trên actionType
          let status = '';
          if (actionType === 'cancel') {
             status = 'Đã huỷ';
          } else if (actionType === 'exchange') {
             status = 'Đổi trả hàng';
          } else if (actionType === 'refund') {
-            status = 'Đang chờ hoàn tiền'; // Thay đổi thành "Đang chờ hoàn tiền" thay vì "Trả hàng hoàn tiền"
+            status = 'Đang chờ hoàn tiền';  // Sửa thành "Trả hàng hoàn tiền" thay vì "Đang chờ hoàn tiền"
          }
-
-         // First, upload files if present (for return/exchange or refund)
-         let filePaths: string[] = [];
-         if (actionType !== 'cancel' && files.length > 0) {
-            // Upload each file and collect paths
-            const uploadPromises = files.map(file => uploadFile(file));
-            const results = await Promise.all(uploadPromises);
-
-            // Filter out failed uploads
-            filePaths = results.filter(path => path !== null) as string[];
-
-            if (filePaths.length < files.length) {
-               showToastMessage('Một số hình ảnh không thể tải lên', 'error');
-            }
-         }
-
-         // Prepare images data if we have file paths
-         const imagesData = filePaths.length > 0 ? { images: filePaths } : {};
 
          const token = localStorage.getItem('token');
          if (!token) {
-            showToastMessage('Phiên đăng nhập hết hạn, vui lòng đăng nhập lại', 'error');
+            showToastMessage('Phiên đăng nhập hết hạn', 'error');
             router.push('/user/signin');
             return;
          }
 
-         // Encode parameters for URL
-         const encodedReason = encodeURIComponent(reason);
-         const encodedStatus = encodeURIComponent(status);
+         // Create FormData object to send both text data and files
+         const formData = new FormData();
+         formData.append('reason', reason);
+         formData.append('status', status);
 
-         // Make API call to cancel or return the order
-         const apiUrl = `http://68.183.226.198:3000/api/orders/cancel-or-return/${selectedOrderId}?reason=${encodedReason}&status=${encodedStatus}`;
+         // Add files directly to the FormData with tên trường chính xác là 'images'
+         if (files && files.length > 0) {
+            files.forEach(file => {
+               formData.append('images', file);
+            });
+         }
 
-         const response = await fetch(apiUrl, {
-            method: 'PATCH',
-            headers: {
-               'Authorization': `Bearer ${token}`,
-               'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(imagesData),
-         });
+         // Debug log FormData content
+         console.log('FormData content:');
+         for (const pair of formData.entries()) {
+            console.log(`${pair[0]}: ${typeof pair[1] === 'object' ? 'File object' : pair[1]}`);
+         }
 
-         // Xử lý phản hồi từ API
+         // Send the request with FormData
+         const response = await fetch(
+            `http://68.183.226.198:3000/api/orders/cancel-or-return/${selectedOrderId}`,
+            {
+               method: 'PATCH',
+               headers: {
+                  'Authorization': `Bearer ${token}`
+               },
+               body: formData
+            }
+         );
+
          if (!response.ok) {
-            // Nếu có lỗi HTTP, phân tích nội dung lỗi
             const errorData = await response.json();
+            console.error('API error response:', errorData);
             throw new Error(errorData.message || `API request failed with status ${response.status}`);
          }
 
-         // Update local state to reflect the change
+         // Update local state
          setOrders(prevOrders =>
             prevOrders.map(order =>
                order.id === selectedOrderId ? { ...order, status } : order
@@ -932,7 +874,7 @@ export default function OrderPage() {
       } catch (error) {
          console.error('Error processing action:', error);
 
-         // Hiển thị thông báo lỗi cụ thể từ API nếu có
+         // Show specific error message from API if available
          let errorMessage = 'Có lỗi xảy ra khi xử lý yêu cầu';
          if (error instanceof Error) {
             errorMessage = error.message;
@@ -943,6 +885,7 @@ export default function OrderPage() {
          setActionLoading(false);
       }
    };
+
 
    if (loading) {
       return (

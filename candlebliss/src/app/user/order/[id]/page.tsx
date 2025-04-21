@@ -181,18 +181,15 @@ export default function OrderDetailPage() {
 
    // Improved function to process order status history
    const processOrderStatusHistory = (order: Order) => {
-      // Create a map to store unique status updates by their status value
-      const statusMap = new Map();
-
       // Đọc lịch sử từ localStorage nếu có
       const historyKey = getOrderStatusHistoryKey(order.id.toString(), userId);
-      let localStatusHistory: { status: string; updatedAt: string }[] = [];
+      let statusHistory: { status: string; updatedAt: string }[] = [];
 
       if (historyKey) {
          try {
             const savedHistory = localStorage.getItem(historyKey);
             if (savedHistory) {
-               localStatusHistory = JSON.parse(savedHistory);
+               statusHistory = JSON.parse(savedHistory);
             }
          } catch (error) {
             console.error('Error reading status history from localStorage:', error);
@@ -200,113 +197,22 @@ export default function OrderDetailPage() {
       }
 
       // Nếu không có lịch sử trong localStorage, tạo lịch sử mặc định
-      if (localStatusHistory.length === 0 && (!order.statusUpdates || order.statusUpdates.length === 0)) {
-         localStatusHistory = generateDefaultStatusTimeline(order);
+      if (statusHistory.length === 0) {
+         statusHistory = generateDefaultStatusTimeline(order);
 
          // Lưu lại lịch sử mặc định vào localStorage
          if (historyKey) {
             try {
-               localStorage.setItem(historyKey, JSON.stringify(localStatusHistory));
+               localStorage.setItem(historyKey, JSON.stringify(statusHistory));
             } catch (error) {
                console.error('Error saving default status history to localStorage:', error);
             }
          }
       }
 
-      // Thêm dữ liệu từ lịch sử đã lưu
-      localStatusHistory.forEach(update => {
-         // Đối với mỗi trạng thái, chỉ giữ lại phiên bản mới nhất nếu trùng
-         const existingUpdate = statusMap.get(update.status);
-         if (!existingUpdate || new Date(update.updatedAt) > new Date(existingUpdate.updatedAt)) {
-            statusMap.set(update.status, update);
-         }
-      });
-
-      // Xử lý các trạng thái đặc biệt
-      if (order.status === 'Đổi trả thành công' || order.status === 'Đổi trả thất bại') {
-         // Đảm bảo có các trạng thái đổi trả trước đó
-         const returnStatusFlow = [
-            'Đổi trả hàng',
-            order.status === 'Đổi trả thành công' ? 'Xác nhận đổi trả' : 'Từ chối đổi trả',
-            order.status
-         ];
-
-         // Đặt thời gian mặc định nếu không tìm thấy trong lịch sử
-         let latestTime = new Date(order.updatedAt);
-         for (let i = returnStatusFlow.length - 1; i >= 0; i--) {
-            const status = returnStatusFlow[i];
-            if (!statusMap.has(status)) {
-               latestTime = new Date(latestTime.getTime() - 24 * 60 * 60 * 1000); // trừ 1 ngày
-               statusMap.set(status, {
-                  status,
-                  updatedAt: latestTime.toISOString()
-               });
-            } else {
-               latestTime = new Date(statusMap.get(status).updatedAt);
-            }
-         }
-      }
-      else if (['Hoàn tiền thành công', 'Hoàn tiền thất bại'].includes(order.status)) {
-         // Đảm bảo có các trạng thái hoàn tiền trước đó
-         const refundStatusFlow = [
-            'Trả hàng hoàn tiền',
-            'Đang chờ hoàn tiền',
-            order.status
-         ];
-
-         // Đặt thời gian mặc định nếu không tìm thấy trong lịch sử
-         let latestTime = new Date(order.updatedAt);
-         for (let i = refundStatusFlow.length - 1; i >= 0; i--) {
-            const status = refundStatusFlow[i];
-            if (!statusMap.has(status)) {
-               latestTime = new Date(latestTime.getTime() - 24 * 60 * 60 * 1000); // trừ 1 ngày
-               statusMap.set(status, {
-                  status,
-                  updatedAt: latestTime.toISOString()
-               });
-            } else {
-               latestTime = new Date(statusMap.get(status).updatedAt);
-            }
-         }
-      }
-
-      // Đảm bảo có trạng thái đơn hàng vừa tạo
-      if (!statusMap.has('Đơn hàng vừa được tạo')) {
-         statusMap.set('Đơn hàng vừa được tạo', {
-            status: 'Đơn hàng vừa được tạo',
-            updatedAt: order.createdAt,
-         });
-      }
-
-      // Đảm bảo trạng thái hiện tại được bao gồm
-      if (!statusMap.has(order.status)) {
-         statusMap.set(order.status, {
-            status: order.status,
-            updatedAt: order.updatedAt,
-         });
-      }
-
-      // Chuyển map về mảng và sắp xếp theo thời gian
-      const statusUpdates = Array.from(statusMap.values()).sort(
-         (a, b) => new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime()
-      );
-
-      return statusUpdates;
+      return statusHistory;
    };
 
-   // Hàm lưu trạng thái đơn hàng
-   const saveOrderStatusHistory = (orderId: string | number, userId: number | null, statusUpdates: { status: string; updatedAt: string }[]) => {
-      if (!userId) return;
-
-      const historyKey = getOrderStatusHistoryKey(orderId.toString(), userId);
-      if (historyKey) {
-         try {
-            localStorage.setItem(historyKey, JSON.stringify(statusUpdates));
-         } catch (error) {
-            console.error('Error saving status history to localStorage:', error);
-         }
-      }
-   };
 
    // Hàm tạo timeline mặc định dựa trên trạng thái đơn hàng
    const generateDefaultStatusTimeline = (order: Order) => {
@@ -583,34 +489,67 @@ export default function OrderDetailPage() {
 
             const data = await response.json();
 
-            // Kiểm tra quyền xem đơn hàng
-            if (parsedUserId !== data.user_id) {
-               showToastMessage('Bạn không có quyền xem đơn hàng này', 'error');
-               router.push('/user/order');
-               return;
-            }
-
-            // Lưu trữ lịch sử trạng thái đơn hàng vào localStorage nếu có
+            // Kiểm tra nếu API trả về lịch sử trạng thái
             if (data.statusUpdates && data.statusUpdates.length > 0) {
-               saveOrderStatusHistory(data.id, parsedUserId, data.statusUpdates);
-            } else {
-               // Nếu API không trả về lịch sử, tạo lịch sử cơ bản dựa trên trạng thái hiện tại
-               const basicHistory = [
-                  {
-                     status: 'Đơn hàng vừa được tạo',
-                     updatedAt: data.createdAt
-                  }
-               ];
+               // Lấy lịch sử hiện tại từ localStorage (nếu có)
+               const historyKey = getOrderStatusHistoryKey(data.id.toString(), parsedUserId);
+               let localStatusHistory = [];
 
-               // Thêm trạng thái hiện tại nếu khác với trạng thái ban đầu
-               if (data.status !== 'Đơn hàng vừa được tạo') {
-                  basicHistory.push({
-                     status: data.status,
-                     updatedAt: data.updatedAt
-                  });
+               if (historyKey) {
+                  const savedHistory = localStorage.getItem(historyKey);
+                  if (savedHistory) {
+                     try {
+                        localStatusHistory = JSON.parse(savedHistory);
+                     } catch (error) {
+                        console.error('Error parsing local status history:', error);
+                     }
+                  }
                }
 
-               saveOrderStatusHistory(data.id, parsedUserId, basicHistory);
+               // Nếu đã có lịch sử trong localStorage, hợp nhất với lịch sử từ API
+               if (localStatusHistory.length > 0) {
+                  // Tạo map từ cả hai nguồn lịch sử
+                  const statusMap = new Map();
+
+                  // Thêm lịch sử từ localStorage
+                  localStatusHistory.forEach((update: { status: string; }) => {
+                     statusMap.set(update.status, update);
+                  });
+
+                  // Thêm lịch sử từ API, ưu tiên dữ liệu từ API nếu cả hai đều có cùng trạng thái
+                  data.statusUpdates.forEach((update: { status: string; }) => {
+                     statusMap.set(update.status, update);
+                  });
+
+                  // Chuyển map về mảng và sắp xếp theo thời gian
+                  const mergedStatusHistory = Array.from(statusMap.values()).sort(
+                     (a, b) => new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime()
+                  );
+
+                  // Lưu lịch sử đã hợp nhất
+                  if (historyKey) {
+                     localStorage.setItem(historyKey, JSON.stringify(mergedStatusHistory));
+                  }
+
+                  // Cập nhật dữ liệu trước khi set state
+                  data.statusUpdates = mergedStatusHistory;
+               } else {
+                  // Nếu chưa có lịch sử local, lưu lịch sử từ API
+                  const historyKey = getOrderStatusHistoryKey(data.id.toString(), parsedUserId);
+                  if (historyKey) {
+                     localStorage.setItem(historyKey, JSON.stringify(data.statusUpdates));
+                  }
+               }
+            } else {
+               // API không trả về lịch sử, tạo lịch sử cơ bản
+               const basicHistory = generateDefaultStatusTimeline(data);
+               const historyKey = getOrderStatusHistoryKey(data.id.toString(), parsedUserId);
+
+               if (historyKey) {
+                  localStorage.setItem(historyKey, JSON.stringify(basicHistory));
+               }
+
+               data.statusUpdates = basicHistory;
             }
 
             setOrder(data);
@@ -691,7 +630,6 @@ export default function OrderDetailPage() {
             return;
          }
 
-         // Update API endpoint to use the status update endpoint
          const response = await fetch(
             `http://68.183.226.198:3000/api/orders/${order.id}/status`,
             {
@@ -714,43 +652,55 @@ export default function OrderDetailPage() {
          // Get current time for the new status
          const currentTime = new Date().toISOString();
 
-         // Xác định các trạng thái hiện có
-         const existingStatusUpdates = order.statusUpdates || [];
+         // Lấy lịch sử trạng thái từ localStorage
+         const historyKey = getOrderStatusHistoryKey(order.id.toString(), userId);
+         let statusHistory = [];
+
+         if (historyKey) {
+            const savedHistory = localStorage.getItem(historyKey);
+            if (savedHistory) {
+               try {
+                  statusHistory = JSON.parse(savedHistory);
+               } catch (error) {
+                  console.error('Error parsing status history:', error);
+               }
+            }
+         }
+
+         // Nếu không có lịch sử, khởi tạo với trạng thái ban đầu
+         if (statusHistory.length === 0) {
+            statusHistory = [{
+               status: 'Đơn hàng vừa được tạo',
+               updatedAt: order.createdAt
+            }];
+
+            // Nếu trạng thái hiện tại khác "Đơn hàng vừa được tạo", thêm vào
+            if (order.status !== 'Đơn hàng vừa được tạo') {
+               statusHistory.push({
+                  status: order.status,
+                  updatedAt: order.updatedAt
+               });
+            }
+         }
+
+         // Tạo map để lưu trạng thái theo tên, đảm bảo không bị trùng lặp
          const statusMap = new Map();
-
-         // Đảm bảo có trạng thái bắt đầu
-         statusMap.set('Đơn hàng vừa được tạo', {
-            status: 'Đơn hàng vừa được tạo',
-            updatedAt: order.createdAt
-         });
-
-         // Thêm các trạng thái hiện có vào map
-         existingStatusUpdates.forEach(update => {
+         statusHistory.forEach((update: { status: string; }) => {
             statusMap.set(update.status, update);
          });
 
-         // Thêm trạng thái hiện tại nếu khác trạng thái ban đầu và chưa có trong map
-         if (order.status !== 'Đơn hàng vừa được tạo' && !statusMap.has(order.status)) {
-            statusMap.set(order.status, {
-               status: order.status,
-               updatedAt: order.updatedAt
-            });
-         }
-
          // Thêm trạng thái hủy mới
-         const newStatusUpdate = {
+         statusMap.set('Đã hủy', {
             status: 'Đã hủy',
             updatedAt: currentTime
-         };
-         statusMap.set('Đã hủy', newStatusUpdate);
+         });
 
-         // Chuyển map thành mảng và sắp xếp theo thời gian
+         // Chuyển map về mảng và sắp xếp theo thời gian
          const updatedStatusHistory = Array.from(statusMap.values()).sort(
             (a, b) => new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime()
          );
 
-         // Lưu lịch sử vào localStorage
-         const historyKey = getOrderStatusHistoryKey(order.id.toString(), userId);
+         // Lưu lịch sử đã cập nhật vào localStorage
          if (historyKey) {
             localStorage.setItem(historyKey, JSON.stringify(updatedStatusHistory));
          }
@@ -828,43 +778,55 @@ export default function OrderDetailPage() {
          // Thời gian cập nhật mới
          const currentTime = new Date().toISOString();
 
-         // Xác định các trạng thái hiện có
-         const existingStatusUpdates = order.statusUpdates || [];
-         const statusMap = new Map();
+         // Lấy lịch sử trạng thái từ localStorage
+         const historyKey = getOrderStatusHistoryKey(order.id.toString(), userId);
+         let statusHistory = [];
 
-         // Đảm bảo có trạng thái bắt đầu
-         statusMap.set('Đơn hàng vừa được tạo', {
-            status: 'Đơn hàng vừa được tạo',
-            updatedAt: order.createdAt
-         });
-
-         // Thêm các trạng thái hiện có vào map
-         existingStatusUpdates.forEach(update => {
-            statusMap.set(update.status, update);
-         })
-
-         // Thêm trạng thái hiện tại nếu khác trạng thái ban đầu và chưa có trong map
-         if (order.status !== 'Đơn hàng vừa được tạo' && !statusMap.has(order.status)) {
-            statusMap.set(order.status, {
-               status: order.status,
-               updatedAt: order.updatedAt
-            });
+         if (historyKey) {
+            const savedHistory = localStorage.getItem(historyKey);
+            if (savedHistory) {
+               try {
+                  statusHistory = JSON.parse(savedHistory);
+               } catch (error) {
+                  console.error('Error parsing status history:', error);
+               }
+            }
          }
 
-         // Thêm trạng thái mới
-         const newStatusUpdate = {
+         // Nếu không có lịch sử, khởi tạo với trạng thái ban đầu
+         if (statusHistory.length === 0) {
+            statusHistory = [{
+               status: 'Đơn hàng vừa được tạo',
+               updatedAt: order.createdAt
+            }];
+
+            // Nếu trạng thái hiện tại khác "Đơn hàng vừa được tạo", thêm vào
+            if (order.status !== 'Đơn hàng vừa được tạo') {
+               statusHistory.push({
+                  status: order.status,
+                  updatedAt: order.updatedAt
+               });
+            }
+         }
+
+         // Tạo map để lưu trạng thái theo tên, đảm bảo không bị trùng lặp
+         const statusMap = new Map();
+         statusHistory.forEach((update: { status: string; }) => {
+            statusMap.set(update.status, update);
+         });
+
+         // Thêm trạng thái mới vào, không thay thế trạng thái cũ
+         statusMap.set(newStatus, {
             status: newStatus,
             updatedAt: currentTime
-         };
-         statusMap.set(newStatus, newStatusUpdate);
+         });
 
-         // Chuyển map thành mảng và sắp xếp theo thời gian
+         // Chuyển map về mảng và sắp xếp theo thời gian
          const updatedStatusHistory = Array.from(statusMap.values()).sort(
             (a, b) => new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime()
          );
 
-         // Lưu lịch sử vào localStorage
-         const historyKey = getOrderStatusHistoryKey(order.id.toString(), userId);
+         // Lưu lịch sử đã cập nhật vào localStorage
          if (historyKey) {
             localStorage.setItem(historyKey, JSON.stringify(updatedStatusHistory));
          }

@@ -96,6 +96,16 @@ interface Order {
         request_date: string;
         status: string;
     };
+    // Add this field for return/exchange images
+    cancel_images?: Array<{
+        id: string;
+        path: string;
+        public_id: string;
+        createdAt: string;
+        updatedAt: string;
+        deletedAt: null;
+        isDeleted: boolean;
+    }> | null;
 }
 
 // Format price helper function
@@ -155,6 +165,7 @@ export default function ExchangePage() {
     const [fetchedDetails, setFetchedDetails] = useState<Record<number, boolean>>({});
     const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
     const [showUpdateStatusModal, setShowUpdateStatusModal] = useState(false);
+    const [previewImage, setPreviewImage] = useState<string | null>(null);
     const [newStatus, setNewStatus] = useState('');
     const [toast, setToast] = useState({
         show: false,
@@ -1150,11 +1161,35 @@ export default function ExchangePage() {
                                                                 {formatPrice(item.unit_price)} × {item.quantity}
                                                             </span>
                                                         </div>
-
                                                     </div>
                                                 </div>
                                             ))}
                                         </div>
+
+                                        {/* Return Images Section - Add this new section */}
+                                        {order.cancel_images && order.cancel_images.length > 0 && (
+                                            <div className='mt-3 pt-2 border-t border-gray-100'>
+                                                <p className='text-xs text-gray-500 mb-1.5'>Hình ảnh đổi/trả ({order.cancel_images.length})</p>
+                                                <div className='flex gap-2 overflow-x-auto pb-1 custom-scrollbar'>
+                                                    {order.cancel_images.map((image) => (
+                                                        <div
+                                                            key={image.id}
+                                                            onClick={() => setPreviewImage(image.path)}
+                                                            className='relative w-14 h-14 bg-gray-100 rounded cursor-pointer hover:opacity-90 transition-opacity flex-shrink-0'
+                                                        >
+                                                            <Image
+                                                                src={image.path}
+                                                                alt="Ảnh đổi/trả hàng"
+                                                                fill
+                                                                sizes='56px'
+                                                                style={{ objectFit: 'cover' }}
+                                                                className='rounded'
+                                                            />
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
 
                                     {/* Order summary and actions */}
@@ -1179,6 +1214,18 @@ export default function ExchangePage() {
                                                         {order.user?.name || 'N/A'}
                                                     </span>
                                                 </div>
+
+                                                {/* Add this indicator for return images */}
+                                                {order.cancel_images && order.cancel_images.length > 0 && (
+                                                    <div>
+                                                        <span className='text-[10px] text-gray-500 block'>
+                                                            Hình ảnh:
+                                                        </span>
+                                                        <span className='text-xs text-blue-600'>
+                                                            {order.cancel_images.length} ảnh
+                                                        </span>
+                                                    </div>
+                                                )}
                                             </div>
 
                                             {/* Add cancellation reason if available */}
@@ -1218,7 +1265,7 @@ export default function ExchangePage() {
             {/* Status update modal */}
             {showUpdateStatusModal && selectedOrder && (
                 <div className='fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4'>
-                    <div className='bg-white rounded-lg p-4 w-full max-w-sm'>
+                    <div className='bg-white rounded-lg p-4 w-full max-w-md'>
                         <div className='flex justify-between items-center mb-4'>
                             <h2 className='text-sm font-medium'>Cập nhật trạng thái đơn đổi trả</h2>
                             <button
@@ -1253,6 +1300,31 @@ export default function ExchangePage() {
                                     <div className='mt-1 border-t border-gray-200 pt-1'>
                                         <p className='text-xs text-gray-600'>{selectedOrder.status === 'Đổi trả hàng' ? 'Lý do đổi trả:' : 'Lý do huỷ:'}</p>
                                         <p className='text-xs text-red-500 mt-0.5'>{selectedOrder.cancelReason}</p>
+                                    </div>
+                                )}
+
+                                {/* Return Images Section in Modal */}
+                                {selectedOrder.cancel_images && selectedOrder.cancel_images.length > 0 && (
+                                    <div className='mt-2 border-t border-gray-200 pt-2'>
+                                        <p className='text-xs text-gray-600 mb-1'>Hình ảnh đính kèm:</p>
+                                        <div className='flex gap-1.5 overflow-x-auto pb-1 custom-scrollbar'>
+                                            {selectedOrder.cancel_images.map((image) => (
+                                                <div
+                                                    key={image.id}
+                                                    onClick={() => setPreviewImage(image.path)}
+                                                    className='relative w-12 h-12 bg-gray-100 rounded cursor-pointer hover:opacity-90 transition-opacity flex-shrink-0'
+                                                >
+                                                    <Image
+                                                        src={image.path}
+                                                        alt="Ảnh đổi/trả hàng"
+                                                        fill
+                                                        sizes='48px'
+                                                        style={{ objectFit: 'cover' }}
+                                                        className='rounded'
+                                                    />
+                                                </div>
+                                            ))}
+                                        </div>
                                     </div>
                                 )}
                             </div>
@@ -1314,6 +1386,38 @@ export default function ExchangePage() {
                                 <Check size={12} className='mr-1.5' />
                                 Xác nhận
                             </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Image Preview Modal */}
+            {previewImage && (
+                <div
+                    className='fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-[100] p-4'
+                    onClick={() => setPreviewImage(null)}
+                >
+                    <div className='relative max-w-4xl w-full max-h-[90vh]'>
+                        <button
+                            onClick={() => setPreviewImage(null)}
+                            className='absolute top-2 right-2 bg-black bg-opacity-50 text-white rounded-full p-1 hover:bg-opacity-70 z-10'
+                        >
+                            <X size={20} />
+                        </button>
+                        <div className='relative w-full h-auto'>
+                            <Image
+                                src={previewImage}
+                                alt="Xem ảnh đổi/trả hàng"
+                                width={1000}
+                                height={800}
+                                style={{
+                                    objectFit: 'contain',
+                                    maxHeight: '85vh',
+                                    margin: '0 auto',
+                                    boxShadow: '0 4px 12px rgba(0,0,0,0.2)'
+                                }}
+                                className='rounded'
+                            />
                         </div>
                     </div>
                 </div>
