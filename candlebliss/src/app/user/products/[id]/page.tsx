@@ -14,6 +14,15 @@ interface ProductImage {
    public_id: string;
 }
 
+interface User {
+   id: number;
+   firstName: string;
+   lastName: string;
+   photo?: {
+      path: string;
+   };
+}
+
 interface ProductDetail {
    id: number;
    size: string;
@@ -286,16 +295,11 @@ export default function ProductDetailPage() {
    // Thay thế hoặc cập nhật phương thức fetchProductRatings
    const fetchProductRatings = useCallback(async (productId: string | string[]) => {
       try {
-         setLoadingRatings(true);
          console.log('Đang lấy đánh giá cho sản phẩm ID:', productId);
-
-         // Gọi trực tiếp API đánh giá thay vì gọi API sản phẩm
          await tryFetchRatingsDirectly(productId);
-
       } catch (error) {
          console.error('Lỗi khi lấy đánh giá:', error);
          setProductRatings([]);
-      } finally {
          setLoadingRatings(false);
       }
    }, []);
@@ -304,8 +308,9 @@ export default function ProductDetailPage() {
    const tryFetchRatingsDirectly = async (productId: string | string[]) => {
       try {
          console.log('Thử gọi API đánh giá trực tiếp cho sản phẩm ID:', productId);
+         setLoadingRatings(true);
 
-         // Gửi request với đúng format mà API yêu cầu - object chứa product_id
+         // Fetch ratings
          const ratingResponse = await fetch(`http://68.183.226.198:3000/api/rating/get-by-product`, {
             method: 'POST',
             headers: {
@@ -314,42 +319,89 @@ export default function ProductDetailPage() {
             body: JSON.stringify({ product_id: parseInt(productId as string) })
          });
 
-         if (ratingResponse.ok) {
-            const data = await ratingResponse.json();
-            console.log('Dữ liệu đánh giá từ API rating:', data);
-
-            if (Array.isArray(data)) {
-               // Lọc các đánh giá có thông tin hợp lệ (có user_id, comment và rating)
-               const validRatings = data.filter(rating =>
-                  rating.user_id && (rating.comment || rating.rating || rating.avg_rating)
-               );
-
-               console.log('Các đánh giá hợp lệ:', validRatings);
-
-               // Chuyển đổi dữ liệu để phù hợp với cấu trúc ProductRating
-               const formattedRatings = validRatings.map(rating => ({
-                  id: rating.id,
-                  product_id: parseInt(productId as string),
-                  user_id: rating.user_id,
-                  user_name: `Khách hàng ${rating.user_id}`,  // Hoặc tìm tên người dùng nếu có
-                  rating: rating.rating || rating.avg_rating || 5,
-                  comment: rating.comment || '',
-                  created_at: new Date().toISOString()  // Nếu API không trả về ngày đánh giá
-               }));
-
-               setProductRatings(formattedRatings);
-            } else {
-               console.error('Định dạng đánh giá không hợp lệ:', typeof data);
-               setProductRatings([]);
-            }
-         } else {
+         if (!ratingResponse.ok) {
             const errorText = await ratingResponse.text();
             console.error('Không thể lấy đánh giá từ API rating:', ratingResponse.status, errorText);
             setProductRatings([]);
+            setLoadingRatings(false);
+            return;
          }
+
+         const data = await ratingResponse.json();
+         console.log('Dữ liệu đánh giá từ API rating:', data);
+
+         if (!Array.isArray(data)) {
+            console.error('Định dạng đánh giá không hợp lệ:', typeof data);
+            setProductRatings([]);
+            setLoadingRatings(false);
+            return;
+         }
+
+         // Lọc các đánh giá có thông tin hợp lệ
+         const validRatings = data.filter(rating =>
+            rating.user_id && (rating.comment || rating.rating || rating.avg_rating)
+         );
+
+         console.log('Các đánh giá hợp lệ:', validRatings);
+
+         // Fetch all users at once
+         const users = await fetchAllUsers();
+         console.log('Users fetched:', users.length);
+
+
+
+         const userMap = users.reduce((map: Record<number, User>, user: User) => {
+            map[user.id] = user;
+            return map;
+         }, {});
+
+         // Combine ratings with user information
+         const formattedRatings = validRatings.map(rating => {
+            const user = userMap[rating.user_id];
+            return {
+               id: rating.id,
+               product_id: parseInt(productId as string),
+               user_id: rating.user_id,
+               user_name: user ? `${user.firstName} ${user.lastName}` : `Khách hàng ${rating.user_id}`,
+               avatar: user?.photo?.path || null,
+               rating: rating.rating || rating.avg_rating || 5,
+               comment: rating.comment || '',
+               created_at: rating.created_at || new Date().toISOString()
+            };
+         });
+
+         console.log('Formatted ratings with user info:', formattedRatings);
+         setProductRatings(formattedRatings);
       } catch (error) {
          console.error('Lỗi khi gọi API rating trực tiếp:', error);
          setProductRatings([]);
+      } finally {
+         setLoadingRatings(false);
+      }
+   };
+
+   // Add this function to fetch all users with proper authentication
+   const fetchAllUsers = async () => {
+      try {
+         // Get token from localStorage
+         const token = localStorage.getItem('token');
+
+         const response = await fetch('http://68.183.226.198:3000/api/v1/users', {
+            headers: {
+               'Authorization': `Bearer ${token || ''}`
+            }
+         });
+
+         if (!response.ok) {
+            console.warn(`Could not fetch users information: ${response.status}`);
+            return [];
+         }
+
+         const result = await response.json();
+         return result.data || [];
+      } catch (error) {
+         console.error('Error fetching users information:', error);
+         return [];
       }
    };
 

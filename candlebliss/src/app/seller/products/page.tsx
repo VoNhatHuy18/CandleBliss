@@ -530,18 +530,18 @@ const ProductTable = ({
                   <div className='relative flex '>
                      <input
                         type='text'
-                        placeholder='Tìm sản phẩm theo tên, ID, danh mục...'
+                        placeholder='Tìm sản phẩm theo tên, ID'
                         value={searchTerm}
                         onChange={(e) => handleSearch(e.target.value)}
                         className='pl-10 pr-4 py-2 w-full border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500'
                      />
-                     <div className='absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400'>
+                     <div className='absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400'>
                         <MagnifyingGlassIcon className='h-5 w-5' />
                      </div>
                      {searchTerm && (
                         <button
                            onClick={() => handleSearch('')}
-                           className='absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600'
+                           className='absolute right-14 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 '
                         >
                            <svg
                               className='h-4 w-4'
@@ -557,6 +557,8 @@ const ProductTable = ({
                               />
                            </svg>
                         </button>
+                        
+               
                      )}
                      <button
                         onClick={handleRefresh}
@@ -574,13 +576,7 @@ const ProductTable = ({
                </div>
 
                <div className='flex items-center space-x-2'>
-                  <button
-                     onClick={() => router.push('/seller/categories')}
-                     className='inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-amber-600 hover:bg-amber-700 shadow-sm'
-                  >
-                     <PlusIcon className='h-4 w-4 mr-1.5' />
-                     Thêm danh mục
-                  </button>
+
                   <button
                      onClick={() => router.push('/seller/products/createproduct/step1')}
                      className='inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-amber-600 hover:bg-amber-700 shadow-sm'
@@ -1294,7 +1290,6 @@ export default function ProductManagement() {
    const tabs: { id: keyof typeof tabCounts; label: string }[] = [
       { id: 'Tất cả', label: 'Tất cả' },
       { id: 'Hoạt động', label: 'Đang bán' },
-      { id: 'Khuyến Mãi', label: 'Khuyến mãi' },
       { id: 'Hết hàng', label: 'Hết hàng' },
    ];
 

@@ -306,6 +306,34 @@ function OrderRatingContent() {
                 setRatings(initialRatings);
                 setReviews(initialReviews);
             }
+
+            // Khôi phục các đánh giá đã lưu trước đó
+            const initialRatings: Record<number, number> = {};
+            const initialReviews: Record<number, string> = {};
+
+            orderData.item.forEach(item => {
+                if (item.product?.id) {
+                    // Kiểm tra nếu đã có đánh giá lưu trước đó
+                    const draft = getRatingDraft(orderData.id, item.product.id);
+                    if (draft) {
+                        initialRatings[item.product.id] = draft.rating;
+                        initialReviews[item.product.id] = draft.review;
+                    } else {
+                        // Nếu không có, khởi tạo với giá trị mặc định
+                        initialRatings[item.product.id] = 5;
+                        initialReviews[item.product.id] = '';
+                    }
+                } else {
+                    // Sử dụng ID của item nếu không có product ID
+                    const key = item.id;
+                    initialRatings[key] = 5;
+                    initialReviews[key] = '';
+                }
+            });
+
+            setRatings(initialRatings);
+            setReviews(initialReviews);
+
         } catch (error) {
             console.error('Error fetching order details:', error);
             showToastMessage('Không thể tải thông tin đơn hàng', 'error');
@@ -314,8 +342,10 @@ function OrderRatingContent() {
         }
     }, [router, showToastMessage, fetchProductDetails]);
 
+    // Cập nhật hàm fetchCompletedOrders để bao gồm việc kiểm tra trạng thái đánh giá
     const fetchCompletedOrders = useCallback(async () => {
         try {
+            setLoading(true);
             const userIdStr = localStorage.getItem('userId');
             if (!userIdStr) {
                 showToastMessage('Phiên đăng nhập hết hạn, vui lòng đăng nhập lại', 'error');
@@ -333,11 +363,9 @@ function OrderRatingContent() {
                 return;
             }
 
-            const encodedStatus = encodeURIComponent('Hoàn thành');
-
-            // Use uid directly instead of userId from state
+            // Sử dụng API để lấy tất cả đơn hàng của người dùng
             const response = await fetch(
-                `http://68.183.226.198:3000/api/orders/status?status=${encodedStatus}&user_id=${uid}`,
+                `http://68.183.226.198:3000/api/orders?user_id=${uid}`,
                 {
                     headers: {
                         Authorization: `Bearer ${token}`,
@@ -346,19 +374,65 @@ function OrderRatingContent() {
             );
 
             if (!response.ok) {
-                throw new Error('Không thể tải danh sách đơn hàng đã hoàn thành');
+                throw new Error('Không thể tải danh sách đơn hàng');
             }
 
-            const data: Order[] = await response.json();
-            setCompletedOrders(Array.isArray(data) ? data : [data]); // Handle both array or single object response
+            const data = await response.json();
+            console.log('Fetched orders:', data);
 
-            // If orderId is provided in URL, fetch the specific order
+            // Lọc để chỉ lấy các đơn hàng có status "Hoàn thành"
+            const completedOrdersData = Array.isArray(data)
+                ? data.filter(order => order.status === 'Hoàn thành')
+                : data.status === 'Hoàn thành' ? [data] : [];
+
+            // Tiếp theo, kiểm tra trạng thái đánh giá của mỗi đơn hàng
+            const userRatingsResponse = await fetch(
+                `http://68.183.226.198:3000/api/rating/user/${uid}`,
+                {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                }
+            );
+
+            if (userRatingsResponse.ok) {
+                const userRatings = await userRatingsResponse.json();
+                console.log("User's existing ratings:", userRatings);
+
+                // Tạo một map từ product_id đến rating
+                const ratedProductMap = new Map();
+                userRatings.forEach((rating: { product_id: number, order_id: number }) => {
+                    if (rating.product_id && rating.order_id) {
+                        if (!ratedProductMap.has(rating.order_id)) {
+                            ratedProductMap.set(rating.order_id, new Set());
+                        }
+                        ratedProductMap.get(rating.order_id).add(rating.product_id);
+                    }
+                });
+
+                // Đánh dấu các đơn hàng đã được đánh giá
+                completedOrdersData.forEach(order => {
+                    const ratedProducts = ratedProductMap.get(order.id);
+                    if (ratedProducts) {
+                        order.item.forEach((item: { product_id: number; rating: number; }) => {
+                            if (item.product_id && ratedProducts.has(item.product_id)) {
+                                item.rating = 5; // Đặt giá trị mặc định
+                            }
+                        });
+                    }
+                });
+            }
+
+            console.log('Completed orders with rating info:', completedOrdersData);
+            setCompletedOrders(completedOrdersData);
+
+            // Nếu có orderId trong URL, tiếp tục với orderId đó
             if (orderId) {
                 fetchOrderDetails(parseInt(orderId));
             }
         } catch (error) {
-            console.error('Error fetching completed orders:', error);
-            showToastMessage('Không thể tải danh sách đơn hàng đã hoàn thành', 'error');
+            console.error('Error fetching orders:', error);
+            showToastMessage('Không thể tải danh sách đơn hàng', 'error');
         } finally {
             setLoading(false);
         }
@@ -491,6 +565,14 @@ function OrderRatingContent() {
             ...prev,
             [itemId]: rating
         }));
+
+        // Lưu nháp đánh giá
+        if (selectedOrder) {
+            const item = selectedOrder.item.find(i => i.product?.id === itemId || i.id === itemId);
+            if (item && item.product?.id) {
+                saveRatingDraft(selectedOrder.id, item.product.id, rating, reviews[itemId] || '');
+            }
+        }
     };
 
     // Handle review text change
@@ -499,6 +581,85 @@ function OrderRatingContent() {
             ...prev,
             [itemId]: text
         }));
+
+        // Lưu nháp nhận xét
+        if (selectedOrder) {
+            const item = selectedOrder.item.find(i => i.product?.id === itemId || i.id === itemId);
+            if (item && item.product?.id) {
+                saveRatingDraft(selectedOrder.id, item.product.id, ratings[itemId] || 5, text);
+            }
+        }
+    };
+
+    // Thêm localStorage để lưu dữ liệu đã nhập
+    const saveRatingDraft = useCallback((orderId: number, productId: number, rating: number, review: string) => {
+        try {
+            const key = `rating_draft_${orderId}_${productId}`;
+            const data = { rating, review, timestamp: new Date().getTime() };
+            localStorage.setItem(key, JSON.stringify(data));
+        } catch (error) {
+            console.error('Error saving rating draft:', error);
+        }
+    }, []);
+
+    // Lấy dữ liệu nháp từ localStorage
+    const getRatingDraft = useCallback((orderId: number, productId: number) => {
+        try {
+            const key = `rating_draft_${orderId}_${productId}`;
+            const savedData = localStorage.getItem(key);
+            if (savedData) {
+                const data = JSON.parse(savedData);
+                // Chỉ sử dụng dữ liệu nháp trong vòng 7 ngày
+                const isValid = (new Date().getTime() - data.timestamp) < 7 * 24 * 60 * 60 * 1000;
+                if (isValid) {
+                    return { rating: data.rating, review: data.review };
+                } else {
+                    localStorage.removeItem(key); // Xóa dữ liệu quá hạn
+                }
+            }
+            return null;
+        } catch (error) {
+            console.error('Error retrieving rating draft:', error);
+            return null;
+        }
+    }, []);
+
+
+
+    // Add this function to store information about rated products
+    const markProductAsRated = (orderId: number, productId: number) => {
+        try {
+            // Get existing rated products or initialize empty object
+            const ratedProductsStr = localStorage.getItem('rated_products') || '{}';
+            const ratedProducts = JSON.parse(ratedProductsStr);
+
+            // Structure: { "userId_orderId_productId": timestamp }
+            const userIdStr = localStorage.getItem('userId');
+            const key = `${userIdStr}_${orderId}_${productId}`;
+            ratedProducts[key] = new Date().getTime();
+
+            // Save back to localStorage
+            localStorage.setItem('rated_products', JSON.stringify(ratedProducts));
+        } catch (error) {
+            console.error('Error marking product as rated:', error);
+        }
+    };
+
+    // Add this function to check if a product has been rated
+    const hasUserRatedProduct = (orderId: number, productId: number) => {
+        try {
+            const ratedProductsStr = localStorage.getItem('rated_products') || '{}';
+            const ratedProducts = JSON.parse(ratedProductsStr);
+
+            const userIdStr = localStorage.getItem('userId');
+            const key = `${userIdStr}_${orderId}_${productId}`;
+
+            // Return true if key exists
+            return !!ratedProducts[key];
+        } catch (error) {
+            console.error('Error checking if product is rated:', error);
+            return false;
+        }
     };
 
     // Update submitRating function to handle "already rated" errors
@@ -607,9 +768,12 @@ function OrderRatingContent() {
                 });
             }
 
+            // Mark as rated in localStorage
+            markProductAsRated(orderId, productId);
+
             // Redirect after success with a delay to show the success message
             setTimeout(() => {
-                router.push('/user/order');
+                goBackToList();
             }, 2000);
 
         } catch (error) {
@@ -619,8 +783,25 @@ function OrderRatingContent() {
             setSubmitting(false);
         }
     };
+    useEffect(() => {
+        // Initialize rated products from localStorage
+        if (selectedOrder) {
+            const initialRatedProducts: Record<number, boolean> = {};
+            selectedOrder.item.forEach(item => {
+                if (item.product?.id) {
+                    initialRatedProducts[item.product.id] = hasUserRatedProduct(selectedOrder.id, item.product.id);
+                }
+            });
+            setUserRatedProducts(initialRatedProducts);
+        }
+    }, [selectedOrder]);
 
 
+
+    // Khi quay lại, đổi view thành 'list' và xóa selectedOrder
+    const goBackToList = () => {
+        setSelectedOrder(null);
+    };
 
     // Star rating component
     const StarRating = ({
@@ -664,6 +845,12 @@ function OrderRatingContent() {
             </div>
         );
     };
+
+    // Thêm một hàm để kiểm tra xem đơn hàng đã được đánh giá chưa
+    const isOrderRated = useCallback((order: Order) => {
+        // Kiểm tra nếu ít nhất một sản phẩm trong đơn hàng đã được đánh giá
+        return order.item.some(item => item.rating !== undefined);
+    }, []);
 
     // Show order selection UI if no order is selected
     if (!loading && !selectedOrder && completedOrders.length > 0) {
@@ -709,8 +896,11 @@ function OrderRatingContent() {
                                         <p className="text-sm">Tổng: <span className="font-medium text-orange-600">{formatPrice(order.total_price)}</span></p>
                                         <p className="text-sm text-gray-500">{order.total_quantity} sản phẩm</p>
                                     </div>
-                                    <button className="px-4 py-2 bg-orange-500 text-white rounded-md hover:bg-orange-600">
-                                        {order.rating ? 'Xem đánh giá' : 'Đánh giá'}
+                                    <button
+                                        className={`px-4 py-2 rounded-md ${isOrderRated(order) ? 'bg-gray-400 text-white' : 'bg-orange-500 text-white hover:bg-orange-600'}`}
+                                        disabled={isOrderRated(order)}
+                                    >
+                                        {isOrderRated(order) ? 'Đã đánh giá' : 'Đánh giá'}
                                     </button>
                                 </div>
                             </div>
@@ -737,15 +927,20 @@ function OrderRatingContent() {
                     <h1 className="text-2xl font-medium mb-6">Đánh giá sản phẩm</h1>
                     <div className="bg-white rounded-lg shadow p-8 text-center">
                         <div className="flex flex-col items-center">
+                            <div className="bg-amber-50 inline-flex p-4 rounded-full mb-4">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                            </div>
                             <h3 className="text-xl font-medium mb-2">Bạn chưa có đơn hàng đã hoàn thành</h3>
                             <p className="text-gray-500 mb-6">
-                                Hãy mua sắm và hoàn thành đơn hàng để có thể đánh giá sản phẩm
+                                Khi đơn hàng của bạn được chuyển sang trạng thái Hoàn thành, bạn có thể đánh giá sản phẩm tại đây.
                             </p>
                             <Link
                                 href="/user/order"
                                 className="bg-orange-600 text-white py-2 px-6 rounded-md hover:bg-orange-700"
                             >
-                                Quay lại đơn hàng
+                                Xem đơn hàng của tôi
                             </Link>
                         </div>
                     </div>
@@ -772,7 +967,7 @@ function OrderRatingContent() {
             <div className="container mx-auto px-4 py-8">
                 <div className="flex items-center mb-6">
                     <button
-                        onClick={() => router.push('/user/order')}
+                        onClick={goBackToList}
                         className="mr-4 text-gray-500 hover:text-gray-700"
                     >
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -887,12 +1082,12 @@ function OrderRatingContent() {
                         </div>
 
                         <div className="p-4 bg-gray-50 flex justify-between items-center">
-                            <Link
-                                href="/user/order"
+                            <button
+                                onClick={goBackToList}
                                 className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-100"
                             >
                                 Quay lại
-                            </Link>
+                            </button>
 
                         </div>
                     </div>
@@ -903,3 +1098,4 @@ function OrderRatingContent() {
         </div >
     );
 }
+

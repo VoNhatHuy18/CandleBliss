@@ -365,11 +365,22 @@ function NavBarContent() {
                      >
                         Quà Tặng
                      </Link>
+                     <hr className='border-[#553C26]' />
+
+                     <Link
+                        href='/user/products/vouchers'
+                        className='block px-4 py-2 text-[#553C26] hover:bg-[#E2DED8]'
+                     >
+                        Danh sách mã khuyến mãi 
+                     </Link>
                   </div>
                </div>
+               
+               <Link href='/user/aboutshop'>
                <button className='text-base xl:text-lg hover:text-[#FF9900] focus:font-semibold focus:text-[#FF9900] font-mont hover:font-semibold'>
                   Về Chúng Tôi
                </button>
+               </Link>
                <Link href='https://www.facebook.com/' target='_blank'>
                   <button className='text-base xl:text-lg hover:text-[#FF9900] focus:font-semibold focus:text-[#FF9900] font-mont hover:font-semibold'>
                      Liên Hệ

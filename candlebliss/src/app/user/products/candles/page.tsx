@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, Suspense } from 'react';
-import { Star, StarHalf, Eye } from 'lucide-react';
+import {  Eye } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
@@ -89,6 +89,63 @@ interface SortOption {
    label: string;
 }
 
+// Tối ưu: Tạo hàm để lấy ratings cho nhiều sản phẩm cùng lúc
+const fetchRatingsForProducts = async (productIds: number[]) => {
+   if (!productIds.length) return {};
+
+   try {
+      const ratingPromises = productIds.map(id =>
+         fetch(`http://68.183.226.198:3000/api/rating/get-by-product`, {
+            method: 'POST',
+            headers: {
+               'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ product_id: id })
+         }).then(res => res.ok ? res.json() : [])
+      );
+
+      const ratingsResults = await Promise.all(ratingPromises);
+
+      // Map ratings to product IDs
+      const ratingsMap: Record<number, number> = {};
+
+      productIds.forEach((id, index) => {
+         const productRatings = ratingsResults[index];
+         if (Array.isArray(productRatings) && productRatings.length > 0) {
+            const totalRating = productRatings.reduce((sum, item) =>
+               sum + (item.rating || item.avg_rating || 0), 0);
+            ratingsMap[id] = productRatings.length > 0 ? totalRating / productRatings.length : 5;
+         } else {
+            ratingsMap[id] = 0; // Default rating
+         }
+      });
+
+      return ratingsMap;
+   } catch (error) {
+      console.error('Error fetching ratings batch:', error);
+      return {};
+   }
+};
+
+// Thêm StarDisplay component từ trang products
+const StarDisplay = ({ rating }: { rating: number }) => {
+   return (
+      <div className="flex">
+         {[1, 2, 3, 4, 5].map((star) => (
+            <svg
+               key={star}
+               xmlns="http://www.w3.org/2000/svg"
+               className={`h-4 w-4 ${star <= rating ? 'text-yellow-400' : 'text-gray-300'}`}
+               viewBox="0 0 20 20"
+               fill="currentColor"
+            >
+               <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+            </svg>
+         ))}
+      </div>
+   );
+};
+
 // ProductCard component (same as in products page)
 const ProductCard = ({
    id,
@@ -134,26 +191,7 @@ const ProductCard = ({
    };
 
    const renderStars = () => {
-      const stars = [];
-      const fullStars = Math.floor(rating);
-      const hasHalfStar = rating % 1 !== 0;
-
-      for (let i = 0; i < fullStars; i++) {
-         stars.push(<Star key={`star-${i}`} className='w-4 h-4 fill-yellow-400 text-yellow-400' />);
-      }
-
-      if (hasHalfStar) {
-         stars.push(
-            <StarHalf key='half-star' className='w-4 h-4 fill-yellow-400 text-yellow-400' />,
-         );
-      }
-
-      const remainingStars = 5 - Math.ceil(rating);
-      for (let i = 0; i < remainingStars; i++) {
-         stars.push(<Star key={`empty-star-${i}`} className='w-4 h-4 text-yellow-400' />);
-      }
-
-      return stars;
+      return <StarDisplay rating={rating} />;
    };
 
    const formatPrice = (value: string | number) => {
@@ -346,7 +384,7 @@ export default function CandlesPage() {
    const [sortOption, setSortOption] = useState<string>('default');
 
    const [currentPage, setCurrentPage] = useState(1);
-   const productsPerPage = 25;
+   const productsPerPage = 20;
 
    // Thêm state để lưu trữ sản phẩm gốc theo đúng thứ tự ban đầu
    const [originalProducts, setOriginalProducts] = useState<Array<{
@@ -634,6 +672,12 @@ export default function CandlesPage() {
                images: Array.isArray(product.images) ? product.images : [product.images],
             }));
 
+            // Lấy danh sách ID của sản phẩm nến để sử dụng cho việc lấy ratings
+            const productIds = normalizedProducts.map(p => p.id);
+
+            // Lấy ratings cho tất cả sản phẩm cùng lúc
+            const ratingsMap = await fetchRatingsForProducts(productIds);
+
             // 3. Lấy chi tiết sản phẩm và giá cho từng sản phẩm nến
             const detailedProducts = await Promise.all(
                normalizedProducts.map(async (product) => {
@@ -775,7 +819,7 @@ export default function CandlesPage() {
                      description: product.description,
                      price: basePrice,
                      discountPrice: discountPrice,
-                     rating: 4.5,
+                     rating: ratingsMap[product.id] || 0, // Use the rating from map, defaulting to 5 if not available
                      imageUrl: imageUrl || '/images/placeholder.jpg',
                      variants: variants.length > 0 ? variants : undefined,
                   };
@@ -786,20 +830,7 @@ export default function CandlesPage() {
                setFilteredProducts(mappedProducts);
             } catch (priceErr) {
                console.error('Lỗi khi lấy thông tin giá:', priceErr);
-               // Hiển thị sản phẩm không có giá nếu không lấy được thông tin giá
-               const mappedProductsWithoutPrices = normalizedProducts.map(product => ({
-                  id: product.id,
-                  title: product.name,
-                  description: product.description,
-                  price: '0',
-                  rating: 4.5,
-                  imageUrl: product.images && product.images.length > 0
-                     ? product.images[0].path
-                     : '/images/placeholder.jpg',
-               }));
 
-               setProducts(mappedProductsWithoutPrices);
-               setFilteredProducts(mappedProductsWithoutPrices);
             }
          } catch (err) {
             console.error('Lỗi khi lấy danh sách sản phẩm:', err);

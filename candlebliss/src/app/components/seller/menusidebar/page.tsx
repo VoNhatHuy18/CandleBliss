@@ -19,9 +19,15 @@ import {
 
 export default function MenuSideBar() {
    const [showProductSubmenu, setShowProductSubmenu] = useState(false);
+   const [showSettingSubmenu, setShowSettingSubmenu] = useState(false);
+
 
    const toggleProductSubmenu = () => {
       setShowProductSubmenu(!showProductSubmenu);
+   };
+
+   const toggleSettingSubmenu = () => {
+      setShowSettingSubmenu(!showSettingSubmenu);
    };
 
    const handleLogout = () => {
@@ -152,14 +158,31 @@ export default function MenuSideBar() {
                   </Link>
                </div>
 
+
                <div className='px-4 py-2'>
-                  <Link
-                     href='/settings'
-                     className='flex items-center p-2 text-gray-600 hover:bg-gray-100 rounded'
+                  <button
+                     onClick={toggleSettingSubmenu}
+                     className='flex items-center justify-between w-full p-2 text-gray-600 hover:bg-gray-100 rounded '
                   >
-                     <Settings size={18} className='mr-2' />
-                     <span>Cài Đặt</span>
-                  </Link>
+                     <div className='flex items-center'>
+
+                        <Settings size={18} className='mr-2' />
+                        <span>Cài Đặt</span>
+                     </div>
+                     {showSettingSubmenu ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                  </button>
+
+                  {showSettingSubmenu && (
+                     <div className='ml-6 mt-2 border-l-2 border-gray-200 pl-2'>
+                        <Link
+                           href='/seller/categories'
+                           className='flex items-center p-2 text-gray-600 hover:bg-gray-100 rounded'
+                        >
+                           <span className='text-sm'>Quản lý danh mục</span>
+                        </Link>
+
+                     </div>
+                  )}
                </div>
             </nav>
             <div className='p-4 border-t'>
