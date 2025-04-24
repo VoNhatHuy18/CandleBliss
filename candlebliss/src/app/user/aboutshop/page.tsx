@@ -8,7 +8,7 @@ import TrendingCarousel from '@/app/components/user/trendingcarousel/page';
 
 export default function AboutShop() {
     return (
-        <div className="flex flex-col min-h-screen bg-[#FFFBF6]">
+        <div className="flex flex-col min-h-screen bg-[#F1EEE9]">
             <Header />
 
             <main className="flex-grow container mx-auto px-4 py-8">

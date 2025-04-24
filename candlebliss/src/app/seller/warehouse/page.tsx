@@ -21,6 +21,7 @@ import {
     ExclamationTriangleIcon,
     ClipboardIcon,
 } from '@heroicons/react/24/outline';
+import React from 'react';
 
 interface Image {
     id: string;
@@ -529,14 +530,19 @@ const StockReceiptModal = ({
 const InventoryFilters = ({
     activeTab,
     setActiveTab,
-    tabCounts
+    tabCounts,
+    setCurrentPage,
+    
 }: {
     activeTab: string;
     setActiveTab: (tab: string) => void;
     tabCounts: Record<string, number>;
+    currentPage: number;
+    setCurrentPage: (page: number) => void;
+    totalPages: number;
 }) => {
     const tabs = [
-        { id: 'Tất cả', label: 'Tất cả sản phẩm' },    
+        { id: 'Tất cả', label: 'Tất cả sản phẩm' },
         { id: 'Hoạt động', label: 'Đang bán' },
         { id: 'Sắp hết', label: 'Sắp hết hàng' },
         { id: 'Hết hàng', label: 'Hết hàng' },
@@ -550,7 +556,10 @@ const InventoryFilters = ({
                         {tabs.map((tab) => (
                             <button
                                 key={tab.id}
-                                onClick={() => setActiveTab(tab.id)}
+                                onClick={() => {
+                                    setActiveTab(tab.id);
+                                    setCurrentPage(1); // Reset to first page when changing tabs
+                                }}
                                 className={`py-3 px-5 text-sm font-medium whitespace-nowrap ${activeTab === tab.id
                                     ? 'border-b-2 border-amber-500 text-amber-600'
                                     : 'text-gray-500 hover:text-gray-700'
@@ -581,6 +590,9 @@ const ProductTable = ({
     handleDeleteProduct,
     getCategoryNameById,
     openStockReceiptModal,
+    currentPage,
+    setCurrentPage,
+    productsPerPage = 10,
 }: {
     products: ProductViewModel[];
     loading: boolean;
@@ -590,6 +602,9 @@ const ProductTable = ({
     getCategoryNameById: (categoryId: number | undefined) => Promise<string>;
     showToast: (message: string, type: 'success' | 'error' | 'info') => void;
     openStockReceiptModal: (productId: number, variantId: number | null) => void;
+    currentPage: number;
+    setCurrentPage: (page: number) => void;
+    productsPerPage?: number;
 }) => {
     const [expandedProduct, setExpandedProduct] = useState<number | null>(null);
     const [detailPrices, setDetailPrices] = useState<Record<number, {
@@ -743,8 +758,18 @@ const ProductTable = ({
         fetchAllProductData();
     }, [fetchAllProductData]);
 
+    // Pagination logic
+    const totalPages = Math.ceil(filteredProducts.length / productsPerPage);
+    const startIndex = (currentPage - 1) * productsPerPage;
+    const endIndex = startIndex + productsPerPage;
+    const currentPageProducts = filteredProducts.slice(startIndex, endIndex);
 
-
+    // Pagination navigation function
+    const goToPage = (page: number) => {
+        if (page >= 1 && page <= totalPages) {
+            setCurrentPage(page);
+        }
+    };
 
     return (
         <div className="bg-white rounded-lg shadow overflow-hidden">
@@ -837,8 +862,8 @@ const ProductTable = ({
                         <div className="text-right">Thao tác</div>
                     </div>
 
-                    {/* Product rows */}
-                    {filteredProducts.map((product) => {
+                    {/* Product rows - using currentPageProducts instead of filteredProducts */}
+                    {currentPageProducts.map((product) => {
                         const totalStock = product.details?.reduce((sum, detail) => sum + (Number(detail.quantities) || 0), 0) || 0;
                         const activeVariants = product.details?.filter((d) => d.isActive)?.length || 0;
                         const totalVariants = product.details?.length || 0;
@@ -1210,6 +1235,72 @@ const ProductTable = ({
                             </div>
                         );
                     })}
+
+                    {/* Pagination Controls */}
+                    {totalPages > 1 && (
+                        <div className="px-6 py-4 border-t flex items-center justify-between">
+                            <div className="text-sm text-gray-500">
+                                Hiển thị {startIndex + 1} đến {Math.min(endIndex, filteredProducts.length)}
+                                trong tổng số {filteredProducts.length} sản phẩm
+                            </div>
+                            <div className="flex space-x-1">
+                                <button
+                                    onClick={() => goToPage(currentPage - 1)}
+                                    disabled={currentPage === 1}
+                                    className="px-3 py-1 border rounded text-sm bg-white text-gray-700 
+                                        disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                                >
+                                    Trước
+                                </button>
+                                {Array.from({ length: totalPages }, (_, i) => i + 1)
+                                    .filter(page => {
+                                        // Only show pages near current page for better UX
+                                        return (
+                                            page === 1 ||
+                                            page === totalPages ||
+                                            (page >= currentPage - 1 && page <= currentPage + 1)
+                                        );
+                                    })
+                                    .map((page, index, array) => {
+                                        // Check if we need to show ellipsis
+                                        const showEllipsisBefore = index > 0 && array[index - 1] !== page - 1;
+                                        const showEllipsisAfter = index < array.length - 1 && array[index + 1] !== page + 1;
+
+                                        return (
+                                            <React.Fragment key={page}>
+                                                {showEllipsisBefore && (
+                                                    <span className="px-3 py-1 border bg-white text-gray-500 rounded">
+                                                        ...
+                                                    </span>
+                                                )}
+                                                <button
+                                                    onClick={() => goToPage(page)}
+                                                    className={`px-3 py-1 border rounded text-sm ${currentPage === page
+                                                        ? 'bg-amber-500 text-white border-amber-500'
+                                                        : 'bg-white text-gray-700 hover:bg-gray-50'
+                                                        }`}
+                                                >
+                                                    {page}
+                                                </button>
+                                                {showEllipsisAfter && (
+                                                    <span className="px-3 py-1 border bg-white text-gray-500 rounded">
+                                                        ...
+                                                    </span>
+                                                )}
+                                            </React.Fragment>
+                                        );
+                                    })}
+                                <button
+                                    onClick={() => goToPage(currentPage + 1)}
+                                    disabled={currentPage === totalPages}
+                                    className="px-3 py-1 border rounded text-sm bg-white text-gray-700 
+                                        disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                                >
+                                    Tiếp
+                                </button>
+                            </div>
+                        </div>
+                    )}
                 </div>
             )}
         </div>
@@ -1228,6 +1319,7 @@ export default function Warehouse() {
     const [isProcessing, setIsProcessing] = useState(false);
     const [selectedProductId, setSelectedProductId] = useState<number | null>(null);
     const [selectedVariantId, setSelectedVariantId] = useState<number | null>(null);
+    const [currentPage, setCurrentPage] = useState(1);
 
     const [inventorySummary, setInventorySummary] = useState<InventorySummary>({
         totalProducts: 0,
@@ -1735,6 +1827,9 @@ export default function Warehouse() {
                         activeTab={activeTab}
                         setActiveTab={setActiveTab}
                         tabCounts={tabCounts}
+                        currentPage={currentPage}
+                        setCurrentPage={setCurrentPage}
+                        totalPages={Math.ceil(filteredProducts.length / 10)}
                     />
 
                     {/* Phần bảng sản phẩm */}
@@ -1751,6 +1846,8 @@ export default function Warehouse() {
                             setSelectedVariantId(variantId);
                             setIsReceiptModalOpen(true);
                         }}
+                        currentPage={currentPage}
+                        setCurrentPage={setCurrentPage}
                     />
 
                     {/* Các modal */}

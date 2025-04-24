@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import {
    FaUser,
    FaShoppingBag,
-   FaHeart,
    FaAddressBook,
    FaStar,
    FaHeadset,
@@ -61,13 +60,7 @@ const MenuProfile: React.FC<MenuProfileProps> = ({ selectedTab }) => {
          path: '/user/order',
       },
       {
-         label: 'Sản phẩm yêu thích',
-         icon: FaHeart,
-         tab: 'wishlist',
-         path: '/user/profile/wishlist',
-      },
-      {
-         label: 'Địa chỉ của tôi',
+         label: 'Địa chỉ của tôi',  
          icon: FaAddressBook,
          tab: 'addresses',
          path: '/user/profile/address',

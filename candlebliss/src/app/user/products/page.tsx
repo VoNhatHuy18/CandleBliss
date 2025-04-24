@@ -4,9 +4,12 @@ import React, { useState, useEffect, Suspense } from 'react';
 import { Eye, Menu, X } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
+import Head from 'next/head';
 import { useSearchParams } from 'next/navigation';
 import NavBar from '@/app/components/user/nav/page';
 import Footer from '@/app/components/user/footer/page';
+import ChatBot from '@/app/components/user/chatbot/ChatBot';
+
 
 interface ProductImage {
    id: string;
@@ -861,6 +864,12 @@ export default function ProductPage() {
 
    return (
       <div className='bg-[#F1EEE9] min-h-screen'>
+         <Head>
+            <title>Sản phẩm</title>
+            <meta name='description' content='Sản phẩm' />
+            <link rel='icon' href='/favicon.ico' />
+         </Head>
+         <ChatBot />
          <NavBar />
 
          {/* Wrap the search params usage in Suspense */}

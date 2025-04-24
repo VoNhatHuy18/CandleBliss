@@ -1100,7 +1100,9 @@ export default function ProductDetailPage() {
                      </div>
 
                      {/* Action Buttons */}
-                     <div className='grid grid-cols-2 gap-3 mb-4'>
+
+
+                     <div className='grid grid-cols-1 gap-3 mb-2'>
                         <button
                            className='flex justify-center items-center bg-white border border-gray-300 py-2.5 text-sm text-gray-700 rounded hover:bg-gray-50 transition disabled:opacity-50'
                            onClick={handleAddToCart}
@@ -1122,26 +1124,6 @@ export default function ProductDetailPage() {
                            </svg>
                            <span>Thêm vào giỏ hàng</span>
                         </button>
-                        <button className='flex justify-center items-center bg-white border border-gray-300 py-2.5 text-sm text-gray-700 rounded hover:bg-gray-50 transition'>
-                           <svg
-                              xmlns='http://www.w3.org/2000/svg'
-                              className='h-4 w-4 mr-1'
-                              fill='none'
-                              viewBox='0 0 24 24'
-                              stroke='currentColor'
-                           >
-                              <path
-                                 strokeLinecap='round'
-                                 strokeLinejoin='round'
-                                 strokeWidth={2}
-                                 d='M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z'
-                              />
-                           </svg>
-                           <span>Thêm vào yêu thích</span>
-                        </button>
-                     </div>
-
-                     <div className='grid grid-cols-1 gap-3 mb-2'>
                         <button
                            className='bg-orange-700 border border-orange-700 py-3 text-sm text-white rounded hover:bg-orange-800 transition font-medium disabled:opacity-50 disabled:hover:bg-orange-700'
                            onClick={handleBuyNow}

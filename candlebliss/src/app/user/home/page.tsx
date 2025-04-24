@@ -9,6 +9,7 @@ import TrendingCarousel from '@/app/components/user/trendingcarousel/page';
 import RotatingImages from '@/app/components/user/rotatingimages/page';
 import NavBar from '@/app/components/user/nav/page';
 import Footer from '@/app/components/user/footer/page';
+import ChatBot from '@/app/components/user/chatbot/ChatBot';
 
 // Fallback loading components
 const LoadingSpinner = () => (
@@ -21,6 +22,10 @@ export default function HomePage() {
    return (
       <>
          <div className='bg-[#F1EEE9] min-h-screen'>
+            {/* Chatbot */}
+            <div className='fixed bottom-4 right-4 z-50'>
+               <ChatBot />
+            </div>
             {/* Wrap NavBar in Suspense in case it's using useSearchParams */}
             <Suspense fallback={<LoadingSpinner />}>
                <NavBar />

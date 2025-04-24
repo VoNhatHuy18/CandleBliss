@@ -2,14 +2,12 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { FaSpinner, FaExclamationTriangle, FaUser } from 'react-icons/fa';
+import { FaSpinner, FaExclamationTriangle } from 'react-icons/fa';
 
 import Header from '@/app/components/user/nav/page';
 import Footer from '@/app/components/user/footer/page';
 import ViewedCarousel from '@/app/components/user/viewedcarousel/page';
 import MenuProfile from '@/app/components/user/menuprofile/MenuProfile';
-
-import Image from 'next/image';
 import { fetchUserProfile } from '@/app/utils/api';
 import type { User } from './types';
 
@@ -174,19 +172,7 @@ const ProfileContent: React.FC = () => {
          <h2 className='text-2xl font-semibold text-gray-800 pb-4 border-b'>Thông tin cá nhân</h2>
 
          <div className='flex flex-col md:flex-row gap-8'>
-            <div className='w-full md:w-1/3 flex flex-col items-center'>
-               <div className='relative w-32 h-32 mb-4'>
-                  <Image
-                     src='/default-avatar.png'
-                     alt='Profile picture'
-                     width={128}
-                     height={128}
-                     className='rounded-full object-cover border-4 border-amber-100'
-                  />
-                  <button className='absolute bottom-0 right-0 bg-amber-500 text-white p-2 rounded-full hover:bg-amber-600'>
-                     <FaUser size={14} />
-                  </button>
-               </div>
+            <div className='w-full md:w-1/3 flex flex-col items-center justify-center'>
                <h3 className='text-xl font-semibold'>{fullName}</h3>
                <p className='text-gray-500'>Thành viên từ {formatDate(user.createdAt)}</p>
                <div className='mt-2 flex gap-2'>
