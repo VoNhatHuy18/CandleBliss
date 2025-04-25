@@ -2,23 +2,30 @@
 
 import { useState, useEffect } from 'react';
 
-type ToastProps = {
+// Cập nhật component Toast để hỗ trợ các nút hành động
+interface ToastProps {
    show: boolean;
    message: string;
    type: 'success' | 'error' | 'info';
    onClose: () => void;
    duration?: number;
    position?: 'top-right' | 'top-left' | 'bottom-right' | 'bottom-left';
-};
+   actions?: Array<{
+      label: string;
+      onClick: () => void;
+      variant?: 'primary' | 'secondary';
+   }>;
+}
 
-const Toast: React.FC<ToastProps> = ({
+export default function Toast({
    show,
    message,
    type,
    onClose,
    duration = 3000,
    position = 'top-right',
-}) => {
+   actions = [],
+}: ToastProps) {
    const [animation, setAnimation] = useState<'fadeIn' | 'fadeOut' | ''>('');
 
    useEffect(() => {
@@ -72,6 +79,28 @@ const Toast: React.FC<ToastProps> = ({
             </svg>
          </button>
 
+         {/* Buttons for actions */}
+         {actions.length > 0 && (
+            <div className="flex space-x-2 mt-3 justify-end">
+               {actions.map((action, index) => (
+                  <button
+                     key={index}
+                     onClick={() => {
+                        onClose();
+                        action.onClick();
+                     }}
+                     className={`px-3 py-1.5 text-sm font-medium rounded-md ${
+                        action.variant === 'primary'
+                           ? 'bg-amber-600 text-white hover:bg-amber-700'
+                           : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                     }`}
+                  >
+                     {action.label}
+                  </button>
+               ))}
+            </div>
+         )}
+
          <style jsx global>{`
             @keyframes fadeIn {
                from {
@@ -105,6 +134,4 @@ const Toast: React.FC<ToastProps> = ({
          `}</style>
       </div>
    );
-};
-
-export default Toast;
+}

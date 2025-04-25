@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Star, StarHalf, Eye, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Eye, ChevronLeft, ChevronRight } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 interface ProductImage {
@@ -59,19 +59,46 @@ interface ProductCardProps {
    onAddToCart?: (productId: number, detailId?: number) => void;
 }
 
-// Add this interface above the existing ones
-interface Category {
-   id: number;
-   name: string;
-   description?: string;
-}
 
-interface ProductWithPossibleCategories extends Product {
-   categoryId?: number;
-   category_id?: number;
-   category?: Category;
-   categories?: Category[];
-}
+
+
+// Add this function before the TrendingCarousel component
+const fetchRatingsForProducts = async (productIds: number[]) => {
+   if (!productIds.length) return {};
+
+   try {
+      const ratingPromises = productIds.map(id =>
+         fetch(`http://68.183.226.198:3000/api/rating/get-by-product`, {
+            method: 'POST',
+            headers: {
+               'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ product_id: id })
+         }).then(res => res.ok ? res.json() : [])
+      );
+
+      const ratingsResults = await Promise.all(ratingPromises);
+
+      // Map ratings to product IDs
+      const ratingsMap: Record<number, number> = {};
+
+      productIds.forEach((id, index) => {
+         const productRatings = ratingsResults[index];
+         if (Array.isArray(productRatings) && productRatings.length > 0) {
+            const totalRating = productRatings.reduce((sum, item) =>
+               sum + (item.rating || item.avg_rating || 0), 0);
+            ratingsMap[id] = productRatings.length > 0 ? totalRating / productRatings.length : 0;
+         } else {
+            ratingsMap[id] = 0; // Default rating of 0 for products with no ratings
+         }
+      });
+
+      return ratingsMap;
+   } catch (error) {
+      console.error('Error fetching ratings batch:', error);
+      return {};
+   }
+};
 
 // ProductCard component (same as in products page)
 const ProductCard = ({
@@ -117,27 +144,26 @@ const ProductCard = ({
       return null;
    };
 
+   const StarDisplay = ({ rating }: { rating: number }) => {
+      return (
+         <div className="flex">
+            {[1, 2, 3, 4, 5].map((star) => (
+               <svg
+                  key={star}
+                  xmlns="http://www.w3.org/2000/svg"
+                  className={`h-4 w-4 ${star <= rating ? 'text-yellow-400' : 'text-gray-300'}`}
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+               >
+                  <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+               </svg>
+            ))}
+         </div>
+      );
+   };
+
    const renderStars = () => {
-      const stars = [];
-      const fullStars = Math.floor(rating);
-      const hasHalfStar = rating % 1 !== 0;
-
-      for (let i = 0; i < fullStars; i++) {
-         stars.push(<Star key={`star-${i}`} className='w-4 h-4 fill-yellow-400 text-yellow-400' />);
-      }
-
-      if (hasHalfStar) {
-         stars.push(
-            <StarHalf key='half-star' className='w-4 h-4 fill-yellow-400 text-yellow-400' />,
-         );
-      }
-
-      const remainingStars = 5 - Math.ceil(rating);
-      for (let i = 0; i < remainingStars; i++) {
-         stars.push(<Star key={`empty-star-${i}`} className='w-4 h-4 text-yellow-400' />);
-      }
-
-      return stars;
+      return <StarDisplay rating={rating} />;
    };
 
    const formatPrice = (value: string | number) => {
@@ -327,51 +353,19 @@ export default function CandlesCarousel() {
             const productsData: Product[] = await productsResponse.json();
             console.log('Total products fetched:', productsData.length);
 
-            // 2. Lọc sản phẩm chỉ lấy danh mục Nến thơm (category_id = 4)
-            const CANDLES_CATEGORY_ID = 4; // "Nến Thơm" category ID
-
-            // Lọc sản phẩm theo category_id hoặc categoryId
-            let candleProducts = productsData.filter((product: ProductWithPossibleCategories) => {
-               return (
-                  product.categoryId === CANDLES_CATEGORY_ID ||
-                  product.category_id === CANDLES_CATEGORY_ID ||
-                  product.category?.id === CANDLES_CATEGORY_ID ||
-                  product.categories?.some(cat => cat.id === CANDLES_CATEGORY_ID)
-               );
-            });
-
-            // Nếu không tìm thấy sản phẩm nào theo ID, lọc theo từ khóa liên quan đến nến
-            if (candleProducts.length === 0) {
-               console.log('Không tìm thấy sản phẩm theo category ID, đang thử lọc theo tên...');
-               candleProducts = productsData.filter(product => {
-                  const name = product.name?.toLowerCase() || '';
-                  const desc = product.description?.toLowerCase() || '';
-                  return (
-                     name.includes('nến') ||
-                     name.includes('candle') ||
-                     desc.includes('nến thơm') ||
-                     desc.includes('scented candle')
-                  );
-               });
-            }
-
-            console.log(`Tìm thấy ${candleProducts.length} sản phẩm nến thơm`);
-
-            // Chuẩn hóa danh sách sản phẩm nến
-            const normalizedProducts = candleProducts.map((product) => ({
+            // Chuẩn hóa danh sách sản phẩm
+            const normalizedProducts = productsData.map((product) => ({
                ...product,
                images: Array.isArray(product.images) ? product.images : [product.images],
             }));
 
-            // 3. Lấy chi tiết sản phẩm và giá cho từng sản phẩm nến
+            // Lấy chi tiết sản phẩm
             const detailedProducts = await Promise.all(
                normalizedProducts.map(async (product) => {
                   try {
-                     // Lấy chi tiết sản phẩm từ API chi tiết
                      const detailResponse = await fetch(`http://68.183.226.198:3000/api/products/${product.id}`);
                      if (detailResponse.ok) {
                         const detailData = await detailResponse.json();
-                        // Cập nhật thông tin chi tiết
                         return {
                            ...product,
                            details: detailData.details || [],
@@ -384,6 +378,13 @@ export default function CandlesCarousel() {
                   }
                })
             );
+
+            // Lấy IDs để batch fetch ratings
+            const productIds = detailedProducts.map(p => p.id);
+
+            // Fetch ratings cho tất cả sản phẩm cùng lúc
+            const ratingsMap = await fetchRatingsForProducts(productIds);
+            console.log('Fetched ratings for', Object.keys(ratingsMap).length, 'products');
 
             // 4. Lấy thông tin giá
             try {
@@ -419,8 +420,6 @@ export default function CandlesCarousel() {
 
                   const imageUrl =
                      product.images && product.images.length > 0 ? product.images[0].path : null;
-
-                  // Replace the pricing logic section (around line 444-475) with this improved implementation:
 
                   let basePrice = '0';
                   let discountPrice: string | undefined = undefined;
@@ -498,34 +497,44 @@ export default function CandlesCarousel() {
                      discountPrice = variants[0].discountPrice;
                   }
 
+                  // Get the rating from ratingsMap
+                  const rating = ratingsMap[product.id] || 0;
+
                   return {
                      id: product.id,
                      title: product.name,
                      description: product.description,
                      price: basePrice,
                      discountPrice: discountPrice,
-                     rating: 4.5,
+                     rating: rating, // Use actual rating from API
                      imageUrl: imageUrl || '/images/placeholder.jpg',
                      variants: variants.length > 0 ? variants : undefined,
                   };
                });
 
-               setProducts(mappedProducts);
+               // Filter products to only include those with ratings between 4 and 5
+               const trendingProducts = mappedProducts.filter(product => {
+                  return product.rating >= 4 && product.rating <= 5;
+               });
+
+               console.log(`Filtered ${trendingProducts.length} trending products with 4-5 star ratings`);
+               setProducts(trendingProducts);
             } catch (priceErr) {
                console.error('Lỗi khi lấy thông tin giá:', priceErr);
-               // Hiển thị sản phẩm không có giá nếu không lấy được thông tin giá
-               const mappedProductsWithoutPrices = normalizedProducts.map(product => ({
+
+               // Even for products without prices, we need to filter by rating
+               const productsWithRatings = detailedProducts.map(product => ({
                   id: product.id,
                   title: product.name,
                   description: product.description,
                   price: '0',
-                  rating: 4.5,
+                  rating: ratingsMap[product.id] || 0,
                   imageUrl: product.images && product.images.length > 0
                      ? product.images[0].path
                      : '/images/placeholder.jpg',
-               }));
+               })).filter(product => product.rating >= 4 && product.rating <= 5);
 
-               setProducts(mappedProductsWithoutPrices);
+               setProducts(productsWithRatings);
             }
          } catch (err) {
             console.error('Lỗi khi lấy danh sách sản phẩm:', err);
@@ -556,7 +565,7 @@ export default function CandlesCarousel() {
       console.log('View detail clicked for product ID:', productId);
    };
 
-   
+
 
    return (
       <div className='bg-[#F1EEE9] py-8'>

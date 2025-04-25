@@ -162,6 +162,11 @@ const ProductTable = ({
    getCategoryNameById,
    showToast, // Đảm bảo thêm tham số này vào định nghĩa
    resetPagination, // Add this new prop
+   setSearchTerm, // Add this new prop
+   searchTerm, // Add this prop to receive the parent's searchTerm
+   currentPage,  // Add these props
+   setCurrentPage,  // Add these props
+
 }: {
    products: ProductViewModel[];
    loading: boolean;
@@ -172,7 +177,14 @@ const ProductTable = ({
 
    showToast: (message: string, type: 'success' | 'error' | 'info') => void; // Đảm bảo có dòng này
    resetPagination?: string; // Add this optional prop
+   setSearchTerm: (term: string) => void; // Add this new prop
+   searchTerm: string; // Add this type
+   currentPage: number;
+   setCurrentPage: (page: number) => void;
 }) => {
+   // Remove the local currentPage state since it's now coming from props
+   // const [currentPage, setCurrentPage] = useState(1); // Delete this line
+
    const [expandedProduct, setExpandedProduct] = useState<number | null>(null);
    const [detailPrices, setDetailPrices] = useState<
       Record<
@@ -184,10 +196,8 @@ const ProductTable = ({
          }
       >
    >({});
-   const [searchTerm, setSearchTerm] = useState<string>('');
    const [detailLoading, setDetailLoading] = useState<Record<number, boolean>>({});
    const [categoryNames, setCategoryNames] = useState<Record<number, string>>({});
-   const [currentPage, setCurrentPage] = useState(1);
    const router = useRouter();
 
    // Add new state to track which detail images are being viewed
@@ -507,8 +517,8 @@ const ProductTable = ({
 
    // Cập nhật hàm xử lý tìm kiếm để reset trang
    const handleSearch = (term: string) => {
-      setSearchTerm(term);
-      setCurrentPage(1); // Reset về trang đầu tiên khi tìm kiếm
+      setSearchTerm(term); // Just use the parent's setSearchTerm directly
+      setCurrentPage(1); // Reset to first page when searching
    };
 
    // Thêm useEffect này vào ProductTable component
@@ -557,8 +567,8 @@ const ProductTable = ({
                               />
                            </svg>
                         </button>
-                        
-               
+
+
                      )}
                      <button
                         onClick={handleRefresh}
@@ -1272,11 +1282,14 @@ export default function ProductManagement() {
    const [activeTab, setActiveTab] = useState<string>('Tất cả');
    const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState<boolean>(false);
    const [productToDelete, setProductToDelete] = useState<number | null>(null);
+   const [selectedCategory, setSelectedCategory] = useState<number | null>(null);
+   const [currentPage, setCurrentPage] = useState(1);
    const [toast, setToast] = useState({
       show: false,
       message: '',
       type: 'info' as 'success' | 'error' | 'info',
    });
+   const [searchTerm, setSearchTerm] = useState<string>(''); // Lifted state
 
    const showToast = (message: string, type: 'success' | 'error' | 'info') => {
       setToast({
@@ -1287,6 +1300,7 @@ export default function ProductManagement() {
    };
 
    const router = useRouter();
+
    const tabs: { id: keyof typeof tabCounts; label: string }[] = [
       { id: 'Tất cả', label: 'Tất cả' },
       { id: 'Hoạt động', label: 'Đang bán' },
@@ -1429,7 +1443,32 @@ export default function ProductManagement() {
          setLoading(false);
       }
    }, []);
+   // Add this function inside ProductManagement component
+   const fetchCategories = useCallback(async () => {
+      try {
+         const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+         if (!token) return;
 
+         const response = await fetch('http://68.183.226.198:3000/api/categories', {
+            headers: {
+               Authorization: `Bearer ${token}`,
+            },
+         });
+
+         if (response.ok) {
+            const categoriesData = await response.json();
+            setCategories(categoriesData);
+         }
+      } catch (error) {
+         console.error('Error fetching categories:', error);
+      }
+   }, []);
+
+   // Call this function in useEffect
+   useEffect(() => {
+      fetchAllProductData();
+      fetchCategories(); // Add this line to fetch categories when component mounts
+   }, []);
    const getCategoryNameById = useCallback(
       async (categoryId: number | undefined): Promise<string> => {
          if (!categoryId) return 'Chưa có danh mục';
@@ -1582,58 +1621,71 @@ export default function ProductManagement() {
       }
    };
 
-   // Filter products based on active tab
+   // Update the filteredProducts useMemo to include category filtering
    const filteredProducts = useMemo(() => {
+      let filtered = products;
+
+      // First filter by category if one is selected
+      if (selectedCategory !== null) {
+         filtered = filtered.filter(product =>
+            product.category_id === selectedCategory ||
+            product.categories?.some(cat => cat.id === selectedCategory)
+         );
+      }
+
+      // Then apply the active tab filter
       switch (activeTab) {
          case 'Hoạt động':
-            return products.filter((product) => product.details?.some((detail) => detail.isActive));
+            return filtered.filter((product) => product.details?.some((detail) => detail.isActive));
          case 'Khuyến Mãi':
-            return products.filter((product) => {
-               // Check if any product pricing has an active discount
+            return filtered.filter((product) => {
                return product.pricing?.some((price) => {
-                  // Check if there's a discount price
                   const hasDiscount = price.discount_price && price.discount_price > 0;
-
-                  // Check if the promotion is still active (not expired)
                   const isActive = isPromotionActive(price.end_date);
-
                   return hasDiscount && isActive;
                });
             });
          case 'Hết hàng':
-            return products.filter((product) => {
-               // Calculate total quantity for this specific product
+            return filtered.filter((product) => {
                const totalQuantity =
                   product.details?.reduce((sum, detail) => {
-                     // Ensure quantities is treated as a number
-                     const quantity =
-                        detail?.quantities !== undefined ? Number(detail.quantities) : 0;
+                     const quantity = detail?.quantities !== undefined ? Number(detail.quantities) : 0;
                      return sum + quantity;
                   }, 0) || 0;
                return totalQuantity === 0;
             });
          default:
-            return products;
+            return filtered;
       }
-   }, [products, activeTab]);
+   }, [products, activeTab, selectedCategory]);
 
    // Get counts for each tab
+   // Modify the tabCounts useMemo to include category filtering
    const tabCounts = useMemo(() => {
+      // First filter by category if one is selected
+      let filtered = products;
+      if (selectedCategory !== null) {
+         filtered = filtered.filter(product =>
+            product.category_id === selectedCategory ||
+            product.categories?.some(cat => cat.id === selectedCategory)
+         );
+      }
+
       return {
-         'Tất cả': products.length,
-         'Hoạt động': products.filter((p) => p.details?.some((d) => d.isActive)).length,
-         'Khuyến Mãi': products.filter((p) =>
+         'Tất cả': filtered.length,
+         'Hoạt động': filtered.filter((p) => p.details?.some((d) => d.isActive)).length,
+         'Khuyến Mãi': filtered.filter((p) =>
             p.pricing?.some(
                (price) => price.discount_price && price.discount_price > 0 && isPromotionActive(price.end_date),
             ),
          ).length,
-         'Hết hàng': products.filter((p) => {
+         'Hết hàng': filtered.filter((p) => {
             const totalQuantity =
                p.details?.reduce((sum, d) => sum + (Number(d.quantities) || 0), 0) || 0;
             return totalQuantity === 0;
          }).length,
       };
-   }, [products]);
+   }, [products, selectedCategory]);
 
    // Thêm vào phần xử lý khi thay đổi tab
    const handleTabChange = (tabId: string) => {
@@ -1641,6 +1693,14 @@ export default function ProductManagement() {
    };
 
    const resetPagination = activeTab; // Using activeTab as a dependency
+
+   // Add this function to the ProductManagement component
+   const resetFilters = () => {
+      setSelectedCategory(null);
+      setActiveTab('Tất cả');
+      setCurrentPage(1);
+      setSearchTerm(''); // You'll need to lift this state up from ProductTable
+   };
 
    return (
       <div className='flex h-screen bg-gray-50'>
@@ -1651,7 +1711,19 @@ export default function ProductManagement() {
                {/* Header with title and add button */}
                <div className='flex flex-col md:flex-row justify-between items-start md:items-center mb-6'>
                   <div>
-                     <h1 className='text-2xl font-semibold text-gray-800'>Quản lý sản phẩm</h1>
+                     <h1 className='text-2xl font-semibold text-gray-800'>
+                        Quản lý sản phẩm
+                        {selectedCategory !== null && (
+                           <span className="ml-2 text-base font-normal text-amber-600">
+                              • {categories.find(cat => cat.id === selectedCategory)?.name || `Danh mục ID: ${selectedCategory}`}
+                           </span>
+                        )}
+                     </h1>
+                     {selectedCategory !== null && (
+                        <p className="mt-1 text-sm text-gray-500">
+                           {categories.find(cat => cat.id === selectedCategory)?.description || 'Không có mô tả'}
+                        </p>
+                     )}
                   </div>
                </div>
 
@@ -1680,6 +1752,76 @@ export default function ProductManagement() {
                      </nav>
                   </div>
                </div>
+
+               {/* Add this right after the filter tabs component */}
+               {/* Category filter dropdown */}
+               <div className="mb-6 flex items-center">
+                  <label className="mr-2 text-sm font-medium text-gray-700">Lọc theo danh mục:</label>
+                  <div className="relative">
+                     <select
+                        value={selectedCategory !== null ? selectedCategory : ''}
+                        onChange={(e) => {
+                           const value = e.target.value;
+                           setSelectedCategory(value ? Number(value) : null);
+                           setCurrentPage(1); // Reset pagination when changing category
+                        }}
+                        className="block w-48 pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-amber-500 focus:border-amber-500 sm:text-sm rounded-md"
+                     >
+                        <option value="">Tất cả danh mục</option>
+                        {categories.map((category) => (
+                           <option key={category.id} value={category.id}>
+                              {category.name}
+                           </option>
+                        ))}
+                     </select>
+
+                  </div>
+
+                  <button
+                     onClick={resetFilters}
+                     className="ml-4 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md flex items-center"
+                  >
+                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1.5" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
+                     </svg>
+                     Đặt lại bộ lọc
+                  </button>
+               </div>
+
+               {/* Add this somewhere near the top of the component or above the product table */}
+               {(selectedCategory !== null || activeTab !== 'Tất cả') && (
+                  <div className="mb-4 flex items-center flex-wrap gap-2">
+                     <span className="text-sm text-gray-500">Bộ lọc đang áp dụng:</span>
+
+                     {selectedCategory !== null && (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
+                           Danh mục: {categories.find(cat => cat.id === selectedCategory)?.name || `ID: ${selectedCategory}`}
+                           <button
+                              onClick={() => setSelectedCategory(null)}
+                              className="ml-1.5 text-amber-600 hover:text-amber-800"
+                           >
+                              <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                           </button>
+                        </span>
+                     )}
+
+                     {activeTab !== 'Tất cả' && (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                           Trạng thái: {activeTab}
+                           <button
+                              onClick={() => setActiveTab('Tất cả')}
+                              className="ml-1.5 text-blue-600 hover:text-blue-800"
+                           >
+                              <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                           </button>
+                        </span>
+                     )}
+                  </div>
+               )}
 
                {/* Error display */}
                {error && (
@@ -1729,6 +1871,10 @@ export default function ProductManagement() {
                   getCategoryNameById={getCategoryNameById}
                   showToast={showToast} // Add this prop
                   resetPagination={resetPagination} // Add this new prop
+                  setSearchTerm={setSearchTerm} // Add this new prop
+                  searchTerm={searchTerm} // Add this prop
+                  currentPage={currentPage} // Add this prop
+                  setCurrentPage={setCurrentPage} // Add this prop
                />
             </main>
          </div>

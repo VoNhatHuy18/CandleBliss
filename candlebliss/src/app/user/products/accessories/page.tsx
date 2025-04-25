@@ -1,12 +1,12 @@
 'use client';
 
 import React, { useState, useEffect, Suspense } from 'react';
-import { Star, StarHalf, Eye, X, Menu } from 'lucide-react';
+import { Eye } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import NavBar from '@/app/components/user/nav/page';
-import Footer from '@/app/components/user/footer/page';
+import Footer from '@/app/components/user/footer/page'; // Fixed: Added missing Footer import
 
 interface ProductImage {
    id: string;
@@ -41,7 +41,7 @@ interface Product {
    video: string;
    images: ProductImage | ProductImage[];
    details?: ProductDetail[];
-   categoryId?: number;
+   categoryId?: number; // Added categoryId field to filter by category
 }
 
 interface ProductCardProps {
@@ -89,7 +89,64 @@ interface SortOption {
    label: string;
 }
 
-// ProductCard component
+// Tối ưu: Tạo hàm để lấy ratings cho nhiều sản phẩm cùng lúc
+const fetchRatingsForProducts = async (productIds: number[]) => {
+   if (!productIds.length) return {};
+
+   try {
+      const ratingPromises = productIds.map(id =>
+         fetch(`http://68.183.226.198:3000/api/rating/get-by-product`, {
+            method: 'POST',
+            headers: {
+               'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ product_id: id })
+         }).then(res => res.ok ? res.json() : [])
+      );
+
+      const ratingsResults = await Promise.all(ratingPromises);
+
+      // Map ratings to product IDs
+      const ratingsMap: Record<number, number> = {};
+
+      productIds.forEach((id, index) => {
+         const productRatings = ratingsResults[index];
+         if (Array.isArray(productRatings) && productRatings.length > 0) {
+            const totalRating = productRatings.reduce((sum, item) =>
+               sum + (item.rating || item.avg_rating || 0), 0);
+            ratingsMap[id] = productRatings.length > 0 ? totalRating / productRatings.length : 5;
+         } else {
+            ratingsMap[id] = 0; // Default rating
+         }
+      });
+
+      return ratingsMap;
+   } catch (error) {
+      console.error('Error fetching ratings batch:', error);
+      return {};
+   }
+};
+
+// Thêm StarDisplay component từ trang products
+const StarDisplay = ({ rating }: { rating: number }) => {
+   return (
+      <div className="flex">
+         {[1, 2, 3, 4, 5].map((star) => (
+            <svg
+               key={star}
+               xmlns="http://www.w3.org/2000/svg"
+               className={`h-4 w-4 ${star <= rating ? 'text-yellow-400' : 'text-gray-300'}`}
+               viewBox="0 0 20 20"
+               fill="currentColor"
+            >
+               <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+            </svg>
+         ))}
+      </div>
+   );
+};
+
+// ProductCard component (same as in products page)
 const ProductCard = ({
    id,
    title,
@@ -134,26 +191,7 @@ const ProductCard = ({
    };
 
    const renderStars = () => {
-      const stars = [];
-      const fullStars = Math.floor(rating);
-      const hasHalfStar = rating % 1 !== 0;
-
-      for (let i = 0; i < fullStars; i++) {
-         stars.push(<Star key={`star-${i}`} className='w-4 h-4 fill-yellow-400 text-yellow-400' />);
-      }
-
-      if (hasHalfStar) {
-         stars.push(
-            <StarHalf key='half-star' className='w-4 h-4 fill-yellow-400 text-yellow-400' />,
-         );
-      }
-
-      const remainingStars = 5 - Math.ceil(rating);
-      for (let i = 0; i < remainingStars; i++) {
-         stars.push(<Star key={`empty-star-${i}`} className='w-4 h-4 text-yellow-400' />);
-      }
-
-      return stars;
+      return <StarDisplay rating={rating} />;
    };
 
    const formatPrice = (value: string | number) => {
@@ -281,7 +319,7 @@ const ProductCard = ({
    );
 };
 
-// Tối ưu hóa Search component để tránh vòng lặp vô hạn
+// Search component
 function ProductSearch({ onSearch }: { onSearch: (query: string) => void }) {
    const searchParams = useSearchParams();
    const searchQuery = searchParams.get('search') || '';
@@ -298,7 +336,7 @@ function ProductSearch({ onSearch }: { onSearch: (query: string) => void }) {
    return null;
 }
 
-export default function AccessoriesPage() {
+export default function CandlesPage() {
    const [products, setProducts] = useState<
       Array<{
          id: number;
@@ -341,32 +379,31 @@ export default function AccessoriesPage() {
    const [error, setError] = useState<string | null>(null);
    const [searchQuery, setSearchQuery] = useState('');
 
-   const [currentPage, setCurrentPage] = useState(1);
-   const productsPerPage = 25;
-
    // Add these new states for filtering and sorting
    const [selectedPriceRange, setSelectedPriceRange] = useState<PriceRange | null>(null);
    const [sortOption, setSortOption] = useState<string>('default');
-   const [originalProducts, setOriginalProducts] = useState<
-      Array<{
-         id: number;
-         title: string;
-         description: string;
-         price: string;
+
+   const [currentPage, setCurrentPage] = useState(1);
+   const productsPerPage = 20;
+
+   // Thêm state để lưu trữ sản phẩm gốc theo đúng thứ tự ban đầu
+   const [originalProducts, setOriginalProducts] = useState<Array<{
+      id: number;
+      title: string;
+      description: string;
+      price: string;
+      discountPrice?: string;
+      rating: number;
+      imageUrl: string;
+      variants?: Array<{
+         detailId: number;
+         size: string;
+         type: string;
+         basePrice: string;
          discountPrice?: string;
-         rating: number;
-         imageUrl: string;
-         variants?: Array<{
-            detailId: number;
-            size: string;
-            type: string;
-            basePrice: string;
-            discountPrice?: string;
-            inStock: boolean;
-         }>;
-      }>
-   >([]);
-   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+         inStock: boolean;
+      }>;
+   }>>([]);
 
    // Define price ranges for filtering
    const priceRanges: PriceRange[] = [
@@ -394,7 +431,7 @@ export default function AccessoriesPage() {
 
    const totalPages = Math.ceil(filteredProducts.length / productsPerPage);
 
-   // Hàm áp dụng bộ lọc và sắp xếp
+   // Cập nhật hàm applyFiltersAndSort để xử lý sắp xếp mặc định đúng cách
    const applyFiltersAndSort = (
       products: Array<{
          id: number;
@@ -506,7 +543,7 @@ export default function AccessoriesPage() {
       return result;
    };
 
-   // Helper function to calculate discounted price (nếu chưa có)
+   // Helper function to calculate discounted price
    const calculateDiscountedPrice = (basePrice: string, discountPercent: string) => {
       const basePriceNum = parseFloat(basePrice);
       const discountPercentNum = parseFloat(discountPercent);
@@ -517,13 +554,15 @@ export default function AccessoriesPage() {
       return discountedPrice;
    };
 
-   // Handlers cho filter và sort
+   // Cập nhật handler cho search để tránh vòng lặp vô hạn
    const handleSearch = (query: string) => {
       if (loading) return;
 
+      // Cập nhật state trước
       setSearchQuery(query);
 
       if (products.length > 0 && originalProducts.length > 0) {
+         // Áp dụng bộ lọc trực tiếp thay vì thông qua useEffect
          const newFilteredProducts = applyFiltersAndSort(
             products,
             originalProducts,
@@ -537,6 +576,7 @@ export default function AccessoriesPage() {
       }
    };
 
+   // Cập nhật handler cho price range
    const handlePriceRangeChange = (range: PriceRange | null) => {
       if (loading) return;
 
@@ -556,6 +596,7 @@ export default function AccessoriesPage() {
       }
    };
 
+   // Cập nhật handler cho sort change để xử lý sắp xếp ngay lập tức
    const handleSortChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
       if (loading) return;
 
@@ -576,15 +617,14 @@ export default function AccessoriesPage() {
       }
    };
 
-   // Thay thế useEffect cho tìm kiếm
+   // Sửa useEffect cho filter và sort để tránh lặp vô hạn
    useEffect(() => {
-      // Chỉ lưu trữ sản phẩm gốc khi có dữ liệu và chưa lưu trước đó
+      // Chỉ áp dụng ban đầu sau khi products được load và khi mới mount component
       if (products.length > 0 && originalProducts.length === 0) {
          setOriginalProducts([...products]);
       }
    }, [products, originalProducts]);
 
-   // Sửa phần fetchProducts trong useEffect
    useEffect(() => {
       const fetchProducts = async () => {
          try {
@@ -596,11 +636,11 @@ export default function AccessoriesPage() {
             const productsData: Product[] = await productsResponse.json();
             console.log('Total products fetched:', productsData.length);
 
-            // 2. Lọc sản phẩm chỉ lấy danh mục Phụ kiện (category_id = 6)
-            const ACCESSORIES_CATEGORY_ID = 6; // "Phụ kiện" category ID
+            // 2. Lọc sản phẩm chỉ lấy danh mục Nến thơm (category_id = 4)
+            const ACCESSORIES_CATEGORY_ID = 6; // "Nến Thơm" category ID
 
             // Lọc sản phẩm theo category_id hoặc categoryId
-            let accessoriesProducts = productsData.filter((product: ProductWithPossibleCategories) => {
+            let candleProducts = productsData.filter((product: ProductWithPossibleCategories) => {
                return (
                   product.categoryId === ACCESSORIES_CATEGORY_ID ||
                   product.category_id === ACCESSORIES_CATEGORY_ID ||
@@ -609,42 +649,36 @@ export default function AccessoriesPage() {
                );
             });
 
-            // Nếu không tìm thấy sản phẩm nào theo ID, lọc theo từ khóa liên quan đến phụ kiện
-            if (accessoriesProducts.length === 0) {
+            // Nếu không tìm thấy sản phẩm nào theo ID, lọc theo từ khóa liên quan đến nến
+            if (candleProducts.length === 0) {
                console.log('Không tìm thấy sản phẩm theo category ID, đang thử lọc theo tên...');
-               accessoriesProducts = productsData.filter(product => {
+               candleProducts = productsData.filter(product => {
                   const name = product.name?.toLowerCase() || '';
                   const desc = product.description?.toLowerCase() || '';
                   return (
                      name.includes('phụ kiện') ||
                      name.includes('accessories') ||
-                     desc.includes('phụ kiện') ||
-                     desc.includes('accessories') ||
-                     name.includes('đế') ||
-                     name.includes('holder') ||
-                     name.includes('đèn')
+                     desc.includes('accessory') ||
+                     desc.includes('phụ kiện nến')
                   );
                });
             }
 
-            console.log(`Tìm thấy ${accessoriesProducts.length} sản phẩm phụ kiện`);
+            console.log(`Tìm thấy ${candleProducts.length} sản phẩm nến thơm`);
 
-            // Nếu vẫn không tìm thấy sản phẩm nào, hiển thị trạng thái trống
-            if (accessoriesProducts.length === 0) {
-               console.log('Không tìm thấy sản phẩm phụ kiện, hiển thị trạng thái trống');
-               setProducts([]);
-               setFilteredProducts([]);
-               setLoading(false);
-               return;
-            }
-
-            // Chuẩn hóa danh sách sản phẩm phụ kiện
-            const normalizedProducts = accessoriesProducts.map((product) => ({
+            // Chuẩn hóa danh sách sản phẩm nến
+            const normalizedProducts = candleProducts.map((product) => ({
                ...product,
                images: Array.isArray(product.images) ? product.images : [product.images],
             }));
 
-            // 3. Lấy chi tiết sản phẩm và giá cho từng sản phẩm phụ kiện
+            // Lấy danh sách ID của sản phẩm nến để sử dụng cho việc lấy ratings
+            const productIds = normalizedProducts.map(p => p.id);
+
+            // Lấy ratings cho tất cả sản phẩm cùng lúc
+            const ratingsMap = await fetchRatingsForProducts(productIds);
+
+            // 3. Lấy chi tiết sản phẩm và giá cho từng sản phẩm nến
             const detailedProducts = await Promise.all(
                normalizedProducts.map(async (product) => {
                   try {
@@ -668,52 +702,19 @@ export default function AccessoriesPage() {
 
             // 4. Lấy thông tin giá
             try {
-               // Fetch prices data với xử lý lỗi tốt hơn
-               let pricesData: Price[] = [];
+               // Fetch prices data
+               const pricesResponse = await fetch('http://68.183.226.198:3000/api/v1/prices', {
+                  headers: {
+                     Authorization: 'Bearer ' + localStorage.getItem('token'),
+                  },
+               });
 
-               try {
-                  // Thử endpoint không cần xác thực trước
-                  const publicPricesResponse = await fetch('http://68.183.226.198:3000/api/v1/prices');
-
-                  if (publicPricesResponse.ok) {
-                     pricesData = await publicPricesResponse.json();
-                     console.log('Lấy giá thành công từ endpoint công khai:', pricesData.length);
-                  } else {
-                     // Nếu thất bại, thử endpoint có xác thực
-                     console.log('Endpoint giá công khai thất bại, đang thử endpoint có xác thực');
-                     const pricesResponse = await fetch('http://68.183.226.198:3000/api/v1/prices', {
-                        headers: {
-                           Authorization: `Bearer ${localStorage.getItem('token') || ''}`,
-                        },
-                     });
-
-                     if (pricesResponse.ok) {
-                        pricesData = await pricesResponse.json();
-                        console.log('Lấy giá thành công từ endpoint có xác thực:', pricesData.length);
-                     }
-                  }
-               } catch (priceErr) {
-                  console.error('Lỗi khi lấy thông tin giá:', priceErr);
+               if (!pricesResponse.ok) {
+                  throw new Error('Failed to fetch prices');
                }
 
-               // Nếu không lấy được giá, tạo sản phẩm với giá mặc định
-               if (pricesData.length === 0) {
-                  console.log('Không tìm thấy giá, tạo dữ liệu sản phẩm cơ bản');
-                  const basicProducts = normalizedProducts.map(product => ({
-                     id: product.id,
-                     title: product.name,
-                     description: product.description,
-                     price: '0',
-                     rating: 4.5,
-                     imageUrl: product.images && product.images.length > 0
-                        ? product.images[0].path
-                        : '/images/placeholder.jpg',
-                  }));
-
-                  setProducts(basicProducts);
-                  setFilteredProducts(basicProducts);
-                  return;
-               }
+               const pricesData: Price[] = await pricesResponse.json();
+               console.log('Tìm thấy tổng số giá:', pricesData.length);
 
                // Tạo mapping từ ID chi tiết sản phẩm đến giá
                const detailPricesMap: { [detailId: number]: Price } = {};
@@ -734,7 +735,8 @@ export default function AccessoriesPage() {
                   const imageUrl =
                      product.images && product.images.length > 0 ? product.images[0].path : null;
 
-                  // Giá trị mặc định
+                  // Replace the pricing logic section (around line 444-475) with this improved implementation:
+
                   let basePrice = '0';
                   let discountPrice: string | undefined = undefined;
                   const variants: Array<{
@@ -746,19 +748,48 @@ export default function AccessoriesPage() {
                      inStock: boolean;
                   }> = [];
 
-                  // Xử lý chi tiết nếu có
-                  if (product.details && product.details.length > 0) {
-                     console.log(`Sản phẩm ${product.id} có ${product.details.length} variant`);
+                  // Try to find prices for this product
+                  const productPrices = pricesData.filter(price =>
+                     price.product_detail && price.product_detail.productId === product.id
+                  );
 
-                     // Xử lý từng variant (chi tiết) của sản phẩm
+                  if (productPrices.length > 0) {
+                     console.log(`Found ${productPrices.length} prices for product ${product.id}`);
+
+                     // Create variants from productPrices
+                     productPrices.forEach(price => {
+                        const detail = price.product_detail;
+                        variants.push({
+                           detailId: detail.id,
+                           size: detail.size || 'Default',
+                           type: detail.type || 'Standard',
+                           basePrice: price.base_price.toString(),
+                           discountPrice: price.discount_price ? price.discount_price.toString() : undefined,
+                           inStock: detail.quantities > 0 && detail.isActive
+                        });
+                     });
+                  }
+                  // If no direct product prices found, process details if available
+                  else if (product.details && product.details.length > 0) {
+                     console.log(`Product ${product.id} has ${product.details.length} variants`);
+
+                     // Create a map of detail IDs to prices for efficient lookup
+                     const detailPricesMap: { [detailId: number]: Price } = {};
+                     pricesData.forEach(price => {
+                        if (price.product_detail && price.product_detail.id) {
+                           detailPricesMap[price.product_detail.id] = price;
+                        }
+                     });
+
+                     // Process each variant (detail) of the product
                      product.details.forEach((detail: { id: string | number; size: string; type: string; quantities: number; isActive: boolean; }) => {
-                        console.log(`Đang xử lý variant ${detail.id} cho sản phẩm ${product.id}`);
+                        console.log(`Processing variant ${detail.id} for product ${product.id}`);
 
-                        // Tìm giá cho variant này dựa trên ID chi tiết
+                        // Find price for this variant based on detail ID
                         const price = detailPricesMap[Number(detail.id)];
 
                         if (price) {
-                           console.log(`Đã tìm thấy giá cho variant ${detail.id}: ${price.base_price}`);
+                           console.log(`Found price for variant ${detail.id}: ${price.base_price}`);
                            variants.push({
                               detailId: Number(detail.id),
                               size: detail.size || 'Default',
@@ -768,38 +799,15 @@ export default function AccessoriesPage() {
                               inStock: detail.quantities > 0 && detail.isActive
                            });
                         } else {
-                           console.log(`Cảnh báo: Không tìm thấy giá cho variant ${detail.id} của sản phẩm ${product.id}`);
+                           console.log(`Warning: No price found for variant ${detail.id} of product ${product.id}`);
                         }
                      });
-                  } else {
-                     console.log(`Sản phẩm ${product.id} không có variants từ chi tiết`);
-
-                     // Tìm giá dựa trên mối quan hệ product_detail.productId = product.id
-                     const relevantPrices = pricesData.filter(price =>
-                        price.product_detail && price.product_detail.productId === product.id
-                     );
-
-                     if (relevantPrices.length > 0) {
-                        console.log(`Tìm thấy ${relevantPrices.length} giá cho sản phẩm ${product.id} qua productId`);
-
-                        relevantPrices.forEach(price => {
-                           const detail = price.product_detail;
-                           variants.push({
-                              detailId: detail.id,
-                              size: detail.size || 'Default',
-                              type: detail.type || 'Standard',
-                              basePrice: price.base_price.toString(),
-                              discountPrice: price.discount_price ? price.discount_price.toString() : undefined,
-                              inStock: detail.quantities > 0 && detail.isActive
-                           });
-                        });
-                     }
                   }
 
-                  // Sắp xếp variant theo giá (thấp đến cao)
+                  // Sort variants by price (lowest to highest)
                   variants.sort((a, b) => Number(a.basePrice) - Number(b.basePrice));
 
-                  // Sử dụng giá của variant rẻ nhất làm giá mặc định
+                  // Use the cheapest variant price as default price
                   if (variants.length > 0) {
                      basePrice = variants[0].basePrice;
                      discountPrice = variants[0].discountPrice;
@@ -811,7 +819,7 @@ export default function AccessoriesPage() {
                      description: product.description,
                      price: basePrice,
                      discountPrice: discountPrice,
-                     rating: 4.5,
+                     rating: ratingsMap[product.id] || 0, // Use the rating from map, defaulting to 5 if not available
                      imageUrl: imageUrl || '/images/placeholder.jpg',
                      variants: variants.length > 0 ? variants : undefined,
                   };
@@ -821,22 +829,8 @@ export default function AccessoriesPage() {
                setProducts(mappedProducts);
                setFilteredProducts(mappedProducts);
             } catch (priceErr) {
-               console.error('Lỗi khi xử lý thông tin giá:', priceErr);
+               console.error('Lỗi khi lấy thông tin giá:', priceErr);
 
-               // Tạo sản phẩm cơ bản không có thông tin giá chi tiết làm phương án dự phòng
-               const basicProducts = normalizedProducts.map(product => ({
-                  id: product.id,
-                  title: product.name,
-                  description: product.description,
-                  price: '0',
-                  rating: 4.5,
-                  imageUrl: product.images && product.images.length > 0
-                     ? product.images[0].path
-                     : '/images/placeholder.jpg',
-               }));
-
-               setProducts(basicProducts);
-               setFilteredProducts(basicProducts);
             }
          } catch (err) {
             console.error('Lỗi khi lấy danh sách sản phẩm:', err);
@@ -847,24 +841,7 @@ export default function AccessoriesPage() {
       };
 
       fetchProducts();
-   }, []); // Giữ dependency array trống để chỉ chạy một lần
-
-   useEffect(() => {
-      if (!searchQuery.trim()) {
-         setFilteredProducts(products);
-         return;
-      }
-
-      const filtered = products.filter((product) => {
-         const searchLower = searchQuery.toLowerCase();
-         return (
-            product.title.toLowerCase().includes(searchLower) ||
-            (product.description && product.description.toLowerCase().includes(searchLower))
-         );
-      });
-
-      setFilteredProducts(filtered);
-   }, [searchQuery, products]);
+   }, []); // Chỉ chạy một lần khi component mount
 
    const handleViewDetail = (productId: number) => {
       console.log('View detail clicked for product ID:', productId);
@@ -880,22 +857,12 @@ export default function AccessoriesPage() {
 
          <div className='px-4 lg:px-0 py-8'>
             <p className='text-center text-[#555659] text-lg font-mont'>D A N H M Ụ C</p>
-            <p className='text-center font-mont font-semibold text-xl lg:text-3xl pb-4'>PHỤ KIỆN</p>
+            <p className='text-center font-mont font-semibold text-xl lg:text-3xl pb-4'>PHỤ KIỆN NẾN</p>
          </div>
 
-         <button
-            className='lg:hidden fixed top-20 left-4 z-50 bg-white p-2 rounded-full shadow-md'
-            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-         >
-            {isSidebarOpen ? <X size={24} /> : <Menu size={24} />}
-         </button>
-
          <div className='flex flex-col lg:flex-row max-w-7xl mx-auto'>
-            {/* Price Filter Sidebar - show/hide on mobile with animation */}
-            <div
-               className={`lg:w-64 lg:block fixed lg:relative top-0 left-0 h-full lg:h-auto z-40 bg-white lg:bg-transparent shadow-lg lg:shadow-none overflow-y-auto transition-all duration-300 transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
-                  } px-4 pt-16 lg:pt-0 lg:px-8 mb-6`}
-            >
+            {/* Add filter sidebar */}
+            <div className='lg:w-64 px-4 lg:px-8 mb-6 lg:mb-0'>
                <div className='bg-white p-4 rounded-lg shadow-sm'>
                   <h3 className='font-medium text-gray-800 mb-3'>Lọc sản phẩm</h3>
 
@@ -918,7 +885,7 @@ export default function AccessoriesPage() {
                            <div key={idx} className='flex items-center'>
                               <button
                                  onClick={() => handlePriceRangeChange(range)}
-                                 className={`text-sm w-full py-2 px-3 text-left rounded-md transition-colors ${selectedPriceRange?.label === range.label
+                                 className={`text-sm w-full py-2 px-3 text-left rounded-md transition-colors ${selectedPriceRange === range
                                     ? 'bg-amber-100 text-amber-800'
                                     : 'text-gray-700 hover:bg-gray-100'
                                     }`}
@@ -933,11 +900,10 @@ export default function AccessoriesPage() {
             </div>
 
             <div className='flex-1 px-4 lg:px-8'>
-               {/* Add sorting dropdown and product count */}
+               {/* Add sorting dropdown */}
                <div className='flex justify-between items-center mb-6'>
                   <p className='text-sm text-gray-600'>
-                     {filteredProducts.length} sản phẩm
-                     {searchQuery ? ` cho "${searchQuery}"` : ''}
+                     {filteredProducts.length} sản phẩm{searchQuery ? ` cho "${searchQuery}"` : ''}
                      {selectedPriceRange ? ` trong khoảng giá ${selectedPriceRange.label}` : ''}
                   </p>
 
@@ -974,7 +940,7 @@ export default function AccessoriesPage() {
                   <div className='text-center py-10'>
                      <div>
                         <p className='text-gray-600 mb-4'>
-                           Không tìm thấy sản phẩm phụ kiện phù hợp
+                           Không tìm thấy sản phẩm nến thơm phù hợp
                            {searchQuery ? ` với "${searchQuery}"` : ''}
                            {selectedPriceRange ? ` trong khoảng giá ${selectedPriceRange.label}` : ''}
                         </p>
@@ -986,13 +952,12 @@ export default function AccessoriesPage() {
                               setSortOption('default');
                            }}
                         >
-                           Xem tất cả phụ kiện
+                           Xem tất cả nến thơm
                         </button>
                      </div>
                   </div>
                )}
 
-               {/* Existing product grid */}
                <div className='grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4'>
                   {getPaginatedProducts().map((product) => (
                      <ProductCard
@@ -1010,7 +975,6 @@ export default function AccessoriesPage() {
                   ))}
                </div>
 
-               {/* Existing pagination */}
                {!loading && !error && filteredProducts.length > productsPerPage && (
                   <div className='flex justify-center items-center gap-2 mt-8 pb-8'>
                      {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
@@ -1027,14 +991,6 @@ export default function AccessoriesPage() {
                )}
             </div>
          </div>
-
-         {/* Add a semi-transparent overlay when sidebar is open on mobile */}
-         {isSidebarOpen && (
-            <div
-               className="fixed inset-0 bg-black bg-opacity-50 z-30 lg:hidden"
-               onClick={() => setIsSidebarOpen(false)}
-            />
-         )}
 
          <Footer />
       </div>

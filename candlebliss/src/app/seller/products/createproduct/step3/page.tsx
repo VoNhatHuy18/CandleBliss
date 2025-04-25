@@ -18,27 +18,38 @@ interface Variant {
    images?: string[];
    quantity?: number;
    detailId?: number;
+   basePrice?: string;
+   discountPrice?: string;
+   calculatedPrice?: string;
+   startDate?: string;
+   endDate?: string;
+
 }
 
 export default function Step3() {
    const router = useRouter();
    const { formData, updateFormData } = useProductForm();
-   const [basePrice, setBasePrice] = useState('');
-   const [discountPrice, setDiscountPrice] = useState('');
+
    const [startDate, setStartDate] = useState('');
    const [endDate, setEndDate] = useState('');
    const [variants, setVariants] = useState<Variant[]>(formData.variants || []);
    const [isActive] = useState(true);
-   const [promotion] = useState('');
    const [isLoading, setIsLoading] = useState(false);
-   const [calculatedPrice, setCalculatedPrice] = useState('');
 
    // Add toast state
-   const [toast, setToast] = useState({
+   const [toast, setToast] = useState<{
+      show: boolean;
+      message: string;
+      type: 'success' | 'error' | 'info';
+      actions?: { label: string; onClick: () => void; variant: 'primary' | 'secondary' }[];
+   }>({
       show: false,
       message: '',
-      type: 'info' as 'success' | 'error' | 'info',
+      type: 'info',
    });
+
+   // Thêm state để lưu giá thấp nhất
+   const [lowestPrice, setLowestPrice] = useState('');
 
    // Helper function to show toast messages
    const showToast = (message: string, type: 'success' | 'error' | 'info') => {
@@ -54,38 +65,33 @@ export default function Step3() {
       console.log('Received form data:', formData);
 
       if (!startDate) {
-         setStartDate(new Date().toISOString().split('T')[0]);
+         const today = new Date().toISOString().split('T')[0];
+         setStartDate(today);
       }
+
       if (!endDate) {
          const thirtyDaysLater = new Date();
          thirtyDaysLater.setDate(thirtyDaysLater.getDate() + 30);
          setEndDate(thirtyDaysLater.toISOString().split('T')[0]);
       }
 
-      // Set empty variants as expanded by default
+      // Set empty variants as expanded by default and initialize dates
       if (variants.length > 0) {
          const initializedVariants = variants.map((variant) => ({
             ...variant,
             isExpanded: variant.isExpanded !== undefined ? variant.isExpanded : true,
+            startDate: variant.startDate || startDate || new Date().toISOString().split('T')[0],
+            endDate: variant.endDate || endDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
          }));
          setVariants(initializedVariants);
       }
    }, []);
 
    // Access data from previous steps
-   const { name, description, selectedCategory, images, productId } = formData;
+   const { name, description, selectedCategory, images } = formData;
    const category = selectedCategory?.name || '';
 
-   // Calculate display price whenever basePrice or discountPrice changes
-   useEffect(() => {
-      if (basePrice && discountPrice && Number(discountPrice) > 0 && Number(discountPrice) <= 100) {
-         const discountAmount = (Number(basePrice) * Number(discountPrice)) / 100;
-         const finalPrice = Number(basePrice) - discountAmount;
-         setCalculatedPrice(finalPrice.toFixed(0));
-      } else {
-         setCalculatedPrice(basePrice);
-      }
-   }, [basePrice, discountPrice]);
+
    // Toggle expanded state of a variant
    const toggleVariantExpanded = (index: number) => {
       const updatedVariants = [...variants];
@@ -93,34 +99,79 @@ export default function Step3() {
       setVariants(updatedVariants);
    };
 
-   // Validate form before submission
-   const validateForm = () => {
-      if (!basePrice || Number(basePrice) <= 0) {
-         return false;
+   // Cập nhật hàm updateVariantPrice
+   const updateVariantPrice = (
+      index: number,
+      field: 'basePrice' | 'discountPrice' | 'startDate' | 'endDate',
+      value: string
+   ) => {
+      const updatedVariants = [...variants];
+      updatedVariants[index][field] = value;
+
+      // Tính toán giá cuối cùng cho variant này nếu giá thay đổi
+      if (field === 'basePrice' || field === 'discountPrice') {
+         if (updatedVariants[index].basePrice) {
+            const basePrice = Number(updatedVariants[index].basePrice);
+            const discountPrice = Number(updatedVariants[index].discountPrice || '0');
+
+            if (discountPrice > 0 && discountPrice <= 100) {
+               const discountAmount = (basePrice * discountPrice) / 100;
+               const finalPrice = basePrice - discountAmount;
+               updatedVariants[index].calculatedPrice = finalPrice.toFixed(0);
+            } else {
+               updatedVariants[index].calculatedPrice = updatedVariants[index].basePrice;
+            }
+         }
       }
 
-      if (discountPrice && (Number(discountPrice) < 0 || Number(discountPrice) > 100)) {
-         return false;
-      }
-
-      if (!startDate) {
-         return false;
-      }
-
-      if (!endDate) {
-         return false;
-      }
-
-      if (new Date(endDate) <= new Date(startDate)) {
-         return false;
-      }
-
-      return true;
+      setVariants(updatedVariants);
+      calculateLowestPrice(updatedVariants);
    };
 
+   // Tính giá thấp nhất từ tất cả các variants
+   const calculateLowestPrice = (variantsToCheck: Variant[]) => {
+      const pricesArray = variantsToCheck
+         .filter(v => v.calculatedPrice && Number(v.calculatedPrice) > 0)
+         .map(v => Number(v.calculatedPrice));
+
+      if (pricesArray.length > 0) {
+         const lowest = Math.min(...pricesArray);
+         setLowestPrice(lowest.toFixed(0));
+      } else {
+         setLowestPrice('');
+      }
+   };
+
+   // Gọi tính toán giá thấp nhất khi variants thay đổi
+   useEffect(() => {
+      calculateLowestPrice(variants);
+   }, [variants]);
+
+
    const handleSubmit = async () => {
-      if (!validateForm()) {
-         showToast('Vui lòng kiểm tra lại thông tin giá và ngày áp dụng', 'error');
+      // Kiểm tra giá của tất cả các variant
+      const hasValidPrices = variants.every(variant =>
+         variant.basePrice && Number(variant.basePrice) > 0
+      );
+
+      if (!hasValidPrices) {
+         showToast('Vui lòng nhập giá gốc hợp lệ cho tất cả biến thể sản phẩm', 'error');
+         return;
+      }
+
+      // Kiểm tra thời gian áp dụng giá cho tất cả variant
+      const hasValidDates = variants.every(variant => {
+         if (!variant.startDate || !variant.endDate) {
+            return false;
+         }
+         if (new Date(variant.endDate) <= new Date(variant.startDate)) {
+            return false;
+         }
+         return true;
+      });
+
+      if (!hasValidDates) {
+         showToast('Vui lòng kiểm tra ngày áp dụng giá cho tất cả biến thể', 'error');
          return;
       }
 
@@ -134,44 +185,25 @@ export default function Step3() {
             return;
          }
 
-         // Kiểm tra xem variants có tồn tại và có dữ liệu không
-         if (!variants || variants.length === 0) {
-            showToast('Không tìm thấy thông tin biến thể. Vui lòng quay lại bước 2.', 'error');
-            router.push('/seller/products/createproduct/step2');
-            return;
-         }
-
          // Xử lý giá cho từng biến thể
          for (const variant of variants) {
-            // Kiểm tra xem biến thể có detailId không
             if (!variant.detailId) {
                console.error('Missing detailId for variant:', variant);
-               continue; // Bỏ qua biến thể này và tiếp tục với biến thể tiếp theo
+               continue;
             }
 
-            // Định dạng ngày
-            const formattedStartDate = startDate || new Date().toISOString().split('T')[0];
-            const formattedEndDate =
-               endDate ||
-               new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-
-            // Tạo dữ liệu giá
-            const basePriceValue = Number(basePrice) || 0;
-            const discountPercentageValue = Number(discountPrice) || 0;
-
-            // THAY ĐỔI: Gửi giá trị phần trăm khuyến mãi thay vì giá sau khuyến mãi
+            // Gửi giá từng variant
             const priceData = {
-               base_price: basePriceValue,
-               discount_price: discountPercentageValue, // Gửi giá trị phần trăm khuyến mãi
-               start_date: formattedStartDate,
-               end_date: formattedEndDate,
+               base_price: Number(variant.basePrice) || 0,
+               discount_price: Number(variant.discountPrice) || 0,
+               start_date: variant.startDate,
+               end_date: variant.endDate,
                productId: variant.detailId,
                isActive: isActive,
             };
 
-            console.log('Sending price data:', priceData); // Giúp debug
+            console.log('Sending price data:', priceData);
 
-            // Gửi request tạo giá
             const priceResponse = await fetch('http://68.183.226.198:3000/api/v1/prices', {
                method: 'POST',
                headers: {
@@ -191,50 +223,39 @@ export default function Step3() {
             }
          }
 
-         // Áp dụng khuyến mãi nếu có
-         if (promotion) {
-            // Thêm code xử lý khuyến mãi ở đây
-         }
-
-         // Cập nhật trạng thái hoạt động của sản phẩm
-         const updateProductResponse = await fetch(
-            `http://68.183.226.198:3000/api/products/${productId}`,
-            {
-               method: 'PATCH',
-               headers: {
-                  'Content-Type': 'application/json',
-                  Authorization: `Bearer ${token}`,
-               },
-               body: JSON.stringify({ isActive: true }),
-            },
-         );
-
-         if (!updateProductResponse.ok) {
-            console.error('Failed to update product status');
-            showToast('Không thể cập nhật trạng thái sản phẩm', 'error');
-         }
-
-         // Success! Navigate back to products page
-         showToast('Sản phẩm đã được tạo thành công!', 'success');
-
-         // Reset form data
+         // Làm mới toàn bộ dữ liệu trong context
          updateFormData({
             name: '',
             description: '',
             categoryId: undefined,
+            selectedCategory: null,
             images: [],
             variants: [],
-            productId: undefined, // Clear productId
+            productId: undefined,
          });
 
-         router.push('/seller/products');
+         setToast({
+            show: true,
+            message: 'Tạo sản phẩm thành công!',
+            type: 'success',
+            actions: [
+               {
+                  label: 'Tạo sản phẩm mới',
+                  onClick: () => router.push('/seller/products/createproduct'),
+                  variant: 'primary',
+               },
+               {
+                  label: 'Về danh sách sản phẩm',
+                  onClick: () => router.push('/seller/products'),
+                  variant: 'secondary',
+               },
+            ],
+         });
+
+         // Không cần setTimeout vì người dùng sẽ chọn hành động tiếp theo từ Toast
       } catch (error) {
-         console.error('Error creating product pricing:', error);
-         showToast(
-            `Lỗi khi cài đặt giá sản phẩm: ${error instanceof Error ? error.message : 'Lỗi không xác định'
-            }`,
-            'error',
-         );
+         showToast('Đã xảy ra lỗi khi tạo sản phẩm', 'error');
+         console.error('Error:', error);
       } finally {
          setIsLoading(false);
       }
@@ -524,6 +545,106 @@ export default function Step3() {
                                              </div>
                                           </div>
                                        )}
+                                       {/* Phần giá cho từng variant */}
+                                       <div className='mt-4 grid grid-cols-2 gap-4'>
+                                          <div>
+                                             <label className='block text-sm font-medium mb-1'>
+                                                Giá gốc (VNĐ)<span className='text-red-500'>*</span>
+                                             </label>
+                                             <input
+                                                type='number'
+                                                className='w-full p-2 border rounded-md'
+                                                value={variant.basePrice || ''}
+                                                onChange={(e) => updateVariantPrice(index, 'basePrice', e.target.value)}
+                                                placeholder='Nhập giá gốc'
+                                                required
+                                             />
+                                          </div>
+                                          <div>
+                                             <label className='block text-sm font-medium mb-1'>
+                                                Phần trăm khuyến mãi (%)
+                                             </label>
+                                             <input
+                                                type='number'
+                                                className='w-full p-2 border rounded-md'
+                                                value={variant.discountPrice || ''}
+                                                onChange={(e) => {
+                                                   const value = e.target.value;
+                                                   if (Number(value) >= 0 && Number(value) <= 100) {
+                                                      updateVariantPrice(index, 'discountPrice', value);
+                                                   }
+                                                }}
+                                                min='0'
+                                                max='100'
+                                                placeholder='Nhập % khuyến mãi (nếu có)'
+                                             />
+                                          </div>
+
+                                          {/* Thêm ngày bắt đầu và kết thúc cho variant */}
+                                          <div>
+                                             <label className='block text-sm font-medium mb-1'>
+                                                Ngày bắt đầu<span className='text-red-500'>*</span>
+                                             </label>
+                                             <input
+                                                type='date'
+                                                className='w-full p-2 border rounded-md'
+                                                value={variant.startDate || ''}
+                                                onChange={(e) => updateVariantPrice(index, 'startDate', e.target.value)}
+                                                min={new Date().toISOString().split('T')[0]}
+                                                required
+                                             />
+                                             <p className='text-xs text-gray-500 mt-1'>Ngày áp dụng giá mới</p>
+                                          </div>
+
+                                          <div>
+                                             <label className='block text-sm font-medium mb-1'>
+                                                Ngày kết thúc<span className='text-red-500'>*</span>
+                                             </label>
+                                             <input
+                                                type='date'
+                                                className='w-full p-2 border rounded-md'
+                                                value={variant.endDate || ''}
+                                                onChange={(e) => updateVariantPrice(index, 'endDate', e.target.value)}
+                                                min={variant.startDate || new Date().toISOString().split('T')[0]}
+                                                required
+                                             />
+                                             <p className='text-xs text-gray-500 mt-1'>Ngày kết thúc áp dụng giá</p>
+                                          </div>
+                                       </div>
+
+                                       {/* Hiển thị giá đã tính cho variant này */}
+                                       {variant.basePrice && (
+                                          <div className='mt-3 p-2 bg-gray-50 rounded'>
+                                             <div className='flex justify-between items-center'>
+                                                <span className='text-sm font-medium'>Giá hiển thị:</span>
+                                                {variant.discountPrice && Number(variant.discountPrice) > 0 ? (
+                                                   <div className='text-right'>
+                                                      <span className='font-bold bg-amber-600 '>
+                                                         {variant.calculatedPrice
+                                                            ? `${Number(variant.calculatedPrice).toLocaleString('vi-VN')} VNĐ`
+                                                            : '0 VNĐ'}
+                                                      </span>
+                                                      <div className='flex items-center mt-1 justify-end'>
+                                                         <span className='text-sm text-gray-500 line-through mr-2'>
+                                                            {variant.basePrice
+                                                               ? `${Number(variant.basePrice).toLocaleString('vi-VN')} VNĐ`
+                                                               : '0 VNĐ'}
+                                                         </span>
+                                                         <span className='text-xs bg-red-100 text-red-600 px-1.5 py-0.5 rounded'>
+                                                            -{variant.discountPrice}%
+                                                         </span>
+                                                      </div>
+                                                   </div>
+                                                ) : (
+                                                   <span className='font-bold bg-amber-600'>
+                                                      {variant.basePrice
+                                                         ? `${Number(variant.basePrice).toLocaleString('vi-VN')} VNĐ`
+                                                         : '0 VNĐ'}
+                                                   </span>
+                                                )}
+                                             </div>
+                                          </div>
+                                       )}
                                     </div>
                                  )}
                               </div>
@@ -536,114 +657,28 @@ export default function Step3() {
                      </div>
                   </div>
 
-                  {/* Price setting section */}
-                  <div className='mb-6 p-4 border rounded-lg '>
-                     <h3 className='text-lg font-semibold mb-4 '>Cài đặt giá cho sản phẩm</h3>
 
-                     <div className='grid md:grid-cols-2 gap-4'>
-                        {/* Giá gốc */}
-                        <div className='mb-4'>
-                           <label className='block text-sm font-medium mb-1'>
-                              Giá gốc (VNĐ)<span className='text-red-500'>*</span>
-                           </label>
-                           <input
-                              type='number'
-                              className='w-full p-2 border rounded-md'
-                              value={basePrice}
-                              onChange={(e) => setBasePrice(e.target.value)}
-                              placeholder='Nhập giá gốc'
-                              required
-                           />
-                           <p className='text-xs text-gray-500 mt-1'>Giá bán gốc của sản phẩm</p>
-                        </div>
 
-                        {/* Phần trăm khuyến mãi */}
-                        <div className='mb-4'>
-                           <label className='block text-sm font-medium mb-1'>
-                              Phần trăm khuyến mãi (%)
-                           </label>
-                           <input
-                              type='number'
-                              className='w-full p-2 border rounded-md'
-                              value={discountPrice}
-                              onChange={(e) => {
-                                 const value = e.target.value;
-                                 if (Number(value) >= 0 && Number(value) <= 100) {
-                                    setDiscountPrice(value);
-                                 }
-                              }}
-                              min='0'
-                              max='100'
-                              placeholder='Nhập % khuyến mãi (nếu có)'
-                           />
-                           <p className='text-xs text-gray-500 mt-1'>% giảm giá so với giá gốc</p>
-                        </div>
+                  {/* Hiển thị giá thấp nhất */}
+                  <div className='mb-6 p-4 border rounded-lg'>
+                     <h3 className='text-lg font-semibold mb-4'>Giá hiển thị cho khách hàng</h3>
 
-                        {/* Ngày bắt đầu khuyến mãi */}
-                        <div className='mb-4'>
-                           <label className='block text-sm font-medium mb-1'>
-                              Ngày bắt đầu<span className='text-red-500'>*</span>
-                           </label>
-                           <input
-                              type='date'
-                              className='w-full p-2 border rounded-md'
-                              value={startDate}
-                              onChange={(e) => setStartDate(e.target.value)}
-                              min={new Date().toISOString().split('T')[0]}
-                              required
-                           />
-                           <p className='text-xs text-gray-500 mt-1'>Ngày áp dụng giá mới</p>
-                        </div>
-
-                        {/* Ngày kết thúc khuyến mãi */}
-                        <div className='mb-4'>
-                           <label className='block text-sm font-medium mb-1'>
-                              Ngày kết thúc<span className='text-red-500'>*</span>
-                           </label>
-                           <input
-                              type='date'
-                              className='w-full p-2 border rounded-md'
-                              value={endDate}
-                              onChange={(e) => setEndDate(e.target.value)}
-                              min={startDate || new Date().toISOString().split('T')[0]}
-                              required
-                           />
-                           <p className='text-xs text-gray-500 mt-1'>Ngày kết thúc áp dụng giá này</p>
-                        </div>
-                     </div>
-
-                     {/* Giá sẽ hiển thị */}
-                     <div className='mt-6 p-3 bg-white rounded-md border border-blue-200'>
+                     <div className='p-3 bg-white rounded-md border border-amber-500'>
                         <div className='flex justify-between items-center'>
                            <span className='font-medium text-sm'>
-                              Giá sẽ hiển thị cho khách hàng:
+                              Giá thấp nhất sẽ hiển thị cho khách hàng:
                            </span>
-                           {discountPrice && Number(discountPrice) > 0 ? (
-                              <div className='font-medium text-right'>
-                                 <span className='font-bold text-lg text-blue-600'>
-                                    {calculatedPrice
-                                       ? `${Number(calculatedPrice).toLocaleString('vi-VN')} VNĐ`
-                                       : '0 VNĐ'}
-                                 </span>
-                                 <div className='flex items-center mt-1 justify-end'>
-                                    <span className='text-sm text-gray-500 line-through mr-2'>
-                                       {basePrice
-                                          ? `${Number(basePrice).toLocaleString('vi-VN')} VNĐ`
-                                          : '0 VNĐ'}
-                                    </span>
-                                    <span className='text-xs bg-red-100 text-red-600 px-1.5 py-0.5 rounded'>
-                                       -{discountPrice}%
-                                    </span>
-                                 </div>
-                              </div>
-                           ) : (
-                              <span className='font-bold text-lg text-blue-600'>
-                                 {basePrice
-                                    ? `${Number(basePrice).toLocaleString('vi-VN')} VNĐ`
-                                    : '0 VNĐ'}
+                           {lowestPrice ? (
+                              <span className='font-bold text-lg bg-amber-600'>
+                                 {`${Number(lowestPrice).toLocaleString('vi-VN')} VNĐ`}
                               </span>
+                           ) : (
+                              <span className='text-sm text-gray-500'>Chưa có thông tin giá</span>
                            )}
                         </div>
+                        <p className='text-xs text-gray-500 mt-1'>
+                           (Giá thấp nhất từ tất cả biến thể sản phẩm)
+                        </p>
                      </div>
                   </div>
 
@@ -688,7 +723,7 @@ export default function Step3() {
                         Hủy
                      </button>
                      <button
-                        className='px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-blue-300'
+                        className='px-6 py-2  text-white rounded-md bg-amber-600 hover:bg-amber-700 disabled:bg-blue-300'
                         onClick={handleSubmit}
                         disabled={isLoading}
                      >
