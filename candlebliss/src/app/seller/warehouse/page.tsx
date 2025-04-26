@@ -15,20 +15,16 @@ import {
     PlusIcon,
     MagnifyingGlassIcon,
     ArrowPathIcon,
-    ArchiveBoxIcon,
-    CubeIcon,
-    TicketIcon,
-    ExclamationTriangleIcon,
-    ClipboardIcon,
+    ClockIcon,
 } from '@heroicons/react/24/outline';
 import React from 'react';
+import { format, subDays } from 'date-fns';
 
 interface Image {
     id: string;
     path: string;
     public_id: string;
 }
-
 interface ProductDetail {
     id: number;
     size: string;
@@ -88,6 +84,28 @@ interface InventorySummary {
     totalStock: number;
     lowStockItems: number;
     outOfStockItems: number;
+}
+
+// Define interfaces for inventory history
+interface InventoryHistoryItem {
+    id: number;
+    product_detail_id: number;
+    quantity: number;
+    status: 'increase' | 'decrease';
+    update_by: string;
+    created_at: string;
+    updated_at: string;
+    product_detail?: {
+        id: number;
+        size: string;
+        type: string;
+        values: string;
+        product?: {
+            image: string;
+            id: number;
+            name: string;
+        };
+    };
 }
 
 // Format price helper function
@@ -150,57 +168,69 @@ const WarehouseSummary = ({ summary }: { summary: InventorySummary }) => {
     return (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
             <div className="bg-white rounded-lg shadow p-4 flex flex-col items-center justify-center">
-                <div className="bg-amber-100 p-2 rounded-full mb-2">
-                    <CubeIcon className="h-6 w-6 text-amber-600" />
+                <div className="bg-blue-50 p-3 rounded-full">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10" />
+                    </svg>
                 </div>
-                <div className="text-2xl font-bold text-gray-800">{summary.totalProducts}</div>
+                <div className="text-2xl font-bold text-gray-800 mt-2">{summary.totalProducts}</div>
                 <div className="text-sm text-gray-500 text-center">Sản phẩm</div>
             </div>
 
             <div className="bg-white rounded-lg shadow p-4 flex flex-col items-center justify-center">
-                <div className="bg-blue-100 p-2 rounded-full mb-2">
-                    <TicketIcon className="h-6 w-6 text-blue-600" />
+                <div className="bg-purple-50 p-3 rounded-full">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4" />
+                    </svg>
                 </div>
-                <div className="text-2xl font-bold text-gray-800">{summary.totalVariants}</div>
+                <div className="text-2xl font-bold text-gray-800 mt-2">{summary.totalVariants}</div>
                 <div className="text-sm text-gray-500 text-center">Phiên bản</div>
             </div>
 
             <div className="bg-white rounded-lg shadow p-4 flex flex-col items-center justify-center">
-                <div className="bg-green-100 p-2 rounded-full mb-2">
-                    <ArchiveBoxIcon className="h-6 w-6 text-green-600" />
+                <div className="bg-green-50 p-3 rounded-full">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
                 </div>
-                <div className="text-2xl font-bold text-gray-800">{summary.activeVariants}</div>
+                <div className="text-2xl font-bold text-gray-800 mt-2">{summary.activeVariants}</div>
                 <div className="text-sm text-gray-500 text-center">Đang kinh doanh</div>
             </div>
 
             <div className="bg-white rounded-lg shadow p-4 flex flex-col items-center justify-center">
-                <div className="bg-purple-100 p-2 rounded-full mb-2">
-                    <ClipboardIcon className="h-6 w-6 text-purple-600" />
+                <div className="bg-amber-50 p-3 rounded-full">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                    </svg>
                 </div>
-                <div className="text-2xl font-bold text-gray-800">{summary.totalStock}</div>
+                <div className="text-2xl font-bold text-gray-800 mt-2">{summary.totalStock}</div>
                 <div className="text-sm text-gray-500 text-center">Tổng tồn kho</div>
             </div>
 
             <div className="bg-white rounded-lg shadow p-4 flex flex-col items-center justify-center">
-                <div className="bg-yellow-100 p-2 rounded-full mb-2">
-                    <ExclamationTriangleIcon className="h-6 w-6 text-yellow-600" />
+                <div className="bg-yellow-50 p-3 rounded-full">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
                 </div>
-                <div className="text-2xl font-bold text-gray-800">{summary.lowStockItems}</div>
-                <div className="text-sm text-gray-500 text-center">Sắp hết hàng (≤10)</div>
+                <div className="text-2xl font-bold text-gray-800 mt-2">{summary.lowStockItems}</div>
+                <div className="text-sm text-gray-500 text-center">Sắp hết hàng</div>
             </div>
 
             <div className="bg-white rounded-lg shadow p-4 flex flex-col items-center justify-center">
-                <div className="bg-red-100 p-2 rounded-full mb-2">
-                    <ExclamationTriangleIcon className="h-6 w-6 text-red-600" />
+                <div className="bg-red-50 p-3 rounded-full">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
                 </div>
-                <div className="text-2xl font-bold text-gray-800">{summary.outOfStockItems}</div>
+                <div className="text-2xl font-bold text-gray-800 mt-2">{summary.outOfStockItems}</div>
                 <div className="text-sm text-gray-500 text-center">Hết hàng</div>
             </div>
         </div>
     );
 };
 
-// Component Modal tạo phiếu nhập kho
+// Component Modal tạo phiếu nhập/xuất kho
 const StockReceiptModal = ({
     isOpen,
     onClose,
@@ -209,6 +239,7 @@ const StockReceiptModal = ({
     loading,
     preSelectedProductId,
     preSelectedVariantId,
+    operationType = 'increase', // Default operation is stock in (increase)
 }: {
     isOpen: boolean;
     onClose: () => void;
@@ -226,11 +257,13 @@ const StockReceiptModal = ({
         }>;
         totalItems: number;
         totalCost: number;
+        operationType: 'increase' | 'decrease'; // Add operation type parameter
     }) => Promise<void>;
     products: ProductViewModel[];
     loading: boolean;
     preSelectedProductId?: number | null;
     preSelectedVariantId?: number | null;
+    operationType?: 'increase' | 'decrease'; // Add operation type parameter
 }) => {
     const [supplier, setSupplier] = useState('');
     const [notes, setNotes] = useState('');
@@ -238,6 +271,7 @@ const StockReceiptModal = ({
     const [selectedVariantId, setSelectedVariantId] = useState<number | null>(preSelectedVariantId || null);
     const [quantity, setQuantity] = useState(1);
     const [costPerUnit, setCostPerUnit] = useState(0);
+    const [productPrices, setProductPrices] = useState<Record<number, number>>({});
 
     const [items, setItems] = useState<Array<{
         product_id: number;
@@ -250,6 +284,7 @@ const StockReceiptModal = ({
 
     // Lọc sản phẩm đã chọn
     const selectedProduct = selectedProductId ? products.find(p => p.id === selectedProductId) : null;
+    const selectedVariant = selectedProduct?.details?.find(d => d.id === selectedVariantId);
 
     // Reset form khi đóng modal
     useEffect(() => {
@@ -261,10 +296,61 @@ const StockReceiptModal = ({
             setQuantity(1);
             setCostPerUnit(0);
             setItems([]);
+            setProductPrices({});
         }
     }, [isOpen]);
 
-    // Hàm thêm sản phẩm vào danh sách nhập kho
+    // Lấy giá của sản phẩm khi người dùng chọn variant
+    useEffect(() => {
+        if (selectedVariantId) {
+            fetchVariantPrice(selectedVariantId);
+        }
+    }, [selectedVariantId]);
+
+    // Hàm để fetch giá của variant
+    const fetchVariantPrice = async (variantId: number) => {
+        try {
+            // Kiểm tra nếu đã có giá trong cache
+            if (productPrices[variantId]) {
+                setCostPerUnit(productPrices[variantId]);
+                return;
+            }
+
+            const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+            if (!token) return;
+
+            const response = await fetch(
+                `http://68.183.226.198:3000/api/v1/prices/product-detail/${variantId}`,
+                {
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                    },
+                }
+            );
+
+            if (response.ok) {
+                const priceData = await response.json();
+
+                if (Array.isArray(priceData) && priceData.length > 0) {
+                    // Lấy giá mới nhất (phần tử đầu tiên)
+                    const price = parseFloat(priceData[0].base_price);
+
+                    // Cập nhật cache giá
+                    setProductPrices(prev => ({
+                        ...prev,
+                        [variantId]: price
+                    }));
+
+                    // Cập nhật giá cho form
+                    setCostPerUnit(price);
+                }
+            }
+        } catch (error) {
+            console.error('Lỗi khi lấy thông tin giá:', error);
+        }
+    };
+
+    // Hàm thêm sản phẩm vào danh sách nhập/xuất kho
     const addItem = () => {
         if (!selectedProductId || !selectedVariantId || quantity <= 0) return;
 
@@ -273,6 +359,12 @@ const StockReceiptModal = ({
 
         const variant = product.details?.find(d => d.id === selectedVariantId);
         if (!variant) return;
+
+        // Kiểm tra nếu là xuất kho, số lượng xuất không được lớn hơn số lượng tồn
+        if (operationType === 'decrease' && variant.quantities < quantity) {
+            alert(`Số lượng xuất không thể lớn hơn số lượng tồn kho (${variant.quantities})`);
+            return;
+        }
 
         const variantInfo = `${variant.size || ''} ${variant.type || ''} ${variant.values || ''}`.trim();
 
@@ -296,7 +388,7 @@ const StockReceiptModal = ({
         setItems(prev => prev.filter((_, i) => i !== index));
     };
 
-    // Hàm lưu phiếu nhập kho
+    // Hàm lưu phiếu nhập/xuất kho
     const handleSave = async () => {
         if (items.length === 0) return;
 
@@ -306,7 +398,8 @@ const StockReceiptModal = ({
             createdAt: new Date().toISOString(),
             items,
             totalItems: items.reduce((sum, item) => sum + item.quantity, 0),
-            totalCost: items.reduce((sum, item) => sum + item.quantity * item.cost_per_unit, 0)
+            totalCost: items.reduce((sum, item) => sum + item.quantity * item.cost_per_unit, 0),
+            operationType // Pass operation type to onSave
         };
 
         await onSave(receiptData);
@@ -318,7 +411,9 @@ const StockReceiptModal = ({
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
             <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-hidden">
                 <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
-                    <h3 className="text-lg font-medium">Tạo phiếu nhập kho</h3>
+                    <h3 className="text-lg font-medium">
+                        {operationType === 'increase' ? 'Tạo phiếu nhập kho' : 'Tạo phiếu xuất kho'}
+                    </h3>
                     <button
                         onClick={onClose}
                         className="text-gray-400 hover:text-gray-500"
@@ -330,35 +425,8 @@ const StockReceiptModal = ({
                 </div>
 
                 <div className="p-6 overflow-y-auto" style={{ maxHeight: "calc(90vh - 120px)" }}>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
-                                Nhà cung cấp
-                            </label>
-                            <input
-                                type="text"
-                                value={supplier}
-                                onChange={e => setSupplier(e.target.value)}
-                                className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-amber-500 focus:border-amber-500"
-                                placeholder="Tên nhà cung cấp"
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
-                                Ghi chú
-                            </label>
-                            <input
-                                type="text"
-                                value={notes}
-                                onChange={e => setNotes(e.target.value)}
-                                className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-amber-500 focus:border-amber-500"
-                                placeholder="Ghi chú phiếu nhập"
-                            />
-                        </div>
-                    </div>
-
-                    <div className="border-t border-b border-gray-200 py-4 mb-4">
-                        <h4 className="text-sm font-medium mb-3">Thêm sản phẩm vào phiếu nhập</h4>
+                    <div className=" border-b border-gray-200 py-4 mb-4">
+                        <h4 className="text-sm font-medium mb-3">Thêm sản phẩm vào phiếu</h4>
                         <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
                             <div className="md:col-span-2">
                                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -369,6 +437,7 @@ const StockReceiptModal = ({
                                     onChange={e => {
                                         setSelectedProductId(e.target.value ? Number(e.target.value) : null);
                                         setSelectedVariantId(null);
+                                        setCostPerUnit(0);
                                     }}
                                     className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-amber-500 focus:border-amber-500"
                                 >
@@ -387,17 +456,29 @@ const StockReceiptModal = ({
                                 </label>
                                 <select
                                     value={selectedVariantId || ''}
-                                    onChange={e => setSelectedVariantId(e.target.value ? Number(e.target.value) : null)}
+                                    onChange={e => {
+                                        const variantId = e.target.value ? Number(e.target.value) : null;
+                                        setSelectedVariantId(variantId);
+                                    }}
                                     className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-amber-500 focus:border-amber-500"
                                     disabled={!selectedProductId}
                                 >
                                     <option value="">Chọn phiên bản</option>
-                                    {selectedProduct?.details?.map(detail => (
-                                        <option key={detail.id} value={detail.id}>
-                                            {`${detail.size || ''} ${detail.type || ''} ${detail.values || ''}`.trim() || `#${detail.id}`}
-                                        </option>
-                                    ))}
+                                    {selectedProduct?.details?.map(detail => {
+                                        const variantInfo = `${detail.size || ''} ${detail.type || ''} ${detail.values || ''}`.trim();
+                                        return (
+                                            <option key={detail.id} value={detail.id}>
+                                                {variantInfo || `#${detail.id}`}
+                                                {detail.quantities ? ` (Hiện có: ${detail.quantities})` : ''}
+                                            </option>
+                                        );
+                                    })}
                                 </select>
+                                {selectedVariant && (
+                                    <p className="text-xs text-gray-500 mt-1">
+                                        Tồn kho hiện tại: <span className="font-medium">{selectedVariant.quantities || 0}</span>
+                                    </p>
+                                )}
                             </div>
 
                             <div>
@@ -412,11 +493,16 @@ const StockReceiptModal = ({
                                     className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-amber-500 focus:border-amber-500"
                                     disabled={!selectedVariantId}
                                 />
+                                {operationType === 'decrease' && selectedVariant && (
+                                    <p className={`text-xs mt-1 ${quantity > selectedVariant.quantities ? 'text-red-500' : 'text-gray-500'}`}>
+                                        {quantity > selectedVariant.quantities ? 'Vượt quá số lượng tồn kho!' : ''}
+                                    </p>
+                                )}
                             </div>
 
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    Giá nhập (VNĐ)
+                                    Giá (VNĐ)
                                 </label>
                                 <input
                                     type="number"
@@ -428,10 +514,10 @@ const StockReceiptModal = ({
                                 />
                             </div>
 
-                            <div className="flex justify-end items-end">
+                            <div className="flex justify-start items-end">
                                 <button
                                     onClick={addItem}
-                                    disabled={!selectedVariantId || quantity < 1}
+                                    disabled={!selectedVariantId || quantity < 1 || (operationType === 'decrease' && selectedVariant && quantity > selectedVariant.quantities)}
                                     className="px-4 py-2 bg-amber-600 text-white rounded-md hover:bg-amber-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
                                 >
                                     Thêm
@@ -440,11 +526,11 @@ const StockReceiptModal = ({
                         </div>
                     </div>
 
-                    <h4 className="text-sm font-medium mb-3">Danh sách sản phẩm nhập kho</h4>
+                    <h4 className="text-sm font-medium mb-3">Danh sách sản phẩm</h4>
 
                     {items.length === 0 ? (
                         <div className="text-center py-6 bg-gray-50 rounded-md text-gray-500">
-                            Chưa có sản phẩm nào trong phiếu nhập
+                            Chưa có sản phẩm nào trong phiếu
                         </div>
                     ) : (
                         <div className="overflow-x-auto">
@@ -517,7 +603,7 @@ const StockReceiptModal = ({
                                 Đang xử lý...
                             </>
                         ) : (
-                            'Lưu phiếu nhập kho'
+                            operationType === 'increase' ? 'Lưu phiếu nhập kho' : 'Lưu phiếu xuất kho'
                         )}
                     </button>
                 </div>
@@ -532,7 +618,7 @@ const InventoryFilters = ({
     setActiveTab,
     tabCounts,
     setCurrentPage,
-    
+
 }: {
     activeTab: string;
     setActiveTab: (tab: string) => void;
@@ -589,6 +675,7 @@ const ProductTable = ({
     handleEditProduct,
     handleDeleteProduct,
     getCategoryNameById,
+    showToast, // Destructured prop
     openStockReceiptModal,
     currentPage,
     setCurrentPage,
@@ -601,7 +688,7 @@ const ProductTable = ({
     handleDeleteProduct: (productId: number) => void;
     getCategoryNameById: (categoryId: number | undefined) => Promise<string>;
     showToast: (message: string, type: 'success' | 'error' | 'info') => void;
-    openStockReceiptModal: (productId: number, variantId: number | null) => void;
+    openStockReceiptModal: (productId: number, variantId: number | null, operationType?: 'increase' | 'decrease') => void;
     currentPage: number;
     setCurrentPage: (page: number) => void;
     productsPerPage?: number;
@@ -616,6 +703,18 @@ const ProductTable = ({
     const [detailLoading, setDetailLoading] = useState<Record<number, boolean>>({});
     const [categoryNames, setCategoryNames] = useState<Record<number, string>>({});
     const router = useRouter();
+
+    // 1. Thêm state để quản lý modal hiển thị hình ảnh 
+    // (thêm vào ProductTable component, sau các state hiện có)
+    const [detailImagesModal, setDetailImagesModal] = useState<{
+        detailId: number;
+        images: Image[];
+        currentImageIndex: number;
+        isLoading?: boolean;
+    } | null>(null);
+
+    // 2. Thêm state cache hình ảnh
+    const [detailImagesCache, setDetailImagesCache] = useState<Record<number, Image[]>>({});
 
     // Filter products based on search term
     const filteredProducts = useMemo(() => {
@@ -770,6 +869,123 @@ const ProductTable = ({
             setCurrentPage(page);
         }
     };
+
+    // 3. Thêm hàm để fetch hình ảnh chi tiết từ API
+    const fetchDetailImages = useCallback(async (detailId: number) => {
+        try {
+            const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+            if (!token) {
+                return null;
+            }
+
+            setDetailImagesModal({
+                detailId,
+                images: [],
+                currentImageIndex: 0,
+                isLoading: true
+            });
+
+            // Kiểm tra cache trước
+            if (detailImagesCache[detailId]?.length > 0) {
+                setDetailImagesModal({
+                    detailId,
+                    images: detailImagesCache[detailId],
+                    currentImageIndex: 0,
+                    isLoading: false
+                });
+                return;
+            }
+
+            const response = await fetch(
+                `http://68.183.226.198:3000/api/product-details/${detailId}`,
+                {
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                    },
+                }
+            );
+
+            if (!response.ok) {
+                throw new Error(`Failed to fetch detail images: ${response.status}`);
+            }
+
+            const detailData = await response.json();
+
+            if (detailData && detailData.images && detailData.images.length > 0) {
+                // Cập nhật cache
+                setDetailImagesCache(prev => ({
+                    ...prev,
+                    [detailId]: detailData.images
+                }));
+
+                setDetailImagesModal({
+                    detailId,
+                    images: detailData.images,
+                    currentImageIndex: 0,
+                    isLoading: false
+                });
+            } else {
+                showToast('Không tìm thấy hình ảnh cho phiên bản này', 'info');
+                setDetailImagesModal(null);
+            }
+        } catch (error) {
+            console.error('Error fetching detail images:', error);
+            showToast('Không thể tải hình ảnh phiên bản', 'error');
+            setDetailImagesModal(null);
+        }
+    }, [detailImagesCache, showToast]);
+
+    // 4. Thêm hàm preload hình ảnh chi tiết
+    const preloadDetailImages = useCallback(async (detailId: number) => {
+        // Bỏ qua nếu đã có trong cache
+        if (detailImagesCache[detailId]?.length > 0) return;
+
+        try {
+            const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+            if (!token) return;
+
+            const response = await fetch(
+                `http://68.183.226.198:3000/api/product-details/${detailId}`,
+                {
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                    },
+                }
+            );
+
+            if (!response.ok) return;
+
+            const detailData = await response.json();
+
+            if (detailData && detailData.images && detailData.images.length > 0) {
+                // Cập nhật cache với hình ảnh vừa tải
+                setDetailImagesCache(prev => ({
+                    ...prev,
+                    [detailId]: detailData.images
+                }));
+            }
+        } catch (error) {
+            console.error('Error preloading detail images:', error);
+        }
+    }, [detailImagesCache]);
+
+    // 5. Thêm hàm hiển thị hình ảnh chi tiết
+    const showDetailImages = useCallback((detailId: number) => {
+        fetchDetailImages(detailId);
+    }, [fetchDetailImages]);
+
+    // Thêm useEffect để preload hình ảnh khi mở rộng sản phẩm
+    useEffect(() => {
+        if (expandedProduct !== null) {
+            // Tải hình ảnh cho tất cả chi tiết sản phẩm được mở rộng
+            const product = products.find(p => p.id === expandedProduct);
+            if (product && product.details) {
+                product.details.forEach(detail => {
+                    preloadDetailImages(detail.id);
+                });
+            }
+        }
+    }, [expandedProduct, products]);
 
     return (
         <div className="bg-white rounded-lg shadow overflow-hidden">
@@ -1140,28 +1356,52 @@ const ProductTable = ({
                                                                     key={detail.id}
                                                                     className="hover:bg-gray-50 transition-colors"
                                                                 >
-                                                                    <td className="px-6 py-4 whitespace-nowrap">
-                                                                        <div className="flex items-center">
-                                                                            <div className="h-10 w-10 flex-shrink-0 mr-3 border rounded-full overflow-hidden">
-                                                                                {detail.images && detail.images.length > 0 ? (
-                                                                                    <Image
-                                                                                        src={detail.images[0].path}
-                                                                                        alt={`Variant ${detail.id}`}
-                                                                                        width={40}
-                                                                                        height={40}
-                                                                                        className="h-full w-full object-cover"
-                                                                                        onError={(e) => {
-                                                                                            const target = e.target as HTMLImageElement;
-                                                                                            target.src = '/placeholder.png';
-                                                                                        }}
-                                                                                    />
+                                                                    <td className='px-6 py-4 whitespace-nowrap'>
+                                                                        <div className='flex items-center'>
+                                                                            <button
+                                                                                onClick={() => showDetailImages(detail.id)}
+                                                                                className='h-10 w-10 flex-shrink-0 mr-3 border rounded-md overflow-hidden hover:opacity-80 transition-opacity'
+                                                                            >
+                                                                                {detailImagesCache[detail.id]?.length > 0 ? (
+                                                                                    // Sử dụng hình ảnh từ cache nếu có
+                                                                                    <div className='relative h-full w-full'>
+                                                                                        <Image
+                                                                                            src={detailImagesCache[detail.id][0].path}
+                                                                                            alt={`${product.name} - ${detail.size || ''} ${detail.type || ''}`}
+                                                                                            width={40}
+                                                                                            height={40}
+                                                                                            className='object-cover h-full w-full'
+                                                                                            onError={(e) => {
+                                                                                                const target = e.target as HTMLImageElement;
+                                                                                                target.src = '/placeholder.png';
+                                                                                            }}
+                                                                                        />
+                                                                                        {detailImagesCache[detail.id].length > 1 && (
+                                                                                            <div className='absolute bottom-0 right-0 bg-black bg-opacity-50 text-white text-xs rounded-tl-sm px-1'>
+                                                                                                +{detailImagesCache[detail.id].length - 1}
+                                                                                            </div>
+                                                                                        )}
+                                                                                    </div>
                                                                                 ) : (
-                                                                                    <div className="h-full w-full flex items-center justify-center bg-gray-100 text-gray-400">
-                                                                                        <PlusIcon className="h-5 w-5" />
+                                                                                    <div className='flex items-center justify-center h-full w-full text-gray-400 bg-gray-100'>
+                                                                                        <svg
+                                                                                            xmlns="http://www.w3.org/2000/svg"
+                                                                                            className="h-5 w-5"
+                                                                                            fill="none"
+                                                                                            viewBox="0 0 24 24"
+                                                                                            stroke="currentColor"
+                                                                                        >
+                                                                                            <path
+                                                                                                strokeLinecap="round"
+                                                                                                strokeLinejoin="round"
+                                                                                                strokeWidth={1.5}
+                                                                                                d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                                                                                            />
+                                                                                        </svg>
                                                                                     </div>
                                                                                 )}
-                                                                            </div>
-                                                                            <span className="text-gray-900 text-sm">
+                                                                            </button>
+                                                                            <span className='text-gray-900 text-sm'>
                                                                                 #{detail.id}
                                                                             </span>
                                                                         </div>
@@ -1186,7 +1426,7 @@ const ProductTable = ({
                                                                                     Sắp hết ({detail.quantities})
                                                                                 </span>
                                                                                 <button
-                                                                                    onClick={() => openStockReceiptModal(product.id, detail.id)}
+                                                                                    onClick={() => openStockReceiptModal(product.id, detail.id, 'increase')}
                                                                                     className="text-xs text-amber-600 hover:text-amber-800"
                                                                                     title="Nhập thêm hàng"
                                                                                 >
@@ -1240,8 +1480,7 @@ const ProductTable = ({
                     {totalPages > 1 && (
                         <div className="px-6 py-4 border-t flex items-center justify-between">
                             <div className="text-sm text-gray-500">
-                                Hiển thị {startIndex + 1} đến {Math.min(endIndex, filteredProducts.length)}
-                                trong tổng số {filteredProducts.length} sản phẩm
+                                Hiển thị {startIndex + 1} đến {Math.min(endIndex, filteredProducts.length)} trong tổng số {filteredProducts.length} sản phẩm
                             </div>
                             <div className="flex space-x-1">
                                 <button
@@ -1303,6 +1542,563 @@ const ProductTable = ({
                     )}
                 </div>
             )}
+            {/* Modal for viewing product detail images */}
+            {detailImagesModal && (
+                <div className='fixed inset-0 bg-black/70 flex items-center justify-center z-50'>
+                    <div className='bg-white rounded-lg p-4 max-w-3xl mx-4 w-full shadow-xl'>
+                        <div className='flex justify-between items-center mb-4'>
+                            <h3 className='text-lg font-medium text-gray-900'>
+                                Hình ảnh phiên bản #{detailImagesModal.detailId}
+                            </h3>
+                            <button
+                                onClick={() => setDetailImagesModal(null)}
+                                className='text-gray-500 hover:text-gray-700'
+                            >
+                                <svg className='h-6 w-6' fill='none' viewBox='0 0 24 24' stroke='currentColor'>
+                                    <path
+                                        strokeLinecap='round'
+                                        strokeLinejoin='round'
+                                        strokeWidth={2}
+                                        d='M6 18L18 6M6 6l12 12'
+                                    />
+                                </svg>
+                            </button>
+                        </div>
+
+                        <div className='flex flex-col items-center'>
+                            {detailImagesModal.isLoading ? (
+                                <div className='py-20 flex flex-col items-center justify-center'>
+                                    <div className='animate-spin rounded-full h-12 w-12 border-b-2 border-amber-700 mb-4'></div>
+                                    <p className='text-gray-500'>Đang tải hình ảnh...</p>
+                                </div>
+                            ) : (
+                                <>
+                                    {/* Main image */}
+                                    <div className='relative w-full h-64 md:h-96 mb-4 bg-gray-100 rounded-lg overflow-hidden'>
+                                        <Image
+                                            src={detailImagesModal.images[detailImagesModal.currentImageIndex].path}
+                                            alt={`Product detail image`}
+                                            fill
+                                            className='object-contain'
+                                            onError={(e) => {
+                                                const target = e.target as HTMLImageElement;
+                                                target.src = '/placeholder.png';
+                                            }}
+                                        />
+                                    </div>
+
+                                    {/* Thumbnails */}
+                                    {detailImagesModal.images.length > 1 && (
+                                        <div className='flex space-x-2 overflow-x-auto max-w-full py-2'>
+                                            {detailImagesModal.images.map((image, index) => (
+                                                <button
+                                                    key={image.id}
+                                                    onClick={() => setDetailImagesModal({
+                                                        ...detailImagesModal,
+                                                        currentImageIndex: index
+                                                    })}
+                                                    className={`h-16 w-16 flex-shrink-0 rounded border-2 ${detailImagesModal.currentImageIndex === index
+                                                        ? 'border-amber-600'
+                                                        : 'border-transparent hover:border-gray-300'
+                                                        }`}
+                                                >
+                                                    <div className='relative h-full w-full'>
+                                                        <Image
+                                                            src={image.path}
+                                                            alt={`Thumbnail ${index + 1}`}
+                                                            fill
+                                                            className='object-cover rounded'
+                                                            onError={(e) => {
+                                                                const target = e.target as HTMLImageElement;
+                                                                target.src = '/placeholder.png';
+                                                            }}
+                                                        />
+                                                    </div>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </>
+                            )}
+                        </div>
+
+                        <div className='mt-4 flex justify-end'>
+                            <button
+                                onClick={() => setDetailImagesModal(null)}
+                                className='px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300'
+                            >
+                                Đóng
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+// Component for viewing inventory history
+const InventoryHistoryModal = ({
+    isOpen,
+    onClose,
+    products, // Thêm tham số products vào đây
+}: {
+    isOpen: boolean;
+    onClose: () => void;
+    products: ProductViewModel[]; // Thêm tham số này
+}) => {
+    // Existing states remain the same
+    const [loading, setLoading] = useState(true);
+    const [history, setHistory] = useState<InventoryHistoryItem[]>([]);
+    const [error, setError] = useState<string | null>(null);
+    const [filters, setFilters] = useState({
+        startDate: format(subDays(new Date(), 30), 'yyyy-MM-dd'),
+        endDate: format(new Date(), 'yyyy-MM-dd'),
+        type: 'all' as 'all' | 'increase' | 'decrease',
+        searchTerm: '',
+    });
+    const [currentPage, setCurrentPage] = useState(1);
+    const itemsPerPage = 20;
+
+    // Tạo một state để lưu trữ chi tiết sản phẩm
+    const [productDetailsMap, setProductDetailsMap] = useState<Record<number, {
+        name: string;
+        image: string;
+        size: string;
+        type: string;
+        values: string;
+    }>>({});
+
+    // Phương thức để lấy thông tin sản phẩm từ product_detail_id
+    const getProductInfo = useCallback((productDetailId: number) => {
+        if (productDetailsMap[productDetailId]) {
+            return productDetailsMap[productDetailId];
+        }
+
+        // Tìm sản phẩm chứa product detail này
+        for (const product of products) {
+            if (!product.details) continue;
+
+            const detail = product.details.find(d => d.id === productDetailId);
+            if (detail) {
+                // Tạo thông tin sản phẩm
+                const productInfo = {
+                    name: product.name || 'Không xác định',
+                    image: Array.isArray(product.images) && product.images.length > 0 ?
+                        product.images[0].path :
+                        '/placeholder.png',
+                    size: detail.size || '',
+                    type: detail.type || '',
+                    values: detail.values || ''
+                };
+
+                // Cập nhật vào map để tái sử dụng
+                setProductDetailsMap(prev => ({
+                    ...prev,
+                    [productDetailId]: productInfo
+                }));
+
+                return productInfo;
+            }
+        }
+
+        return {
+            name: 'Sản phẩm không xác định',
+            image: '/placeholder.png',
+            size: '',
+            type: '',
+            values: ''
+        };
+    }, [products, productDetailsMap]);
+
+    // Thêm useEffect để load dữ liệu khi modal mở
+    useEffect(() => {
+        if (isOpen) {
+            fetchInventoryHistory();
+        }
+    }, [isOpen]);
+
+    // Thêm log để debug
+    const fetchInventoryHistory = useCallback(async () => {
+        try {
+            setLoading(true);
+            console.log('Fetching inventory history...');
+
+            const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+            if (!token) {
+                throw new Error('Bạn chưa đăng nhập hoặc phiên làm việc đã hết hạn');
+            }
+
+            console.log('Using token:', token ? 'Token exists' : 'No token');
+
+            const response = await fetch(
+                `http://68.183.226.198:3000/api/inventory`,
+                {
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                    },
+                }
+            );
+
+            console.log('Response status:', response.status);
+
+            if (!response.ok) {
+                throw new Error(`Failed to fetch history: ${response.status}`);
+            }
+
+            const data = await response.json();
+            console.log('Received data length:', data.length);
+            console.log('Sample data:', data.slice(0, 2));
+
+            // Process the data to ensure all numeric fields are properly parsed
+            const processedData = data.map((item: {
+                id: number;
+                product_detail_id: string | number;
+                quantity: string | number;
+                status: 'increase' | 'decrease';
+                update_by: string;
+                created_at: string;
+                updated_at: string;
+            }) => ({
+                ...item,
+                product_detail_id: parseInt(item.product_detail_id.toString(), 10) || 0,
+                quantity: parseInt(item.quantity.toString(), 10) || 0
+            }));
+
+            // Apply date and type filtering in JavaScript
+            const filteredData = processedData.filter((item: InventoryHistoryItem) => {
+                const itemDate = new Date(item.created_at);
+                const startDate = new Date(`${filters.startDate}T00:00:00`);
+                const endDate = new Date(`${filters.endDate}T23:59:59`);
+
+                const isInDateRange = itemDate >= startDate && itemDate <= endDate;
+                const matchesType = filters.type === 'all' || item.status === filters.type;
+
+                return isInDateRange && matchesType;
+            });
+
+            console.log('After filtering - data length:', filteredData.length);
+
+            // Thêm thông tin sản phẩm vào từng record lịch sử
+            const enhancedData = filteredData.map((item: InventoryHistoryItem) => {
+                // Lấy thông tin sản phẩm từ products
+                for (const product of products) {
+                    if (!product.details) continue;
+
+                    const detail = product.details.find(d => d.id === item.product_detail_id);
+                    if (detail) {
+                        return {
+                            ...item,
+                            product_detail: {
+                                ...(item.product_detail || {}),
+                                id: detail.id,
+                                size: detail.size || '',
+                                type: detail.type || '',
+                                values: detail.values || '',
+                                product: {
+                                    id: product.id,
+                                    name: product.name,
+                                    image: Array.isArray(product.images) && product.images.length > 0 ?
+                                        product.images[0].path : undefined
+                                }
+                            }
+                        };
+                    }
+                }
+
+                return item;
+            });
+
+            setHistory(enhancedData);
+            setError(null);
+            console.log('Data loaded successfully');
+        } catch (err) {
+            console.error('Error fetching inventory history:', err);
+            setError(err instanceof Error ? err.message : 'Failed to load inventory history');
+        } finally {
+            setLoading(false);
+        }
+    }, [filters.startDate, filters.endDate, filters.type, products]);
+
+    // Rest of the component remains the same...
+
+    // Filter history based on search term
+    const filteredHistory = useMemo(() => {
+        if (!filters.searchTerm.trim()) return history;
+
+        const searchLower = filters.searchTerm.toLowerCase();
+        return history.filter(item =>
+            (item.product_detail?.product?.name || '').toLowerCase().includes(searchLower) ||
+            `${item.product_detail?.size || ''} ${item.product_detail?.type || ''} ${item.product_detail?.values || ''}`.toLowerCase().includes(searchLower) ||
+            item.product_detail_id.toString().includes(searchLower)
+        );
+    }, [history, filters.searchTerm]);
+
+    // Calculate pagination
+    const totalPages = Math.ceil(filteredHistory.length / itemsPerPage);
+    const displayedHistory = filteredHistory.slice(
+        (currentPage - 1) * itemsPerPage,
+        currentPage * itemsPerPage
+    );
+
+    // Group history by date for better UI organization
+    const groupedHistory = useMemo(() => {
+        const groups: Record<string, InventoryHistoryItem[]> = {};
+
+        displayedHistory.forEach(item => {
+            const date = format(new Date(item.created_at), 'yyyy-MM-dd');
+            if (!groups[date]) {
+                groups[date] = [];
+            }
+            groups[date].push(item);
+        });
+
+        return groups;
+    }, [displayedHistory]);
+
+    if (!isOpen) return null;
+
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-lg shadow-xl w-full max-w-6xl max-h-[90vh] overflow-hidden">
+                <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+                    <h3 className="text-lg font-medium">Lịch sử nhập/xuất kho</h3>
+                    <button
+                        onClick={onClose}
+                        className="text-gray-400 hover:text-gray-500"
+                    >
+                        <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+
+                <div className="p-6">
+                    {/* Filters */}
+                    <div className="mb-6 grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Từ ngày
+                            </label>
+                            <input
+                                type="date"
+                                value={filters.startDate}
+                                onChange={(e) => setFilters(prev => ({ ...prev, startDate: e.target.value }))}
+                                className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-amber-500 focus:border-amber-500"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Đến ngày
+                            </label>
+                            <input
+                                type="date"
+                                value={filters.endDate}
+                                onChange={(e) => setFilters(prev => ({ ...prev, endDate: e.target.value }))}
+                                className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-amber-500 focus:border-amber-500"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Loại giao dịch
+                            </label>
+                            <select
+                                value={filters.type}
+                                onChange={(e) => setFilters(prev => ({ ...prev, type: e.target.value as 'all' | 'increase' | 'decrease' }))}
+                                className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-amber-500 focus:border-amber-500"
+                            >
+                                <option value="all">Tất cả</option>
+                                <option value="increase">Nhập kho</option>
+                                <option value="decrease">Xuất kho</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Tìm kiếm
+                            </label>
+                            <div className="relative">
+                                <input
+                                    type="text"
+                                    placeholder="Tìm theo tên sản phẩm, phiên bản..."
+                                    value={filters.searchTerm}
+                                    onChange={(e) => setFilters(prev => ({ ...prev, searchTerm: e.target.value }))}
+                                    className="w-full border border-gray-300 rounded-md pl-10 pr-4 py-2 focus:outline-none focus:ring-amber-500 focus:border-amber-500"
+                                />
+                                <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                    </svg>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="flex justify-between items-center mb-4">
+                        <div className="text-sm text-gray-600">
+                            {!loading && `Hiển thị ${filteredHistory.length} kết quả`}
+                        </div>
+                        <button
+                            onClick={fetchInventoryHistory}
+                            className="flex items-center text-amber-600 hover:text-amber-800"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                            </svg>
+                            Làm mới
+                        </button>
+                    </div>
+
+                    {/* History content */}
+                    <div className="overflow-y-auto" style={{ maxHeight: "calc(90vh - 300px)" }}>
+                        {loading ? (
+                            <div className="py-20 flex flex-col items-center justify-center">
+                                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-amber-700 mb-4"></div>
+                                <p className="text-gray-500">Đang tải dữ liệu...</p>
+                            </div>
+                        ) : error ? (
+                            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+                                <div className="flex">
+                                    <div className="flex-shrink-0">
+                                        <svg className="h-5 w-5 text-red-500" viewBox="0 0 20 20" fill="currentColor">
+                                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                                        </svg>
+                                    </div>
+                                    <div className="ml-3">
+                                        <p className="text-sm">{error}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        ) : filteredHistory.length === 0 ? (
+                            <div className="text-center py-8 text-gray-500 bg-white rounded-lg border border-gray-200">
+                                <p>Không tìm thấy dữ liệu nhập/xuất kho trong khoảng thời gian này.</p>
+                            </div>
+                        ) : (
+                            // Hiển thị dữ liệu nhóm theo ngày - giữ nguyên
+                            Object.entries(groupedHistory).map(([date, items]) => (
+                                <div key={date} className="mb-6">
+                                    <div className="flex items-center mb-2">
+                                        <div className="bg-gray-100 px-3 py-1 rounded-full text-sm font-medium text-gray-800">
+                                            {format(new Date(date), 'dd/MM/yyyy')}
+                                        </div>
+                                        <div className="ml-3 text-sm text-gray-500">
+                                            {items.length} giao dịch
+                                        </div>
+                                    </div>
+
+                                    <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+                                        <table className="min-w-full divide-y divide-gray-200">
+                                            <thead className="bg-gray-50">
+                                                <tr>
+                                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Thời gian</th>
+                                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sản phẩm</th>
+                                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Phiên bản</th>
+                                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Số lượng</th>
+                                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Loại</th>
+                                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Thực hiện bởi</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="bg-white divide-y divide-gray-200">
+                                                {items.map(item => {
+                                                    // Lấy thông tin sản phẩm từ cache hoặc tính toán
+                                                    const productInfo = item.product_detail?.product ?
+                                                        {
+                                                            name: item.product_detail.product.name,
+                                                            image: item.product_detail.product.image,
+                                                            size: item.product_detail.size || '',
+                                                            type: item.product_detail.type || '',
+                                                            values: item.product_detail.values || '',
+                                                        } :
+                                                        getProductInfo(item.product_detail_id);
+
+                                                    return (
+                                                        <tr key={item.id} className="hover:bg-gray-50">
+                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                                {format(new Date(item.created_at), 'HH:mm:ss')}
+                                                            </td>
+                                                            <td className="px-6 py-4 whitespace-nowrap">
+                                                                <div className="flex items-center">
+                                                                    <div className="flex-shrink-0 h-10 w-10 rounded-md bg-gray-200 overflow-hidden border">
+                                                                        <Image
+                                                                            src={productInfo.image || '/placeholder.png'}
+                                                                            alt={productInfo.name}
+                                                                            width={40}
+                                                                            height={40}
+                                                                            className="h-10 w-10 object-cover"
+                                                                            onError={(e) => {
+                                                                                const target = e.target as HTMLImageElement;
+                                                                                target.src = '/placeholder.png';
+                                                                            }}
+                                                                        />
+                                                                    </div>
+                                                                    <div className="ml-3">
+                                                                        <div className="text-sm font-medium text-gray-900">
+                                                                            {productInfo.name}
+                                                                        </div>
+                                                                        <div className="text-xs text-gray-500">
+                                                                            #{item.product_detail_id}
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            </td>
+                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                                {`${productInfo.size} ${productInfo.type} ${productInfo.values}`.trim() || `#${item.product_detail_id}`}
+                                                            </td>
+                                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                                                {item.quantity}
+                                                            </td>
+                                                            <td className="px-6 py-4 whitespace-nowrap">
+                                                                <span className={`px-2 py-1 text-xs rounded-full ${item.status === 'increase'
+                                                                    ? 'bg-green-100 text-green-800'
+                                                                    : 'bg-red-100 text-red-800'
+                                                                    }`}>
+                                                                    {item.status === 'increase' ? 'Nhập kho' : 'Xuất kho'}
+                                                                </span>
+                                                            </td>
+                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                                {item.update_by || 'Hệ thống'}
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            ))
+                        )}
+                    </div>
+
+                    {/* Pagination controls - giữ nguyên */}
+                    {totalPages > 1 && (
+                        <div className="flex items-center justify-between border-t border-gray-200 pt-4 mt-4">
+                            <div className="text-sm text-gray-500">
+                                Trang {currentPage} / {totalPages}
+                            </div>
+                            <div className="flex space-x-1">
+                                <button
+                                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                                    disabled={currentPage === 1}
+                                    className="px-3 py-1 border rounded text-sm bg-white text-gray-700 
+                                        disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                                >
+                                    Trước
+                                </button>
+
+                                {/* Pagination buttons */}
+
+                                <button
+                                    onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                                    disabled={currentPage === totalPages}
+                                    className="px-3 py-1 border rounded text-sm bg-white text-gray-700 
+                                        disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                                >
+                                    Tiếp
+                                </button>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </div>
         </div>
     );
 };
@@ -1320,6 +2116,8 @@ export default function Warehouse() {
     const [selectedProductId, setSelectedProductId] = useState<number | null>(null);
     const [selectedVariantId, setSelectedVariantId] = useState<number | null>(null);
     const [currentPage, setCurrentPage] = useState(1);
+    const [operationType, setOperationType] = useState<'increase' | 'decrease'>('increase');
+    const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
 
     const [inventorySummary, setInventorySummary] = useState<InventorySummary>({
         totalProducts: 0,
@@ -1751,24 +2549,52 @@ export default function Warehouse() {
         }>;
         totalItems: number;
         totalCost: number;
+        operationType: 'increase' | 'decrease';
     }) => {
         setIsProcessing(true);
         try {
-            // Giả lập API call - trong thực tế bạn sẽ gọi API thực sự
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+            if (!token) {
+                throw new Error('Bạn chưa đăng nhập hoặc phiên làm việc đã hết hạn');
+            }
 
-            // Cập nhật số lượng sản phẩm trong kho
+            // Tạo dữ liệu cho API theo format yêu cầu
+            const inventoryUpdateData = {
+                update_by: "seller", // Hoặc có thể lấy từ thông tin người dùng đăng nhập
+                upsert_products: receiptData.items.map(item => ({
+                    product_detail_id: item.product_detail_id,
+                    quantity: item.quantity,
+                    status: receiptData.operationType // Nhập kho (increase) hoặc xuất kho (decrease)
+                }))
+            };
+
+            // Gọi API nhập/xuất kho
+            const response = await fetch('http://68.183.226.198:3000/api/inventory', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(inventoryUpdateData)
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.message || `Lỗi khi ${receiptData.operationType === 'increase' ? 'nhập' : 'xuất'} kho: ${response.status}`);
+            }
+
+            // Cập nhật số lượng sản phẩm trong state
             const updatedProducts = [...products];
-
-            // Với mỗi sản phẩm được nhập, cập nhật số lượng tồn kho
-            receiptData.items.forEach((item: { product_id: number; product_detail_id: number; product_name: string; variant_info: string; quantity: number; cost_per_unit: number }) => {
+            receiptData.items.forEach((item) => {
                 for (const product of updatedProducts) {
                     if (product.details) {
                         const detailIndex = product.details.findIndex(d => d.id === item.product_detail_id);
                         if (detailIndex !== -1) {
-                            // Cộng dồn số lượng nhập
                             const currentQuantity = Number(product.details[detailIndex].quantities) || 0;
-                            product.details[detailIndex].quantities = currentQuantity + item.quantity;
+                            // Tăng hoặc giảm số lượng dựa vào loại thao tác
+                            product.details[detailIndex].quantities = receiptData.operationType === 'increase'
+                                ? currentQuantity + item.quantity
+                                : currentQuantity - item.quantity;
                             break;
                         }
                     }
@@ -1777,18 +2603,26 @@ export default function Warehouse() {
 
             // Cập nhật state sản phẩm
             setProducts(updatedProducts);
-
-            // Cập nhật lại thống kê
             calculateInventorySummary();
 
-            showToast('Nhập kho thành công', 'success');
+            showToast(
+                `${receiptData.operationType === 'increase' ? 'Nhập' : 'Xuất'} kho thành công`,
+                'success'
+            );
             setIsReceiptModalOpen(false);
         } catch (error) {
-            console.error('Lỗi khi tạo phiếu nhập kho:', error);
-            showToast('Có lỗi xảy ra khi tạo phiếu nhập kho', 'error');
+            console.error(`Lỗi khi ${operationType === 'increase' ? 'nhập' : 'xuất'} kho:`, error);
+            showToast(error instanceof Error ? error.message : `Có lỗi xảy ra khi ${operationType === 'increase' ? 'nhập' : 'xuất'} kho`, 'error');
         } finally {
             setIsProcessing(false);
         }
+    };
+
+    const openStockReceiptModal = (productId: number | null = null, variantId: number | null = null, type: 'increase' | 'decrease' = 'increase') => {
+        setSelectedProductId(productId);
+        setSelectedVariantId(variantId);
+        setOperationType(type);
+        setIsReceiptModalOpen(true);
     };
 
     return (
@@ -1808,13 +2642,33 @@ export default function Warehouse() {
                             <p className='text-gray-500 mt-1'>Quản lý tồn kho của bạn</p>
                         </div>
                         <div className='mt-4 md:mt-0 flex gap-2'>
-
+                            {/* Button for stock in (increase) */}
                             <button
-                                onClick={() => setIsReceiptModalOpen(true)}
-                                className='bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 font-medium py-2 px-4 rounded-lg flex items-center shadow-sm transition-colors'
+                                onClick={() => openStockReceiptModal(null, null, 'increase')}
+                                className='bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-lg flex items-center shadow-sm transition-colors'
                             >
                                 <PlusIcon className='w-5 h-5 mr-2' />
-                                Tạo phiếu nhập kho
+                                Nhập kho
+                            </button>
+
+                            {/* Button for stock out (decrease) */}
+                            <button
+                                onClick={() => openStockReceiptModal(null, null, 'decrease')}
+                                className='bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-4 rounded-lg flex items-center shadow-sm transition-colors'
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M20 12H4" />
+                                </svg>
+                                Xuất kho
+                            </button>
+
+                            {/* Button to open history modal */}
+                            <button
+                                onClick={() => setIsHistoryModalOpen(true)}
+                                className='bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 px-4 rounded-lg flex items-center shadow-sm transition-colors'
+                            >
+                                <ClockIcon className="h-5 w-5 mr-2" />
+                                Xem lịch sử
                             </button>
                         </div>
                     </div>
@@ -1841,9 +2695,10 @@ export default function Warehouse() {
                         handleDeleteProduct={handleDeleteProduct}
                         getCategoryNameById={getCategoryNameById}
                         showToast={showToast}
-                        openStockReceiptModal={(productId, variantId) => {
+                        openStockReceiptModal={(productId, variantId, operationType) => {
                             setSelectedProductId(productId);
                             setSelectedVariantId(variantId);
+                            setOperationType(operationType || 'increase');
                             setIsReceiptModalOpen(true);
                         }}
                         currentPage={currentPage}
@@ -1864,6 +2719,7 @@ export default function Warehouse() {
                             loading={isProcessing}
                             preSelectedProductId={selectedProductId}
                             preSelectedVariantId={selectedVariantId}
+                            operationType={operationType}
                         />
                     )}
 
@@ -1935,6 +2791,14 @@ export default function Warehouse() {
                         </div>
                     )}
 
+                    {isHistoryModalOpen && (
+                        <InventoryHistoryModal
+                            isOpen={isHistoryModalOpen}
+                            onClose={() => setIsHistoryModalOpen(false)}
+                            products={products}
+                        />
+                    )}
+
                     {error && (
                         <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-6">
                             <div className="flex">
@@ -1975,3 +2839,5 @@ function isPromotionActive(end_date: string | null | undefined) {
         return true; // If date parsing fails, assume it's active
     }
 }
+
+
