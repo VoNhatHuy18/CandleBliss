@@ -230,7 +230,9 @@ const ProductCard = ({
          </div>
 
          <div className='mt-3'>
-            <h3 className='text-sm font-medium text-gray-700 mb-1'>{title}</h3>
+            <h3 className='text-sm font-medium text-gray-700 mb-1 truncate whitespace-nowrap overflow-hidden'>
+               {title}
+            </h3>
             <p className='text-xs text-gray-500 line-clamp-2 mb-1'>{description}</p>
             <div className='flex items-center'>{renderStars()}</div>
 
@@ -387,7 +389,7 @@ export default function ProductPage() {
    const [sortOption, setSortOption] = useState<string>('default');
 
    const [currentPage, setCurrentPage] = useState(1);
-   const productsPerPage = 25;
+   const productsPerPage = 24;
 
    // Thêm state để lưu trữ sản phẩm gốc theo đúng thứ tự ban đầu
    const [originalProducts, setOriginalProducts] = useState<Array<{

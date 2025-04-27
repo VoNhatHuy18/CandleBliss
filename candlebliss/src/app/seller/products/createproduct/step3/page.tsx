@@ -234,25 +234,13 @@ export default function Step3() {
             productId: undefined,
          });
 
-         setToast({
-            show: true,
-            message: 'Tạo sản phẩm thành công!',
-            type: 'success',
-            actions: [
-               {
-                  label: 'Tạo sản phẩm mới',
-                  onClick: () => router.push('/seller/products/createproduct'),
-                  variant: 'primary',
-               },
-               {
-                  label: 'Về danh sách sản phẩm',
-                  onClick: () => router.push('/seller/products'),
-                  variant: 'secondary',
-               },
-            ],
-         });
+         // Hiển thị thông báo thành công và chuyển về trang danh sách sản phẩm
+         showToast('Tạo sản phẩm thành công!', 'success');
 
-         // Không cần setTimeout vì người dùng sẽ chọn hành động tiếp theo từ Toast
+         // Chờ toast hiển thị xong trước khi chuyển trang
+         setTimeout(() => {
+            router.push('/seller/products');
+         }, 1000);
       } catch (error) {
          showToast('Đã xảy ra lỗi khi tạo sản phẩm', 'error');
          console.error('Error:', error);

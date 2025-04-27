@@ -43,6 +43,12 @@ interface Cart {
    userId?: number;
 }
 
+interface Category {
+   id: number;
+   name: string;
+   description: string;
+}
+
 // Create a client component that uses searchParams
 function SearchParamsHandler({ onUpdate }: { onUpdate: (productDetailId: number | null) => void }) {
    const searchParams = useSearchParams();
@@ -72,6 +78,7 @@ function NavBarContent() {
    const [cartItemCount, setCartItemCount] = useState(0);
    const [productDetailCounts, setProductDetailCounts] = useState<{ [key: number]: number }>({});
    const [currentProductDetailId, setCurrentProductDetailId] = useState<number | null>(null);
+   const [categories, setCategories] = useState<Category[]>([]);
 
    const router = useRouter();
    const pathname = usePathname();
@@ -271,6 +278,113 @@ function NavBarContent() {
       }
    };
 
+   const fetchCategories = useCallback(async () => {
+      try {
+         setCategories([]); // Reset categories before fetching
+
+         console.log('Fetching categories...');
+         const response = await fetch('http://68.183.226.198:3000/api/categories');
+
+         console.log('Categories API response status:', response.status);
+
+         let categoriesData;
+
+         if (response.status === 302) {
+            // Xử lý trường hợp API trả về status 302 nhưng vẫn có dữ liệu
+            const responseText = await response.text();
+            console.log('Received 302 response with text:', responseText);
+
+            try {
+               // Thử parse responseText trực tiếp thành JSON
+               categoriesData = JSON.parse(responseText);
+               console.log('Successfully parsed categories from 302 response:', categoriesData);
+            } catch (parseError) {
+               console.error('Failed to parse categories from 302 response:', parseError);
+
+               // Trích xuất JSON array từ text nếu có chứa dấu [] 
+               if (responseText.includes('[') && responseText.includes(']')) {
+                  const jsonStart = responseText.indexOf('[');
+                  const jsonEnd = responseText.lastIndexOf(']') + 1;
+                  const jsonString = responseText.substring(jsonStart, jsonEnd);
+
+                  try {
+                     categoriesData = JSON.parse(jsonString);
+                     console.log('Extracted categories from 302 response text:', categoriesData);
+                  } catch (nestedError) {
+                     console.error('Failed to extract categories from 302 response text:', nestedError);
+                     throw new Error('Không thể xử lý dữ liệu danh mục từ máy chủ');
+                  }
+               } else {
+                  throw new Error('Không thể xử lý dữ liệu danh mục từ máy chủ');
+               }
+            }
+         } else if (!response.ok) {
+            const errorText = await response.text();
+            console.error('API Error response:', errorText);
+
+            // Trích xuất JSON array từ error response
+            if (errorText.includes('[') && errorText.includes(']')) {
+               const jsonStart = errorText.indexOf('[');
+               const jsonEnd = errorText.lastIndexOf(']') + 1;
+               const jsonString = errorText.substring(jsonStart, jsonEnd);
+
+               try {
+                  categoriesData = JSON.parse(jsonString);
+                  console.log('Extracted categories from error response:', categoriesData);
+               } catch (parseError) {
+                  console.error('Failed to extract categories from error response:', parseError);
+                  throw new Error(`Không thể tải danh mục sản phẩm (${response.status}): ${errorText}`);
+               }
+            } else {
+               throw new Error(`Không thể tải danh mục sản phẩm (${response.status}): ${errorText}`);
+            }
+         } else {
+            // Trường hợp thông thường: API trả về status success
+            categoriesData = await response.json();
+            console.log('Categories loaded successfully:', categoriesData);
+         }
+
+         if (Array.isArray(categoriesData)) {
+            console.log('Setting categories:', categoriesData);
+            setCategories(categoriesData);
+         } else {
+            console.error('Categories data is not an array:', categoriesData);
+            setCategories([]);
+         }
+      } catch (error) {
+         console.error('Error fetching categories:', error);
+
+         // Trích xuất dữ liệu danh mục từ thông báo lỗi nếu có chứa JSON
+         const errorMessage = error instanceof Error ? error.message : 'Lỗi không xác định';
+
+         if (errorMessage.includes('[{') && errorMessage.includes('"}]')) {
+            try {
+               // Trích xuất JSON từ thông báo lỗi
+               const jsonStart = errorMessage.indexOf('[');
+               const jsonEnd = errorMessage.lastIndexOf(']') + 1;
+               const jsonString = errorMessage.substring(jsonStart, jsonEnd);
+
+               const extractedData = JSON.parse(jsonString);
+               console.log('Successfully extracted categories from error message:', extractedData);
+
+               if (Array.isArray(extractedData)) {
+                  setCategories(extractedData);
+                  return; // Thoát sớm vì đã xử lý thành công dữ liệu
+               }
+            } catch (parseError) {
+               console.error('Failed to parse categories from error message:', parseError);
+            }
+         }
+
+         // Nếu không thể trích xuất được dữ liệu từ lỗi, gán mảng rỗng
+         setCategories([]);
+      }
+   }, []);
+
+   useEffect(() => {
+      fetchCategories();
+   }, [fetchCategories]);
+
    return (
       <>
          {/* This is where we'll use the Suspense component to handle searchParams */}
@@ -306,15 +420,15 @@ function NavBarContent() {
                   {isLoggedIn &&
                      (currentProductDetailId
                         ? getProductDetailCount(currentProductDetailId) > 0 && (
-                             <span className='absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center'>
-                                {getProductDetailCount(currentProductDetailId)}
-                             </span>
-                          )
+                           <span className='absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center'>
+                              {getProductDetailCount(currentProductDetailId)}
+                           </span>
+                        )
                         : cartItemCount > 0 && (
-                             <span className='absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center'>
-                                {cartItemCount}
-                             </span>
-                          ))}
+                           <span className='absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center'>
+                              {cartItemCount}
+                           </span>
+                        ))}
                </button>
                <button onClick={toggleMobileMenu} className='text-[#553C26]'>
                   {mobileMenuOpen ? (
@@ -338,48 +452,29 @@ function NavBarContent() {
                      </button>
                   </Link>
                   <div className='absolute hidden group-hover:block bg-[#F1EEE9] shadow-lg rounded-lg w-36 font-semibold z-50'>
-                     <Link
-                        href='/user/products/candles'
-                        className='block px-4 py-2 text-[#553C26] hover:bg-[#E2DED8]'
-                     >
-                        Nến Thơm
-                     </Link>
+                     {categories.map((category, index) => (
+                        <React.Fragment key={category.id}>
+                           <Link
+                              href={`/user/products/category/${category.id}`}
+                              className='block px-4 py-2 text-[#553C26] hover:bg-[#E2DED8]'
+                           >
+                              {category.name}
+                           </Link>
+                           {index < categories.length - 1 && <hr className='border-[#553C26]' />}
+                        </React.Fragment>
+                     ))}
                      <hr className='border-[#553C26]' />
-                     <Link
-                        href='/user/products/scents'
-                        className='block px-4 py-2 text-[#553C26] hover:bg-[#E2DED8]'
-                     >
-                        Tinh Dầu
-                     </Link>
-                     <hr className='border-[#553C26]' />
-                     <Link
-                        href='/user/products/accessories'
-                        className='block px-4 py-2 text-[#553C26] hover:bg-[#E2DED8]'
-                     >
-                        Phụ Kiện Nến
-                     </Link>
-                     <hr className='border-[#553C26]' />
-                     <Link
-                        href='/products/accessories'
-                        className='block px-4 py-2 text-[#553C26] hover:bg-[#E2DED8]'
-                     >
-                        Quà Tặng
-                     </Link>
-                     <hr className='border-[#553C26]' />
-
-                     <Link
-                        href='/user/products/vouchers'
-                        className='block px-4 py-2 text-[#553C26] hover:bg-[#E2DED8]'
-                     >
-                        Danh sách mã khuyến mãi 
-                     </Link>
                   </div>
                </div>
-               
+               <Link href='/user/products/vouchers'>
+                  <button className='text-base xl:text-lg hover:text-[#FF9900] focus:font-semibold focus:text-[#FF9900] font-mont hover:font-semibold'>
+                     Mã Giảm Giá
+                  </button>
+               </Link>
                <Link href='/user/aboutshop'>
-               <button className='text-base xl:text-lg hover:text-[#FF9900] focus:font-semibold focus:text-[#FF9900] font-mont hover:font-semibold'>
-                  Về Chúng Tôi
-               </button>
+                  <button className='text-base xl:text-lg hover:text-[#FF9900] focus:font-semibold focus:text-[#FF9900] font-mont hover:font-semibold'>
+                     Về Chúng Tôi
+                  </button>
                </Link>
                <Link href='https://www.facebook.com/' target='_blank'>
                   <button className='text-base xl:text-lg hover:text-[#FF9900] focus:font-semibold focus:text-[#FF9900] font-mont hover:font-semibold'>
@@ -415,23 +510,22 @@ function NavBarContent() {
                   {isLoggedIn &&
                      (currentProductDetailId
                         ? getProductDetailCount(currentProductDetailId) > 0 && (
-                             <span className='absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center'>
-                                {getProductDetailCount(currentProductDetailId)}
-                             </span>
-                          )
+                           <span className='absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center'>
+                              {getProductDetailCount(currentProductDetailId)}
+                           </span>
+                        )
                         : cartItemCount > 0 && (
-                             <span className='absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center'>
-                                {cartItemCount}
-                             </span>
-                          ))}
+                           <span className='absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center'>
+                              {cartItemCount}
+                           </span>
+                        ))}
                </button>
 
                <div className='relative'>
                   <button
                      onClick={handleUserIconClick}
-                     className={`text-[#553C26] p-2 rounded-full ${
-                        isLoggedIn ? 'bg-amber-100' : ''
-                     }`}
+                     className={`text-[#553C26] p-2 rounded-full ${isLoggedIn ? 'bg-amber-100' : ''
+                        }`}
                   >
                      <UserIcon className='size-5' />
                   </button>
@@ -496,21 +590,17 @@ function NavBarContent() {
                         </span>
                      </Link>
                      <div className='ml-4 mt-2 space-y-2'>
-                        <Link href='/user/products/candles' onClick={toggleMobileMenu}>
-                           <span className='block text-[#553C26] hover:text-[#FF9900]'>
-                              Nến Thơm
-                           </span>
-                        </Link>
-                        <Link href='/products/holders' onClick={toggleMobileMenu}>
-                           <span className='block text-[#553C26] hover:text-[#FF9900]'>
-                              Tinh Dầu
-                           </span>
-                        </Link>
-                        <Link href='/products/scents' onClick={toggleMobileMenu}>
-                           <span className='block text-[#553C26] hover:text-[#FF9900]'>
-                              Phụ Kiện Nến
-                           </span>
-                        </Link>
+                        {categories.map((category) => (
+                           <Link
+                              key={category.id}
+                              href={`/user/products/category/${category.id}`}
+                              onClick={toggleMobileMenu}
+                           >
+                              <span className='block text-[#553C26] hover:text-[#FF9900]'>
+                                 {category.name}
+                              </span>
+                           </Link>
+                        ))}
                         <Link href='/products/accessories' onClick={toggleMobileMenu}>
                            <span className='block text-[#553C26] hover:text-[#FF9900]'>
                               Quà Tặng
