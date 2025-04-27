@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import Header from '@/app/components/user/nav/page';
 import Footer from '@/app/components/user/footer/page';
+import { useCart } from '@/app/contexts/CartContext';
 
 // Interfaces
 interface CartItem {
@@ -53,6 +54,7 @@ const formatPrice = (price: number): string => {
 
 export default function CartPage() {
    const router = useRouter();
+   const { updateCartBadge } = useCart();
    const [cartItems, setCartItems] = useState<CartItem[]>([]);
    const [loading, setLoading] = useState(true);
    const [error, setError] = useState<string | null>(null);
@@ -448,6 +450,7 @@ export default function CartPage() {
       if (newQuantity < 0) return;
 
       const updatedItems = [...cartItems];
+      const oldQuantity = updatedItems[index].quantity;
 
       if (newQuantity === 0) {
          // If quantity becomes zero, remove from local cart
@@ -463,6 +466,16 @@ export default function CartPage() {
 
       // Recalculate totals
       calculateTotals(updatedItems);
+      
+      // Update badge - adjust by the difference in quantity
+      const quantityDifference = newQuantity - oldQuantity;
+      if (quantityDifference !== 0) {
+         const currentBadge = localStorage.getItem('cartBadge');
+         if (currentBadge) {
+            const newBadgeCount = Math.max(0, parseInt(currentBadge) + quantityDifference);
+            updateCartBadge(newBadgeCount);
+         }
+      }
 
       // If logged in, update API cart item
       updateApiCartItem(updatedItems[index]);
@@ -500,6 +513,9 @@ export default function CartPage() {
       setCartItems(updatedItems);
       localStorage.setItem('cart', JSON.stringify(updatedItems));
       calculateTotals(updatedItems);
+
+      // Update badge when removing an item - subtract the quantity from badge
+      updateCartBadge(totalQuantity - itemToRemove.quantity);
 
       // If logged in, remove from API cart by setting quantity to 0
       if (userId && apiCart) {
@@ -629,9 +645,8 @@ export default function CartPage() {
 
             {/* Sync message */}
             {syncMessage && (
-               <div
-                  className={`mb-4 p-3 bg-blue-50 text-blue-700 rounded-md flex items-center ${syncing ? 'justify-between' : 'justify-center'
-                     }`}
+               <div className={`mb-4 p-3 bg-blue-50 text-blue-700 rounded-md flex items-center ${syncing ? 'justify-between' : 'justify-center'
+                  }`}
                >
                   <span>{syncMessage}</span>
                   {syncing && (

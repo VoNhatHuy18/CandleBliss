@@ -10,7 +10,7 @@ import { useRouter } from 'next/navigation';
 import {
     ChevronDownIcon,
     ChevronRightIcon,
-    PencilIcon,
+
     TrashIcon,
     PlusIcon,
     MagnifyingGlassIcon,
@@ -672,8 +672,7 @@ const ProductTable = ({
     products,
     loading,
     fetchAllProductData,
-    handleEditProduct,
-    handleDeleteProduct,
+   
     getCategoryNameById,
     showToast, // Destructured prop
     openStockReceiptModal,

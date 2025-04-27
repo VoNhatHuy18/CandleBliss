@@ -62,6 +62,7 @@ interface Product {
    details?: ProductDetail[];
    pricing?: Price[];
    categories?: Category[];
+   createdAt?: string;
 }
 
 interface ProductViewModel extends Product {
@@ -182,8 +183,7 @@ const ProductTable = ({
    currentPage: number;
    setCurrentPage: (page: number) => void;
 }) => {
-   // Remove the local currentPage state since it's now coming from props
-   // const [currentPage, setCurrentPage] = useState(1); // Delete this line
+
 
    const [expandedProduct, setExpandedProduct] = useState<number | null>(null);
    const [detailPrices, setDetailPrices] = useState<
@@ -625,9 +625,10 @@ const ProductTable = ({
          ) : (
             <div>
                {/* Header */}
-               <div className='hidden md:grid grid-cols-6 bg-gray-50 px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider'>
+               <div className='hidden md:grid grid-cols-7 bg-gray-50 px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider'>
                   <div className='col-span-2'>Sản phẩm</div>
                   <div>Mã sản phẩm</div>
+                  <div>Ngày tạo</div>
                   <div>Số lượng phiên bản</div>
                   <div>Trạng thái</div>
                   <div className='text-right'>Thao tác</div>
@@ -646,7 +647,7 @@ const ProductTable = ({
                         className='border-b last:border-b-0 transition hover:bg-gray-50/50'
                      >
                         {/* Main product row */}
-                        <div className='grid grid-cols-1 md:grid-cols-6 px-6 py-4'>
+                        <div className='grid grid-cols-1 md:grid-cols-7 px-6 py-4'>
                            {/* Mobile view */}
                            <div className='md:hidden flex justify-between items-center mb-3'>
                               <div className='flex items-center'>
@@ -744,21 +745,40 @@ const ProductTable = ({
                                     <p className='text-sm font-medium text-gray-800 truncate'>
                                        {product.name}
                                     </p>
-                                    <p className='text-xs text-gray-500 mt-1 truncate'>
-                                       {product.category_id
-                                          ? categoryNames[product.category_id]
-                                             ? `${categoryNames[product.category_id]} `
-                                             : `Đang tải... (ID: ${product.category_id})`
-                                          : product.categories && product.categories.length > 0
-                                             ? `${product.categories[0].name} `
-                                             : 'Chưa có danh mục'}
-                                    </p>
+                                    <div className='flex flex-wrap items-center gap-x-2 mt-1'>
+                                       <p className='text-xs text-gray-500 truncate'>
+                                          {product.category_id
+                                             ? categoryNames[product.category_id]
+                                                ? `${categoryNames[product.category_id]} `
+                                                : `Đang tải... (ID: ${product.category_id})`
+                                             : product.categories && product.categories.length > 0
+                                                ? `${product.categories[0].name} `
+                                                : 'Chưa có danh mục'}
+                                       </p>
+                                       {product.createdAt && (
+                                          <p className='text-xs text-gray-500'>
+                                             <span className="inline-flex items-center">
+                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                                </svg>
+                                                {formatDate(product.createdAt)}
+                                             </span>
+                                          </p>
+                                       )}
+                                    </div>
                                  </div>
                               </div>
                            </div>
 
                            <div className='hidden md:flex items-center'>
                               <span className='text-sm text-gray-700'>#{product.id}</span>
+                           </div>
+
+                           {/* New column for creation date */}
+                           <div className='hidden md:flex items-center'>
+                              <span className='text-sm text-gray-700'>
+                                 {product.createdAt ? formatDate(product.createdAt) : '—'}
+                              </span>
                            </div>
 
                            <div className='hidden md:flex items-center'>

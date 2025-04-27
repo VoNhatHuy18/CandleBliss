@@ -602,6 +602,17 @@ const ReviewTable = ({
     );
 };
 
+// Các hàm quản lý thời gian đánh giá trong localStorage
+const saveRatingTimes = (ratingsWithTimes: Record<number, string>) => {
+    localStorage.setItem('ratingTimes', JSON.stringify(ratingsWithTimes));
+};
+
+const getRatingTimes = (): Record<number, string> => {
+    if (typeof window === 'undefined') return {}; // Server-side check
+    const saved = localStorage.getItem('ratingTimes');
+    return saved ? JSON.parse(saved) : {};
+};
+
 export default function ReviewsManagement() {
     const [reviews, setReviews] = useState<EnhancedRating[]>([]);
     const [loading, setLoading] = useState<boolean>(true);
@@ -609,7 +620,6 @@ export default function ReviewsManagement() {
     const [activeTab, setActiveTab] = useState<string>('Tất cả');
     const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState<boolean>(false);
     const [reviewToDelete, setReviewToDelete] = useState<number | null>(null);
-
     const [toast, setToast] = useState({
         show: false,
         message: '',
@@ -643,6 +653,9 @@ export default function ReviewsManagement() {
     const fetchAllReviews = useCallback(async () => {
         try {
             setLoading(true);
+
+            // Load thời gian trực tiếp từ localStorage thay vì sử dụng state
+            const currentRatingTimes = getRatingTimes();
 
             // Get token
             const token = localStorage.getItem('token') || sessionStorage.getItem('token');
@@ -723,14 +736,24 @@ export default function ReviewsManagement() {
                             const enhancedProductRatings = ratingsData.map((rating: RatingData) => {
                                 const user = usersMap.get(rating.user_id);
 
+                                // Kiểm tra nếu đã có thời gian lưu trong localStorage
+                                let ratingTime = currentRatingTimes[rating.id];
+
+                                // Nếu chưa có, tạo thời gian mới và cập nhật localStorage
+                                if (!ratingTime) {
+                                    ratingTime = new Date().toISOString();
+                                    currentRatingTimes[rating.id] = ratingTime;
+                                    saveRatingTimes(currentRatingTimes);
+                                }
+
                                 return {
                                     id: rating.id,
                                     product_id: product.id,
                                     user_id: rating.user_id,
-                                    rating: rating.rating || rating.avg_rating || 0,
-                                    comment: rating.comment || '',
-                                    created_at: rating.created_at || new Date().toISOString(),
-                                    updated_at: rating.updated_at || new Date().toISOString(),
+                                    rating: rating.rating ?? rating.avg_rating ?? 0,
+                                    comment: rating.comment ?? '',
+                                    created_at: ratingTime,
+                                    updated_at: ratingTime,
                                     product_name: product.name,
                                     product_image: product.images && product.images.length > 0
                                         ? product.images[0].path
@@ -905,6 +928,13 @@ export default function ReviewsManagement() {
             result = result.filter(review => review.product?.category_id === selectedCategory);
         }
 
+        // Sắp xếp theo thời gian tạo mới nhất
+        result.sort((a, b) => {
+            const dateA = new Date(a.created_at);
+            const dateB = new Date(b.created_at);
+            return dateB.getTime() - dateA.getTime(); // Sắp xếp giảm dần (mới nhất lên đầu)
+        });
+
         return result;
     }, [reviews, activeTab, selectedCategory]);
 
@@ -1008,7 +1038,7 @@ export default function ReviewsManagement() {
                             >
                                 <path
                                     fillRule='evenodd'
-                                    d='M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z'
+                                    d='M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 001.414 1.414L10 11.414l1.293 1.293a1 1 00-1.414-1.414L10 8.586 8.707 7.293z'
                                     clipRule='evenodd'
                                 />
                             </svg>

@@ -8,6 +8,7 @@ import { UserIcon, ShoppingBagIcon, Bars3Icon, XMarkIcon } from '@heroicons/reac
 import Image from 'next/image';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { jwtDecode } from 'jwt-decode';
+import { useCart } from '@/app/contexts/CartContext';
 
 // Loading component
 const NavBarLoading = () => (
@@ -68,6 +69,8 @@ function SearchParamsHandler({ onUpdate }: { onUpdate: (productDetailId: number 
 
 // Main NavBar component
 function NavBarContent() {
+   const { localCartBadge, setLocalCartBadge, updateCartBadge } = useCart();
+
    const [showSearchInput, setShowSearchInput] = useState(false);
    const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
    const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -82,9 +85,6 @@ function NavBarContent() {
 
    const router = useRouter();
    const pathname = usePathname();
-
-   // Rest of your component code
-   // ...
 
    // Handle update from SearchParamsHandler
    const handleSearchParamsUpdate = useCallback((productDetailId: number | null) => {
@@ -105,19 +105,18 @@ function NavBarContent() {
       localStorage.removeItem('token');
       localStorage.removeItem('refreshToken');
       localStorage.removeItem('userId');
+      localStorage.removeItem('cartBadge'); // Clear badge on logout
 
       setIsLoggedIn(false);
       setUserName(null);
       setUserId(null);
       setShowUserMenu(false);
+      updateCartBadge(0); // Use context method to reset badge
 
       router.push('/user/home');
-   }, [router]);
+   }, [router, updateCartBadge]); // Add updateCartBadge to dependencies
 
-   // Rest of your functions and useEffects
-   // ...
 
-   // Keep all your original code, just replacing the searchParams usage
    const checkAuthStatus = useCallback(() => {
       const token = localStorage.getItem('token');
 
@@ -172,6 +171,11 @@ function NavBarContent() {
                );
                setCartItemCount(count);
 
+               // Use updateCartBadge from context which also updates localStorage
+               if (count > 0) {
+                  updateCartBadge(count);
+               }
+
                const detailCounts: { [key: number]: number } = {};
                cartData.items.forEach((item: CartItem) => {
                   if (item.productDetailId) {
@@ -179,20 +183,12 @@ function NavBarContent() {
                   }
                });
                setProductDetailCounts(detailCounts);
-            } else {
-               setCartItemCount(0);
-               setProductDetailCounts({});
             }
-         } else {
-            setCartItemCount(0);
-            setProductDetailCounts({});
          }
       } catch (error) {
          console.error('Error fetching cart count:', error);
-         setCartItemCount(0);
-         setProductDetailCounts({});
       }
-   }, [userId]);
+   }, [userId, updateCartBadge]); // Add updateCartBadge to dependencies
 
    useEffect(() => {
       if (isLoggedIn && userId) {
@@ -202,6 +198,20 @@ function NavBarContent() {
          setProductDetailCounts({});
       }
    }, [isLoggedIn, userId, pathname, fetchCartItemCount]);
+
+   useEffect(() => {
+      if (cartItemCount > 0) {
+         localStorage.setItem('cartBadge', cartItemCount.toString());
+      }
+   }, [cartItemCount]);
+
+   // Remove or modify this useEffect if you're managing the badge through context
+   // You can either remove it completely or keep it for double-safety
+   useEffect(() => {
+      if (cartItemCount > 0) {
+         updateCartBadge(cartItemCount);
+      }
+   }, [cartItemCount, updateCartBadge]);
 
    const getProductDetailCount = (productDetailId: number | null): number => {
       if (!productDetailId) return 0;
@@ -385,6 +395,29 @@ function NavBarContent() {
       fetchCategories();
    }, [fetchCategories]);
 
+   useEffect(() => {
+      // Listen for badge updates from anywhere in the application
+      const handleBadgeUpdate = (event: CustomEvent) => {
+         const { count } = event.detail;
+         // Update your state with the new count
+         setLocalCartBadge(count);
+      };
+
+      // Add event listener with proper type casting
+      window.addEventListener('cartBadgeUpdated', handleBadgeUpdate as EventListener);
+
+      // Load initial badge from localStorage
+      const savedBadge = localStorage.getItem('cartBadge');
+      if (savedBadge) {
+         setLocalCartBadge(parseInt(savedBadge));
+      }
+
+      // Cleanup event listener
+      return () => {
+         window.removeEventListener('cartBadgeUpdated', handleBadgeUpdate as EventListener);
+      };
+   }, []);
+
    return (
       <>
          {/* This is where we'll use the Suspense component to handle searchParams */}
@@ -417,18 +450,14 @@ function NavBarContent() {
                </button>
                <button onClick={handleCartClick} className='text-[#553C26] relative'>
                   <ShoppingBagIcon className='size-5' />
-                  {isLoggedIn &&
-                     (currentProductDetailId
-                        ? getProductDetailCount(currentProductDetailId) > 0 && (
-                           <span className='absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center'>
-                              {getProductDetailCount(currentProductDetailId)}
-                           </span>
-                        )
-                        : cartItemCount > 0 && (
-                           <span className='absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center'>
-                              {cartItemCount}
-                           </span>
-                        ))}
+                  {isLoggedIn && (
+                     // Đơn giản hóa điều kiện hiển thị, ưu tiên hiển thị badge sản phẩm chi tiết, nếu không có thì hiển thị badge tổng
+                     <span className='absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center'>
+                        {currentProductDetailId && getProductDetailCount(currentProductDetailId) > 0
+                           ? getProductDetailCount(currentProductDetailId)
+                           : localCartBadge > 0 ? localCartBadge : cartItemCount > 0 ? cartItemCount : null}
+                     </span>
+                  )}
                </button>
                <button onClick={toggleMobileMenu} className='text-[#553C26]'>
                   {mobileMenuOpen ? (
@@ -507,18 +536,14 @@ function NavBarContent() {
                </div>
                <button onClick={handleCartClick} className='text-[#553C26] relative'>
                   <ShoppingBagIcon className='size-5' />
-                  {isLoggedIn &&
-                     (currentProductDetailId
-                        ? getProductDetailCount(currentProductDetailId) > 0 && (
-                           <span className='absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center'>
-                              {getProductDetailCount(currentProductDetailId)}
-                           </span>
-                        )
-                        : cartItemCount > 0 && (
-                           <span className='absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center'>
-                              {cartItemCount}
-                           </span>
-                        ))}
+                  {isLoggedIn && (
+                     // Đơn giản hóa điều kiện hiển thị, ưu tiên hiển thị badge sản phẩm chi tiết, nếu không có thì hiển thị badge tổng
+                     <span className='absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center'>
+                        {currentProductDetailId && getProductDetailCount(currentProductDetailId) > 0
+                           ? getProductDetailCount(currentProductDetailId)
+                           : localCartBadge > 0 ? localCartBadge : cartItemCount > 0 ? cartItemCount : null}
+                     </span>
+                  )}
                </button>
 
                <div className='relative'>

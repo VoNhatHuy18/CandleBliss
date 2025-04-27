@@ -5,7 +5,7 @@ import Link from 'next/link';
 import Header from '@/app/components/seller/header/page';
 import MenuSideBar from '@/app/components/seller/menusidebar/page';
 import { useRouter } from 'next/navigation';
-import { useProductForm } from '@/app/context/ProductFormContext';
+import { useProductForm } from '@/app/contexts/ProductFormContext';
 
 // Define the variant interface
 interface Variant {

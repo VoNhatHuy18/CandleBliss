@@ -45,6 +45,8 @@ interface Product {
     images: ProductImage | ProductImage[];
     details?: ProductDetail[];
     categoryId: number; // Add this field to track category
+    category_id?: number; // Thêm field này để hỗ trợ API trả về dưới tên khác
+    categories?: Array<{ id: number, name: string }>;
 }
 
 interface Category {
@@ -458,10 +460,21 @@ export default function CategoryProductsPage() {
                 }
                 const productsData: Product[] = await productsResponse.json();
 
-                // Filter products by category
-                const categoryProducts = productsData.filter(
-                    product => product.categoryId === categoryId
-                );
+                // Sửa phần lọc sản phẩm theo danh mục
+                const categoryProducts = productsData.filter(product => {
+                    // Kiểm tra cả hai trường hợp: categoryId hoặc category_id
+                    if (product.categoryId === categoryId) return true;
+                    if (product.category_id === categoryId) return true;
+
+                    // Kiểm tra trong mảng categories nếu có
+                    if (product.categories && Array.isArray(product.categories)) {
+                        return product.categories.some(cat => cat.id === categoryId);
+                    }
+
+                    return false;
+                });
+
+                console.log(`Tìm thấy ${categoryProducts.length} sản phẩm cho danh mục ID ${categoryId}`);
 
                 // Normalize products
                 const normalizedProducts = categoryProducts.map((product) => ({
@@ -687,27 +700,7 @@ export default function CategoryProductsPage() {
         }
     };
 
-    // Handle search query changes
-    const handleSearch = (query: string) => {
-        if (loading) return;
 
-        setSearchQuery(query);
-
-        if (products.length > 0 && originalProducts.length > 0) {
-            const productsToFilter = sortOption === 'default' ? originalProducts : products;
-
-            const newFilteredProducts = applyFiltersAndSort(
-                productsToFilter,
-                originalProducts,
-                query,
-                selectedPriceRange,
-                sortOption
-            );
-
-            setFilteredProducts(newFilteredProducts);
-            setCurrentPage(1);
-        }
-    };
 
     // Get products for current page
     const getPaginatedProducts = () => {

@@ -7,6 +7,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Header from '@/app/components/user/nav/page';
 import Footer from '@/app/components/user/footer/page';
 import ViewedCarousel from '@/app/components/user/viewedcarousel/page';
+import { incrementCartBadge } from '@/app/utils/cartBadgeManager';
 
 interface ProductImage {
    id: string;
@@ -737,6 +738,7 @@ export default function ProductDetailPage() {
 
       setShowCartNotification(true);
       setTimeout(() => setShowCartNotification(false), 3000);
+      incrementCartBadge(quantity);
    };
 
    const handleBuyNow = () => {
@@ -1134,6 +1136,7 @@ export default function ProductDetailPage() {
                         <button className='bg-orange-50 border border-orange-700 py-3 text-sm text-orange-700 rounded hover:bg-orange-100 transition font-medium'>
                            Nhắn tin với shop
                         </button>
+
                      </div>
                   </div>
                </div>
