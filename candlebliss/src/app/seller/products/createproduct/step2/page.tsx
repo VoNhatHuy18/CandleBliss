@@ -62,7 +62,7 @@ export default function Step2() {
       },
       images: {
          maxFiles: 5,
-         allowedTypes: ['image/jpeg', 'image/png', 'image/gif'],
+         allowedTypes: ['image/jpeg', 'image/png', 'image/gif', 'image/jpg', 'image/webp'],
          maxSize: 5 * 1024 * 1024, // 5MB
       },
    };
