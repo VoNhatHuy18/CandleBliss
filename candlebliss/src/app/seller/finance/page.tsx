@@ -3,8 +3,7 @@
 import Link from 'next/link';
 import Header from '@/app/components/seller/header/page';
 import Sidebar from '@/app/components/seller/menusidebar/page';
-import Image from 'next/image';
-import { useState, useEffect, SetStateAction, useCallback, useMemo } from 'react';
+import { useEffect, useState, SetStateAction, useCallback, useMemo } from 'react';
 import {
    Search,
    DollarSign,
@@ -19,18 +18,16 @@ import {
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import {
-   Chart as ChartJS,
+   Chart,
    CategoryScale,
    LinearScale,
    BarElement,
    Title,
    Tooltip,
-   Legend
+   Legend,
 } from 'chart.js';
 import { Bar } from 'react-chartjs-2';
-
-// Đăng ký các thành phần cần thiết của Chart.js
-ChartJS.register(
+Chart.register(
    CategoryScale,
    LinearScale,
    BarElement,
@@ -38,6 +35,10 @@ ChartJS.register(
    Tooltip,
    Legend
 );
+import { formatDistanceToNow } from 'date-fns';
+import { vi } from 'date-fns/locale';
+// Register Chart.js components
+
 
 // Define interface for order item
 interface OrderItem {
@@ -74,11 +75,21 @@ interface Order {
    user?: User; // Thêm trường user
 }
 
-// Hàm cập nhật dữ liệu cho biểu đồ
-interface ChartData {
+// Rename this interface to avoid conflicts with the imported ChartData
+interface FinanceChartData {
    totalRevenue: number;
    totalOrderValue: number;
    totalShippingFee: number;
+}
+
+// Add this new interface:
+interface NewCustomer {
+   id: number;
+   firstName: string;
+   lastName: string;
+   email: string;
+   createdAt: string;
+   phone?: number | null;
 }
 
 export default function FinancePage() {
@@ -130,6 +141,9 @@ export default function FinancePage() {
    // Add this state
    const [chartView, setChartView] = useState<'current' | 'historical'>('historical');
 
+   // Add this state inside your component:
+   const [newCustomers, setNewCustomers] = useState<NewCustomer[]>([]);
+
    useEffect(() => {
       // Kích hoạt animation khi component mount
       setAnimateStats(true);
@@ -152,6 +166,9 @@ export default function FinancePage() {
       } else {
          updateHistoricalChart();
       }
+
+      // Add this line to your existing useEffect that handles initial data loading
+      fetchNewCustomers();
    }, [timeFilter, timeValue, year, chartView]);
 
    // Modify the fetchStatisticsData function to properly filter orders
@@ -279,15 +296,30 @@ export default function FinancePage() {
    }, [orders]);
 
    const handleTimeFilterChange = (event: { target: { value: SetStateAction<string>; }; }) => {
-      setTimeFilter(event.target.value);
+      const newTimeFilter = event.target.value as string;
+      setTimeFilter(newTimeFilter);
+
       // Reset timeValue based on new filter
-      if (event.target.value === 'month') {
+      if (newTimeFilter === 'month') {
          setTimeValue(4); // Default to April
-      } else if (event.target.value === 'week') {
+      } else if (newTimeFilter === 'week') {
          setTimeValue(16); // Example week number
       } else {
          setTimeValue(2025); // Current year
       }
+
+      // Cập nhật lại dữ liệu khi thay đổi bộ lọc
+      setTimeout(() => {
+         generateSampleHistoricalData();
+         setupChartOptions();
+
+         if (chartView === 'current') {
+            updateCurrentPeriodChart();
+         } else {
+            // Gọi sau khi đã cập nhật historicalData
+            updateHistoricalChart();
+         }
+      }, 0);
    };
 
    const stats = [
@@ -313,7 +345,7 @@ export default function FinancePage() {
          value: `${statsData.totalShippingFee?.toLocaleString()} VND`,
          trend: 'Phí vận chuyển',
          bg: 'bg-gradient-to-br from-green-50 to-green-100',
-         icon: <Truck className='text-green-500' size={28} />,
+         icon: <Truck className='text-green-500' size={28} />
       },
       {
          id: 4,
@@ -331,12 +363,6 @@ export default function FinancePage() {
          bg: 'bg-gradient-to-br from-indigo-50 to-indigo-100',
          icon: <Star className='text-indigo-500' size={28} />,
       },
-   ];
-
-   const newCustomers = [
-      { id: 1, name: 'Courtney Henry', image: '/images/courtney.png' },
-      { id: 2, name: 'Jenny Wilson', image: '/images/jenny.png' },
-      { id: 3, name: 'Cameron Williamson', image: '/images/cameron.png' },
    ];
 
    const filteredOrders = useMemo(() => {
@@ -365,6 +391,241 @@ export default function FinancePage() {
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, worksheet, 'Đơn hàng thành công');
       XLSX.writeFile(workbook, 'completed_orders.xlsx');
+   };
+
+   // Hàm xuất báo cáo tổng quan tài chính chuyên nghiệp
+   const exportFinancialOverview = () => {
+      // Tạo timestamp cho tên file
+      const dateStr = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      const currentDate = new Date().toLocaleDateString('vi-VN');
+
+      // Định dạng tiêu đề báo cáo
+      const title = timeFilter === 'week' ? `Tuần ${timeValue}/${year}` :
+         timeFilter === 'month' ? `Tháng ${timeValue}/${year}` :
+            `Năm ${year}`;
+
+      // Tạo workbook mới
+      const workbook = XLSX.utils.book_new();
+
+      // SHEET 1: TRANG TỔNG QUAN
+      // -------------------
+      // Tạo dữ liệu cho summary sheet (trang tóm tắt) với tiêu đề lớn
+      const summaryData = [
+         ["BÁO CÁO TÀI CHÍNH TỔNG QUAN"], [""],
+         ["Tên cửa hàng:", "CandleBliss"],
+         ["Kỳ báo cáo:", title],
+         ["Ngày xuất báo cáo:", currentDate],
+         ["Người xuất báo cáo:", "Admin"],
+         [""],
+         ["THỐNG KÊ CHỈ SỐ TÀI CHÍNH CHÍNH"], [""],
+         ["Chỉ số", "Giá trị", "Phân tích"],
+         ["Tổng doanh thu", `${statsData.totalRevenue.toLocaleString()} VND`, statsData.totalRevenue > 10000000 ? "Đạt chỉ tiêu" : "Chưa đạt chỉ tiêu"],
+         ["Tổng giá trị đơn hàng", `${statsData.totalOrderValue.toLocaleString()} VND`, ""],
+         ["Tổng phí vận chuyển", `${statsData.totalShippingFee.toLocaleString()} VND`, ""],
+         ["Tổng số đơn hàng", statsData.totalOrders.toString(), ""],
+         ["Giá trị trung bình/đơn", statsData.totalOrders > 0 ? `${Math.round(statsData.totalOrderValue / statsData.totalOrders).toLocaleString()} VND` : "0 VND", ""],
+         [""],
+         ["BIỂU ĐỒ VÀ THỐNG KÊ CHI TIẾT"],
+         ["Tham khảo phần biểu đồ trong file đính kèm hoặc trang quản trị."]
+      ];
+
+      // Tạo worksheet summary từ mảng dữ liệu
+      const summarySheet = XLSX.utils.aoa_to_sheet(summaryData);
+
+      // Thiết lập style cho các tiêu đề
+      const merges = [
+         { s: { r: 0, c: 0 }, e: { r: 0, c: 2 } },  // Merge ô tiêu đề chính
+         { s: { r: 7, c: 0 }, e: { r: 7, c: 2 } },  // Merge ô tiêu đề thống kê
+         { s: { r: 15, c: 0 }, e: { r: 15, c: 2 } } // Merge ô tiêu đề biểu đồ
+      ];
+      summarySheet['!merges'] = merges;
+
+      // Thiết lập độ rộng cho các cột
+      summarySheet['!cols'] = [
+         { width: 25 },  // Cột A
+         { width: 25 },  // Cột B
+         { width: 25 }   // Cột C
+      ];
+
+      // Thêm sheet summary vào workbook
+      XLSX.utils.book_append_sheet(workbook, summarySheet, 'Tổng quan');
+
+      // SHEET 2: CHI TIẾT ĐƠN HÀNG
+      // -------------------
+      if (completedOrders.length > 0) {
+         // Tạo header chuyên nghiệp cho sheet đơn hàng
+         const orderHeader = [
+            [`BÁO CÁO CHI TIẾT ĐƠN HÀNG - ${title}`], [""],
+            ["Ngày xuất báo cáo:", currentDate],
+            ["Tổng số đơn hàng:", completedOrders.length.toString()],
+            [""],
+         ];
+
+         // Tạo dữ liệu chi tiết đơn hàng
+         const orderDetails = completedOrders.map((order, index) => ({
+            "STT": index + 1,
+            "Mã đơn hàng": order.orderId,
+            "Khách hàng": order.customer,
+            "Địa chỉ": order.address,
+            "Số lượng": order.quantity,
+            "Phí vận chuyển": `${order.shippingFee.toLocaleString()} VND`,
+            "Tổng thanh toán": `${order.total.toLocaleString()} VND`,
+            "Trạng thái": order.status,
+            "Ngày": order.date
+         }));
+
+         // Tạo worksheet từ header
+         const orderSheet = XLSX.utils.aoa_to_sheet(orderHeader);
+
+         // Thêm data chi tiết vào sheet (bắt đầu từ dòng sau header)
+         XLSX.utils.sheet_add_json(orderSheet, orderDetails, {
+            origin: "A" + (orderHeader.length + 1),
+            skipHeader: false
+         });
+
+         // Thiết lập merge cells cho tiêu đề
+         const orderMerges = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 8 } }]; // Merge tiêu đề chính
+         orderSheet['!merges'] = orderMerges;
+
+         // Thiết lập độ rộng cột
+         orderSheet['!cols'] = [
+            { width: 5 },  // STT
+            { width: 15 }, // Mã đơn hàng
+            { width: 20 }, // Khách hàng
+            { width: 30 }, // Địa chỉ
+            { width: 10 }, // Số lượng
+            { width: 15 }, // Phí vận chuyển
+            { width: 15 }, // Tổng thanh toán
+            { width: 20 }, // Trạng thái
+            { width: 15 }  // Ngày
+         ];
+
+         // Thêm sheet vào workbook
+         XLSX.utils.book_append_sheet(workbook, orderSheet, 'Chi tiết đơn hàng');
+      }
+
+      // SHEET 3: DỮ LIỆU LỊCH SỬ
+      // -------------------
+      if (historicalData.length > 0) {
+         // Tạo header cho sheet lịch sử
+         const historyHeader = [
+            [`BÁO CÁO DỮ LIỆU LỊCH SỬ - ${timeFilter === 'week' ? 'THEO TUẦN' : timeFilter === 'month' ? 'THEO THÁNG' : 'THEO NĂM'}`], [""],
+            ["Ngày xuất báo cáo:", currentDate],
+            ["Số kỳ báo cáo:", historicalData.length.toString()],
+            [""],
+         ];
+
+         // Tạo dữ liệu lịch sử
+         const historyDetails = historicalData.map(item => ({
+            "Thời gian": timeFilter === 'week' ? `Tuần ${item.timeValue}` :
+               timeFilter === 'month' ? `Tháng ${item.timeValue}` :
+                  `Năm ${item.timeValue}`,
+            "Doanh thu": item.totalRevenue.toLocaleString() + " VND",
+            "Tổng giá trị đơn hàng": item.totalOrderValue.toLocaleString() + " VND",
+            "Tổng phí vận chuyển": item.totalShippingFee.toLocaleString() + " VND",
+            "Số đơn hàng": item.totalOrders,
+            "Giá trị TB/đơn": item.totalOrders > 0 ?
+               Math.round(item.totalOrderValue / item.totalOrders).toLocaleString() + " VND" :
+               "0 VND"
+         }));
+
+         // Tính tổng và trung bình các giá trị
+         const totalRevenue = historicalData.reduce((sum, item) => sum + item.totalRevenue, 0);
+         const totalOrderValue = historicalData.reduce((sum, item) => sum + item.totalOrderValue, 0);
+         const totalShippingFee = historicalData.reduce((sum, item) => sum + item.totalShippingFee, 0);
+         const totalOrders = historicalData.reduce((sum, item) => sum + item.totalOrders, 0);
+
+         // Thêm dòng tổng vào cuối
+         historyDetails.push({
+            "Thời gian": "TỔNG CỘNG",
+            "Doanh thu": totalRevenue.toLocaleString() + " VND",
+            "Tổng giá trị đơn hàng": totalOrderValue.toLocaleString() + " VND",
+            "Tổng phí vận chuyển": totalShippingFee.toLocaleString() + " VND",
+            "Số đơn hàng": totalOrders,
+            "Giá trị TB/đơn": totalOrders > 0 ?
+               Math.round(totalOrderValue / totalOrders).toLocaleString() + " VND" :
+               "0 VND"
+         });
+
+         // Tạo worksheet từ header
+         const historySheet = XLSX.utils.aoa_to_sheet(historyHeader);
+
+         // Thêm data chi tiết vào sheet
+         XLSX.utils.sheet_add_json(historySheet, historyDetails, {
+            origin: "A" + (historyHeader.length + 1),
+            skipHeader: false
+         });
+
+         // Thiết lập merge cells cho tiêu đề
+         const historyMerges = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 5 } }];
+         historySheet['!merges'] = historyMerges;
+
+         // Thiết lập độ rộng cột
+         historySheet['!cols'] = [
+            { width: 15 }, // Thời gian
+            { width: 20 }, // Doanh thu
+            { width: 25 }, // Tổng giá trị đơn hàng
+            { width: 25 }, // Tổng phí vận chuyển
+            { width: 15 }, // Số đơn hàng
+            { width: 20 }  // Giá trị TB/đơn
+         ];
+
+         // Thêm sheet vào workbook
+         XLSX.utils.book_append_sheet(workbook, historySheet, 'Lịch sử');
+      }
+
+      // SHEET 4: KHÁCH HÀNG MỚI
+      // -------------------
+      if (newCustomers.length > 0) {
+         // Tạo header cho sheet khách hàng mới
+         const customerHeader = [
+            ["BÁO CÁO KHÁCH HÀNG MỚI (7 NGÀY GẦN NHẤT)"], [""],
+            ["Ngày xuất báo cáo:", currentDate],
+            ["Số khách hàng mới:", newCustomers.length.toString()],
+            [""],
+         ];
+
+         // Tạo dữ liệu khách hàng
+         const customerDetails = newCustomers.map((customer, index) => ({
+            "STT": index + 1,
+            "Họ": customer.lastName,
+            "Tên": customer.firstName,
+            "Email": customer.email,
+            "Số điện thoại": customer.phone || "Không có",
+            "Ngày đăng ký": new Date(customer.createdAt).toLocaleDateString('vi-VN'),
+            "Thời gian": formatTimeAgo(customer.createdAt)
+         }));
+
+         // Tạo worksheet từ header
+         const customerSheet = XLSX.utils.aoa_to_sheet(customerHeader);
+
+         // Thêm data chi tiết vào sheet
+         XLSX.utils.sheet_add_json(customerSheet, customerDetails, {
+            origin: "A" + (customerHeader.length + 1),
+            skipHeader: false
+         });
+
+         // Thiết lập merge cells cho tiêu đề
+         const customerMerges = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 6 } }];
+         customerSheet['!merges'] = customerMerges;
+
+         // Thiết lập độ rộng cột
+         customerSheet['!cols'] = [
+            { width: 5 },  // STT
+            { width: 15 }, // Họ
+            { width: 15 }, // Tên
+            { width: 30 }, // Email
+            { width: 15 }, // Số điện thoại
+            { width: 15 }, // Ngày đăng ký
+            { width: 20 }  // Thời gian
+         ];
+
+         // Thêm sheet vào workbook
+         XLSX.utils.book_append_sheet(workbook, customerSheet, 'Khách hàng mới');
+      }
+
+      // Xuất file với tên có thương hiệu
+      XLSX.writeFile(workbook, `CandleBliss_BaoCaoTaiChinh_${dateStr}.xlsx`);
    };
 
    // Hàm thiết lập tùy chọn cho biểu đồ
@@ -402,7 +663,7 @@ export default function FinancePage() {
       });
    };
 
-   const updateChartData = (data: ChartData) => {
+   const updateChartData = (data: FinanceChartData) => {
       const timeLabel = timeFilter === 'month'
          ? `Tháng ${timeValue}/${year}`
          : timeFilter === 'week'
@@ -544,7 +805,7 @@ export default function FinancePage() {
    const updateHistoricalChart = () => {
       if (historicalData.length === 0) return;
 
-      const labels = historicalData.map(item => {
+      const labels = historicalData.map(item => { // Sửa từ sampleData thành historicalData
          if (timeFilter === 'month') return `T${item.timeValue}`;
          if (timeFilter === 'week') return `Tuần ${item.timeValue}`;
          return `${item.timeValue}`;
@@ -589,6 +850,55 @@ export default function FinancePage() {
       return validStatuses.includes(status);
    };
 
+   // Add this function inside your component:
+   const fetchNewCustomers = async () => {
+      try {
+         const token = localStorage.getItem('token');
+         if (!token) return;
+
+         const response = await fetch('http://68.183.226.198:3000/api/v1/users', {
+            headers: { Authorization: `Bearer ${token}` }
+         });
+
+         if (!response.ok) throw new Error('Failed to fetch customers');
+
+         const data = await response.json();
+
+         // Calculate date 7 days ago
+         const sevenDaysAgo = new Date();
+         sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+         // Filter customers created within the last 7 days
+         const recentCustomers = data.data
+            .filter((user: { createdAt: string; role: { name: string } }) => {
+               const createdAt = new Date(user.createdAt);
+               return createdAt >= sevenDaysAgo && user.role.name === "User";
+            })
+            .map((user: { id: number; firstName: string; lastName: string; email: string; createdAt: string; phone?: number | null }) => ({
+               id: user.id,
+               firstName: user.firstName || '',
+               lastName: user.lastName || '',
+               email: user.email,
+               createdAt: user.createdAt,
+               phone: user.phone
+            }));
+
+         setNewCustomers(recentCustomers);
+      } catch {
+         console.error('Error fetching new customers:');
+      }
+   };
+
+   // Add this helper function for formatting time ago:
+   const formatTimeAgo = (dateString: string) => {
+      try {
+         const date = new Date(dateString);
+         return formatDistanceToNow(date, { addSuffix: true, locale: vi });
+      } catch {
+         return 'Không xác định';
+      }
+   };
+
    return (
       <div className='flex h-screen bg-gray-50'>
          {/* Sidebar */}
@@ -628,12 +938,13 @@ export default function FinancePage() {
                         </div>
 
                         <button
-                           onClick={exportOrdersToExcel}
-                           className='flex items-center gap-2 px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-all shadow-sm hover:shadow'
+                           onClick={exportFinancialOverview}
+                           className='flex items-center gap-2 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-all shadow-sm hover:shadow mr-2'
                         >
                            <Download size={18} />
-                           <span>Xuất báo cáo</span>
+                           <span>Xuất báo cáo tổng quan</span>
                         </button>
+
                      </div>
                   </div>
 
@@ -658,15 +969,7 @@ export default function FinancePage() {
                         >
                            Đơn hàng
                         </button>
-                        <button
-                           onClick={() => setCurrentTab('customers')}
-                           className={`pb-3 px-1 font-medium text-sm ${currentTab === 'customers'
-                              ? 'border-b-2 border-amber-500 text-amber-600'
-                              : 'text-gray-500 hover:text-gray-700'
-                              }`}
-                        >
-                           Khách hàng
-                        </button>
+
                      </div>
                   </div>
 
@@ -759,7 +1062,7 @@ export default function FinancePage() {
                               <div>
                                  <h2 className='text-lg font-semibold'>Khách hàng mới</h2>
                                  <p className='text-sm text-gray-600 mt-1'>
-                                    {newCustomers.length} khách hàng mới trong tháng này
+                                    Khách hàng đăng ký trong 7 ngày qua
                                  </p>
                               </div>
                               <Link
@@ -771,26 +1074,31 @@ export default function FinancePage() {
                            </div>
 
                            <div className='grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-4 gap-6'>
-                              {newCustomers.map((customer) => (
-                                 <div
-                                    key={customer.id}
-                                    className='flex items-center p-3 rounded-lg hover:bg-gray-50 transition-all'
-                                 >
-                                    <div className='w-12 h-12 rounded-full overflow-hidden border border-gray-200'>
-                                       <Image
-                                          src={customer.image}
-                                          alt={customer.name}
-                                          width={48}
-                                          height={48}
-                                          className='object-cover'
-                                       />
-                                    </div>
-                                    <div className='ml-3'>
-                                       <p className='font-medium text-gray-800'>{customer.name}</p>
-                                       <p className='text-xs text-gray-500'>Mới tham gia</p>
-                                    </div>
+                              {loading ? (
+                                 <div className="col-span-full flex justify-center py-8">
+                                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-amber-500"></div>
                                  </div>
-                              ))}
+                              ) : newCustomers.length > 0 ? (
+                                 newCustomers.map((customer) => (
+                                    <div
+                                       key={customer.id}
+                                       className='flex items-center p-3 rounded-lg hover:bg-gray-50 transition-all'
+                                    >
+                                       <div className='w-12 h-12 rounded-full overflow-hidden border border-gray-200 bg-amber-50 flex items-center justify-center text-amber-700 font-medium'>
+                                          {customer.firstName?.charAt(0)}{customer.lastName?.charAt(0)}
+                                       </div>
+                                       <div className='ml-3'>
+                                          <p className='font-medium text-gray-800'>{customer.firstName} {customer.lastName}</p>
+                                          <p className='text-xs text-gray-500'>{formatTimeAgo(customer.createdAt)}</p>
+                                          <p className='text-xs text-gray-500'>{customer.email}</p>
+                                       </div>
+                                    </div>
+                                 ))
+                              ) : (
+                                 <div className="col-span-full text-center py-8 text-gray-500">
+                                    Không có khách hàng mới trong 7 ngày qua
+                                 </div>
+                              )}
                            </div>
                         </section>
                      </>
