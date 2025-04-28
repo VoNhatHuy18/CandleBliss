@@ -77,6 +77,13 @@ interface SortOption {
    label: string;
 }
 
+interface PriceRange {
+   min: number;
+   max: number;
+   label: string;
+   hasDiscount?: boolean; // Add this property
+}
+
 // Thêm StarDisplay component từ trang chi tiết sản phẩm
 const StarDisplay = ({ rating }: { rating: number }) => {
    return (
@@ -499,8 +506,26 @@ export default function ProductPage() {
          });
       }
 
-      // Áp dụng bộ lọc giá
-      if (priceRange) {
+      // Apply discount filter if selected
+      if (priceRange?.hasDiscount === true) {
+         result = result.filter((product) => {
+            // Check if the product has a discount
+            if (product.discountPrice && parseFloat(product.discountPrice) > 0) {
+               return true;
+            }
+
+            // Check if any variant has a discount
+            if (product.variants && product.variants.length > 0) {
+               return product.variants.some(variant =>
+                  variant.discountPrice && parseFloat(variant.discountPrice) > 0
+               );
+            }
+
+            return false;
+         });
+      }
+      // Áp dụng bộ lọc giá nếu không phải là bộ lọc khuyến mãi
+      else if (priceRange && priceRange.min !== undefined && priceRange.max !== undefined) {
          result = result.filter((product) => {
             // Get actual price considering discounts
             const productPrice = product.discountPrice
@@ -938,6 +963,23 @@ export default function ProductPage() {
                         ))}
                      </div>
                   </div>
+
+                  <div className='mb-5'>
+                     <h4 className='text-sm font-medium text-gray-700 mb-2'>Khuyến mãi</h4>
+                     <div className='space-y-2'>
+                        <div className='flex items-center'>
+                           <button
+                              onClick={() => handlePriceRangeChange({ min: 0, max: Infinity, label: 'Sản phẩm khuyến mãi', hasDiscount: true })}
+                              className={`text-sm w-full py-2 px-3 text-left rounded-md transition-colors ${selectedPriceRange?.hasDiscount === true
+                                 ? 'bg-amber-100 text-amber-800'
+                                 : 'text-gray-700 hover:bg-gray-100'
+                                 }`}
+                           >
+                              Đang giảm giá
+                           </button>
+                        </div>
+                     </div>
+                  </div>
                </div>
             </div>
 
@@ -947,7 +989,11 @@ export default function ProductPage() {
                   <p className='text-sm text-gray-600'>
                      {filteredProducts.length} sản phẩm
                      {searchQuery ? ` cho "${searchQuery}"` : ''}
-                     {selectedPriceRange ? ` trong khoảng giá ${selectedPriceRange.label}` : ''}
+                     {selectedPriceRange ?
+                        selectedPriceRange.hasDiscount ?
+                           ' đang được giảm giá' :
+                           ` trong khoảng giá ${selectedPriceRange.label}`
+                        : ''}
                   </p>
 
                   <div className='flex items-center'>

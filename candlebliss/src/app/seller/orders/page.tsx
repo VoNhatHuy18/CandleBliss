@@ -1227,15 +1227,18 @@ export default function OrdersPage() {
                                        Chi tiết
                                     </Link>
 
-                                    <button
-                                       onClick={() => openUpdateStatusModal(order)}
-                                       className='flex-1 sm:flex-none text-center text-sm bg-[#442C08] text-white hover:bg-opacity-90 px-4 py-2 rounded-md flex items-center justify-center'
-                                    >
-                                       <TruckIcon size={16} className='mr-2' />
-                                       {order.status === 'Đơn hàng vừa được tạo'
-                                          ? 'Xử lý'
-                                          : 'Cập nhật'}
-                                    </button>
+                                    {/* Hide update button for completed orders */}
+                                    {order.status !== 'Hoàn thành' && order.status !== 'Đã huỷ' && (
+                                       <button
+                                          onClick={() => openUpdateStatusModal(order)}
+                                          className='flex-1 sm:flex-none text-center text-sm bg-[#442C08] text-white hover:bg-opacity-90 px-4 py-2 rounded-md flex items-center justify-center'
+                                       >
+                                          <TruckIcon size={16} className='mr-2' />
+                                          {order.status === 'Đơn hàng vừa được tạo'
+                                             ? 'Xử lý'
+                                             : 'Cập nhật'}
+                                       </button>
+                                    )}
                                  </div>
                               </div>
                            </div>

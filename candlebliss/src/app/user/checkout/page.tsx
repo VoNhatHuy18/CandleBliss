@@ -8,6 +8,7 @@ import Header from '@/app/components/user/nav/page';
 import Footer from '@/app/components/user/footer/page';
 import Toast from '@/app/components/ui/toast/Toast';
 import { updateOrderPaymentMethod } from '@/app/utils/orderUtils';
+import { useCart } from '@/app/contexts/CartContext'; // Thêm import này
 
 // Interfaces
 interface CartItem {
@@ -159,6 +160,7 @@ export default function CheckoutPage() {
    const [subTotal, setSubTotal] = useState(0);
    const [shippingFee, setShippingFee] = useState(30000); // Mặc định phí ship
    const [totalPrice, setTotalPrice] = useState(0);
+   const { updateCartBadge } = useCart(); // Thêm dòng này để sử dụng function từ context
    const [userId, setUserId] = useState<number | null>(null);
 
    // Thông tin người dùng
@@ -1437,12 +1439,15 @@ export default function CheckoutPage() {
                console.log(`Đã cập nhật phương thức thanh toán: ${paymentMethod}`);
             } catch (error) {
                console.error('Lỗi khi cập nhật phương thức thanh toán:', error);
-               // Continue with order process even if payment method update fails
             }
 
             // Xóa giỏ hàng và voucher sau khi đặt hàng thành công
             localStorage.setItem('cart', '[]');
             localStorage.removeItem('appliedVoucher');
+
+            // Reset cart badge to 0
+            updateCartBadge(0);
+            localStorage.removeItem('cartBadge');
 
             if (paymentMethod === 'MOMO') {
                // Nếu chọn thanh toán MOMO, chuyển hướng tới trang thanh toán
