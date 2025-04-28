@@ -985,7 +985,7 @@ export default function OrderDetailPage() {
    const getPaymentMethodIcon = (method: string) => {
       switch (method) {
          case 'COD':
-            return '/images/payment/cod.png';
+            return '/images/logo.png';
          case 'BANKING':
             return '/images/payment/bank.png';
          case 'MOMO':

@@ -156,6 +156,7 @@ export default function OrderDetailPage() {
         message: '',
         type: 'info' as 'success' | 'error' | 'info',
     });
+    const [customerInfoFetched, setCustomerInfoFetched] = useState(false);
 
     // Toast message helper
     const showToastMessage = (message: string, type: 'success' | 'error' | 'info') => {
@@ -281,10 +282,10 @@ export default function OrderDetailPage() {
 
     // Thêm useEffect để fetch thông tin khách hàng
     useEffect(() => {
-        if (order?.user_id) {
+        if (order?.user_id && !customerInfoFetched) {
             fetchCustomerInfo(order.user_id);
         }
-    }, [order?.user_id]);
+    }, [order?.user_id, customerInfoFetched]);
 
     // Sửa hàm fetch thông tin khách hàng
     const fetchCustomerInfo = async (userId: number) => {
@@ -302,17 +303,18 @@ export default function OrderDetailPage() {
                 const userData = await response.json();
                 console.log("Customer data fetched:", userData); // Debug log
 
-                // Cập nhật thông tin khách hàng vào order
-                setOrder(prev => {
-                    if (!prev) return null;
+                // Cập nhật thông tin khách hàng vào order với hàm cập nhật state đảm bảo
+                setOrder(prevOrder => {
+                    if (!prevOrder) return null;
                     return {
-                        ...prev,
+                        ...prevOrder,
                         customer_name: userData.firstName && userData.lastName
                             ? `${userData.firstName} ${userData.lastName}`
                             : userData.firstName || userData.lastName || userData.username || 'Không có thông tin',
                         customer_phone: userData.phone ? userData.phone.toString() : 'Không có thông tin'
                     };
                 });
+                setCustomerInfoFetched(true);  // Mark as fetched
             }
         } catch (error) {
             console.error('Error fetching customer info:', error);
