@@ -15,6 +15,7 @@ import {
    MagnifyingGlassIcon,
    ArrowPathIcon,
 } from '@heroicons/react/24/outline';
+import { HOST } from '@/app/constants/api';
 
 // Định nghĩa các interface
 interface Image {
@@ -228,10 +229,10 @@ const ProductTable = ({
             isLoading: true
          });
 
-         console.log('Making API request to:', `http://68.183.226.198:3000/api/product-details/${detailId}`);
+         console.log('Making API request to:', `${HOST}/api/product-details/${detailId}`);
 
          const response = await fetch(
-            `http://68.183.226.198:3000/api/product-details/${detailId}`,
+            `${HOST}/api/product-details/${detailId}`,
             {
                headers: {
                   Authorization: `Bearer ${token}`,
@@ -280,7 +281,7 @@ const ProductTable = ({
          if (!token) return;
 
          const response = await fetch(
-            `http://68.183.226.198:3000/api/product-details/${detailId}`,
+            `${HOST}/api/product-details/${detailId}`,
             {
                headers: {
                   Authorization: `Bearer ${token}`,
@@ -368,7 +369,7 @@ const ProductTable = ({
          const pricePromises = product.details.map(async (detail) => {
             try {
                const response = await fetch(
-                  `http://68.183.226.198:3000/api/v1/prices/product-detail/${detail.id}`,
+                  `${HOST}/api/v1/prices/product-detail/${detail.id}`,
                   {
                      headers: {
                         Authorization: `Bearer ${token}`,
@@ -1351,7 +1352,7 @@ export default function ProductManagement() {
          setLoading(true);
 
          // 1. Fetch all products first to get IDs
-         const productsResponse = await fetch('http://68.183.226.198:3000/api/products', {
+         const productsResponse = await fetch(`${HOST}/api/products`, {
             headers: headers,
          });
 
@@ -1365,7 +1366,7 @@ export default function ProductManagement() {
          const detailedProductsPromises = productsData.map(async (product: Product) => {
             try {
                const detailResponse = await fetch(
-                  `http://68.183.226.198:3000/api/products/${product.id}`,
+                  `${HOST}/api/products/${product.id}`,
                   {
                      headers: headers,
                   },
@@ -1424,7 +1425,7 @@ export default function ProductManagement() {
 
          // 3. Fetch all prices
          try {
-            const allPricesResponse = await fetch('http://68.183.226.198:3000/api/v1/prices', {
+            const allPricesResponse = await fetch(`${HOST}/api/v1/prices`, {
                headers: headers,
             });
 
@@ -1469,7 +1470,7 @@ export default function ProductManagement() {
          const token = localStorage.getItem('token') || sessionStorage.getItem('token');
          if (!token) return;
 
-         const response = await fetch('http://68.183.226.198:3000/api/categories', {
+         const response = await fetch(`${HOST}/api/categories`, {
             headers: {
                Authorization: `Bearer ${token}`,
             },
@@ -1505,7 +1506,7 @@ export default function ProductManagement() {
 
             // Sửa lại URL API endpoint đúng với cấu trúc của bạn
             const response = await fetch(
-               `http://68.183.226.198:3000/api/categories/${categoryId}`,
+               `${HOST}/api/categories/${categoryId}`,
                {
                   headers: {
                      Authorization: `Bearer ${token}`,
@@ -1586,7 +1587,7 @@ export default function ProductManagement() {
 
          // First, we'll make a DELETE request to the API
          const response = await fetch(
-            `http://68.183.226.198:3000/api/products/${productToDelete}`,
+            `${HOST}/api/products/${productToDelete}`,
             {
                method: 'DELETE',
                headers: {

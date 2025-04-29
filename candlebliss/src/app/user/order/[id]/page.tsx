@@ -7,6 +7,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import Header from '@/app/components/user/nav/page';
 import Footer from '@/app/components/user/footer/page';
 import Toast from '@/app/components/ui/toast/Toast';
+import { HOST } from '@/app/constants/api';
 
 interface OrderItem {
    id: number;
@@ -413,7 +414,7 @@ export default function OrderDetailPage() {
                try {
                   console.log(`Fetching product with ID: ${item.product_id}`);
                   const productResponse = await fetch(
-                     `http://68.183.226.198:3000/api/products/${item.product_id}`,
+                     `${HOST}/api/products/${item.product_id}`,
                      {
                         headers: {
                            Authorization: `Bearer ${token}`,
@@ -502,7 +503,7 @@ export default function OrderDetailPage() {
             }
 
             const response = await fetch(
-               `http://68.183.226.198:3000/api/orders/${orderId}?id=${orderId}`,
+               `${HOST}/api/orders/${orderId}?id=${orderId}`,
                {
                   headers: {
                      Authorization: `Bearer ${token}`,
@@ -663,7 +664,7 @@ export default function OrderDetailPage() {
          }
 
          const response = await fetch(
-            `http://68.183.226.198:3000/api/orders/${order.id}/status`,
+            `${HOST}/api/orders/${order.id}/status`,
             {
                method: 'PATCH',
                headers: {
@@ -789,7 +790,7 @@ export default function OrderDetailPage() {
 
          // Gọi API cập nhật trạng thái
          const response = await fetch(
-            `http://68.183.226.198:3000/api/orders/${order.id}/status`,
+            `${HOST}/api/orders/${order.id}/status`,
             {
                method: 'PATCH',
                headers: {

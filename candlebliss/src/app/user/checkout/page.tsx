@@ -9,6 +9,7 @@ import Footer from '@/app/components/user/footer/page';
 import Toast from '@/app/components/ui/toast/Toast';
 import { updateOrderPaymentMethod } from '@/app/utils/orderUtils';
 import { useCart } from '@/app/contexts/CartContext'; // Thêm import này
+import { HOST } from '@/app/constants/api';
 
 // Interfaces
 interface CartItem {
@@ -239,7 +240,7 @@ export default function CheckoutPage() {
             return false;
          }
 
-         const response = await fetch(`http://68.183.226.198:3000/api/v1/address/${addressId}`, {
+         const response = await fetch(`${HOST}/api/v1/address/${addressId}`, {
             method: 'DELETE',
             headers: {
                Authorization: `Bearer ${token}`,
@@ -523,7 +524,7 @@ export default function CheckoutPage() {
    // Load thông tin người dùng
    const loadUserInfo = async (userId: number) => {
       try {
-         const response = await fetch(`http://68.183.226.198:3000/api/v1/users/${userId}`, {
+         const response = await fetch(`${HOST}/api/v1/users/${userId}`, {
             headers: {
                Authorization: `Bearer ${localStorage.getItem('token') || ''}`,
             },
@@ -558,7 +559,7 @@ export default function CheckoutPage() {
          const token = localStorage.getItem('token');
          if (!token) return { fullName: '', phone: '' };
 
-         const response = await fetch(`http://68.183.226.198:3000/api/v1/users/${userId}`, {
+         const response = await fetch(`${HOST}/api/v1/users/${userId}`, {
             headers: { Authorization: `Bearer ${token}` },
          });
 
@@ -602,7 +603,7 @@ export default function CheckoutPage() {
                try {
                   const firstAddress = storedAddresses[0];
                   const checkResponse = await fetch(
-                     `http://68.183.226.198:3000/api/v1/address/${firstAddress.id}`,
+                     `${HOST}/api/v1/address/${firstAddress.id}`,
                      {
                         headers: { Authorization: `Bearer ${token}` },
                      },
@@ -643,7 +644,7 @@ export default function CheckoutPage() {
 
             for (let id = 1; id <= maxAddressIdToTry; id++) {
                addressPromises.push(
-                  fetch(`http://68.183.226.198:3000/api/v1/address/${id}`, {
+                  fetch(`${HOST}/api/v1/address/${id}`, {
                      headers: { Authorization: `Bearer ${token}` },
                   })
                      .then((response) => {
@@ -677,7 +678,7 @@ export default function CheckoutPage() {
 
          // Lấy chi tiết của từng địa chỉ đã biết ID
          const addressPromises = userAddressIds.map((id: number) =>
-            fetch(`http://68.183.226.198:3000/api/v1/address/${id}`, {
+            fetch(`${HOST}/api/v1/address/${id}`, {
                headers: { Authorization: `Bearer ${token}` },
             })
                .then((response) => {
@@ -875,7 +876,7 @@ export default function CheckoutPage() {
             return null;
          }
 
-         const response = await fetch(`http://68.183.226.198:3000/api/v1/address/${addressId}`, {
+         const response = await fetch(`${HOST}/api/v1/address/${addressId}`, {
             headers: {
                Authorization: `Bearer ${token}`,
             },
@@ -991,8 +992,8 @@ export default function CheckoutPage() {
          // Xác định xem đây là cập nhật hay tạo mới
          const isUpdate = !!addressData.id;
          const url = isUpdate
-            ? `http://68.183.226.198:3000/api/v1/address/${addressData.id}`
-            : 'http://68.183.226.198:3000/api/v1/address';
+            ? `${HOST}/api/v1/address/${addressData.id}`
+            : `${HOST}/api/v1/address`;
 
          const method = isUpdate ? 'PATCH' : 'POST';
 
@@ -1219,7 +1220,7 @@ export default function CheckoutPage() {
          setVoucherError('');
 
          // Bước 1: Lấy tất cả vouchers
-         const allVouchersResponse = await fetch(`http://68.183.226.198:3000/api/v1/vouchers`, {
+         const allVouchersResponse = await fetch(`${HOST}/api/v1/vouchers`, {
             headers: {
                Authorization: `Bearer ${localStorage.getItem('token') || ''}`,
             },
@@ -1242,7 +1243,7 @@ export default function CheckoutPage() {
 
          // Bước 2: Lấy thông tin chi tiết của voucher theo ID
          const voucherDetailResponse = await fetch(
-            `http://68.183.226.198:3000/api/v1/vouchers/${matchingVoucher.id}`,
+            `${HOST}/api/v1/vouchers/${matchingVoucher.id}`,
             {
                headers: {
                   Authorization: `Bearer ${localStorage.getItem('token') || ''}`,
@@ -1312,7 +1313,7 @@ export default function CheckoutPage() {
 
          // Call API to create MOMO payment with orderId as query parameter
          const momoResponse = await fetch(
-            `http://68.183.226.198:3000/api/payments/create?orderId=${orderId}`,
+            `${HOST}/api/payments/create?orderId=${orderId}`,
             {
                method: 'GET',
                headers: {
@@ -1416,7 +1417,7 @@ export default function CheckoutPage() {
          console.log('Đang tạo đơn hàng mới:', newOrderData);
 
          // Gọi API để tạo đơn hàng mới
-         const response = await fetch('http://68.183.226.198:3000/api/orders', {
+         const response = await fetch(`${HOST}/api/orders`, {
             method: 'POST',
             headers: {
                'Content-Type': 'application/json',

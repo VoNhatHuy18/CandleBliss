@@ -1,3 +1,5 @@
+import { HOST } from '../constants/api';
+
 /**
  * Updates the payment method for an existing order and sets appropriate status
  * @param orderId - The ID of the order to update
@@ -15,19 +17,16 @@ export async function updateOrderPaymentMethod(
       }
 
       // First update the payment method
-      const paymentResponse = await fetch(
-         `http://68.183.226.198:3000/api/orders/${orderId}/method-payment`,
-         {
-            method: 'PATCH',
-            headers: {
-               'Content-Type': 'application/json',
-               Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify({
-               payment_method: paymentMethod,
-            }),
+      const paymentResponse = await fetch(`${HOST}/api/orders/${orderId}/method-payment`, {
+         method: 'PATCH',
+         headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
          },
-      );
+         body: JSON.stringify({
+            payment_method: paymentMethod,
+         }),
+      });
 
       if (!paymentResponse.ok) {
          const errorData = await paymentResponse.json().catch(() => ({}));
@@ -39,19 +38,16 @@ export async function updateOrderPaymentMethod(
 
       // If payment method is COD, update status to "Đang xử lý"
       if (paymentMethod === 'COD') {
-         const statusResponse = await fetch(
-            `http://68.183.226.198:3000/api/orders/${orderId}/status`,
-            {
-               method: 'PATCH',
-               headers: {
-                  'Content-Type': 'application/json',
-                  Authorization: `Bearer ${token}`,
-               },
-               body: JSON.stringify({
-                  status: 'Đang xử lý',
-               }),
+         const statusResponse = await fetch(`${HOST}/api/orders/${orderId}/status`, {
+            method: 'PATCH',
+            headers: {
+               'Content-Type': 'application/json',
+               Authorization: `Bearer ${token}`,
             },
-         );
+            body: JSON.stringify({
+               status: 'Đang xử lý',
+            }),
+         });
 
          if (!statusResponse.ok) {
             console.error('Failed to update order status after setting COD payment');
@@ -60,7 +56,7 @@ export async function updateOrderPaymentMethod(
       }
 
       // Fetch and return the updated order data
-      const updatedOrderResponse = await fetch(`http://68.183.226.198:3000/api/orders/${orderId}`, {
+      const updatedOrderResponse = await fetch(`${HOST}/api/orders/${orderId}`, {
          headers: {
             Authorization: `Bearer ${token}`,
          },
@@ -87,7 +83,7 @@ export const retryOrderPayment = async (orderId: number): Promise<string> => {
       }
 
       // First update the order status back to "Đang chờ thanh toán" if needed
-      await fetch(`http://68.183.226.198:3000/api/orders/${orderId}/status`, {
+      await fetch(`${HOST}/api/orders/${orderId}/status`, {
          method: 'PATCH',
          headers: {
             Authorization: `Bearer ${token}`,
@@ -99,15 +95,12 @@ export const retryOrderPayment = async (orderId: number): Promise<string> => {
       });
 
       // Call API to create MOMO payment with orderId as query parameter
-      const momoResponse = await fetch(
-         `http://68.183.226.198:3000/api/payments/create?orderId=${orderId}`,
-         {
-            method: 'GET',
-            headers: {
-               Authorization: `Bearer ${token}`,
-            },
+      const momoResponse = await fetch(`${HOST}/api/payments/create?orderId=${orderId}`, {
+         method: 'GET',
+         headers: {
+            Authorization: `Bearer ${token}`,
          },
-      );
+      });
 
       if (!momoResponse.ok) {
          throw new Error('Không thể tạo thanh toán MoMo');

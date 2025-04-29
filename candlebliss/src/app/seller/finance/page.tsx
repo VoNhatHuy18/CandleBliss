@@ -37,7 +37,7 @@ Chart.register(
 );
 import { formatDistanceToNow } from 'date-fns';
 import { vi } from 'date-fns/locale';
-// Register Chart.js components
+import { HOST } from '@/app/constants/api';
 
 
 // Define interface for order item
@@ -224,7 +224,7 @@ export default function FinancePage() {
          if (!order.user && order.user_id && !fetchedUserIds[order.user_id]) {
             try {
                const userResponse = await fetch(
-                  `http://68.183.226.198:3000/api/v1/users/${order.user_id}`,
+                  `${HOST}/api/v1/users/${order.user_id}`,
                   {
                      headers: { Authorization: `Bearer ${token}` },
                   }
@@ -856,7 +856,7 @@ export default function FinancePage() {
          const token = localStorage.getItem('token');
          if (!token) return;
 
-         const response = await fetch('http://68.183.226.198:3000/api/v1/users', {
+         const response = await fetch(`${HOST}/api/v1/users`, {
             headers: { Authorization: `Bearer ${token}` }
          });
 

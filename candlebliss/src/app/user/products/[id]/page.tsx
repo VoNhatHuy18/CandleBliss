@@ -8,6 +8,7 @@ import Header from '@/app/components/user/nav/page';
 import Footer from '@/app/components/user/footer/page';
 import ViewedCarousel from '@/app/components/user/viewedcarousel/page';
 import { incrementCartBadge } from '@/app/utils/cartBadgeManager';
+import { HOST } from '@/app/constants/api';
 
 interface ProductImage {
    id: string;
@@ -157,7 +158,7 @@ export default function ProductDetailPage() {
             if (detail && typeof detail.id === 'number') {
                try {
                   const priceResponse = await fetch(
-                     `http://68.183.226.198:3000/api/v1/prices/product-detail/${detail.id}`,
+                     `${HOST}/api/v1/prices/product-detail/${detail.id}`,
                      {
                         headers: {
                            Authorization: `Bearer ${localStorage.getItem('token') || ''}`,
@@ -312,7 +313,7 @@ export default function ProductDetailPage() {
          setLoadingRatings(true);
 
          // Fetch ratings
-         const ratingResponse = await fetch(`http://68.183.226.198:3000/api/rating/get-by-product`, {
+         const ratingResponse = await fetch(`${HOST}/api/rating/get-by-product`, {
             method: 'POST',
             headers: {
                'Content-Type': 'application/json'
@@ -387,7 +388,7 @@ export default function ProductDetailPage() {
          // Get token from localStorage
          const token = localStorage.getItem('token');
 
-         const response = await fetch('http://68.183.226.198:3000/api/v1/users', {
+         const response = await fetch(`${HOST}/api/v1/users`, {
             headers: {
                'Authorization': `Bearer ${token || ''}`
             }
@@ -421,7 +422,7 @@ export default function ProductDetailPage() {
 
             try {
                const productResponse = await fetch(
-                  `http://68.183.226.198:3000/api/products/${productId}`,
+                  `${HOST}/api/products/${productId}`,
                );
 
                if (!productResponse.ok) {
@@ -600,7 +601,7 @@ export default function ProductDetailPage() {
 
          // Gọi API lấy chi tiết sản phẩm
          const response = await fetch(
-            `http://68.183.226.198:3000/api/product-details/${detailId}`
+            `${HOST}/api/product-details/${detailId}`
          );
 
          if (!response.ok) {

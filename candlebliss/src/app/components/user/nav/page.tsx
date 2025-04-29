@@ -9,6 +9,7 @@ import Image from 'next/image';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { jwtDecode } from 'jwt-decode';
 import { useCart } from '@/app/contexts/CartContext';
+import { HOST } from '@/app/constants/api';
 
 // Loading component
 const NavBarLoading = () => (
@@ -160,7 +161,7 @@ function NavBarContent() {
       if (!userId) return;
 
       try {
-         const response = await fetch(`http://68.183.226.198:3000/api/cart/user/${userId}`);
+         const response = await fetch(`${HOST}/api/cart/user/${userId}`);
 
          if (response.ok) {
             const cartData = (await response.json()) as Cart;
@@ -239,12 +240,12 @@ function NavBarContent() {
 
       if (isLoggedIn && userId) {
          try {
-            const response = await fetch(`http://68.183.226.198:3000/api/cart/user/${userId}`);
+            const response = await fetch(`${HOST}/api/cart/user/${userId}`);
 
             if (!response.ok) {
                console.log('Creating new cart for user:', userId);
 
-               const createCartResponse = await fetch('http://68.183.226.198:3000/api/cart', {
+               const createCartResponse = await fetch(`${HOST}/api/cart`, {
                   method: 'POST',
                   headers: {
                      'Content-Type': 'application/json',
@@ -293,7 +294,7 @@ function NavBarContent() {
          setCategories([]); // Reset categories before fetching
 
          console.log('Fetching categories...');
-         const response = await fetch('http://68.183.226.198:3000/api/categories');
+         const response = await fetch(`${HOST}/api/categories`);
 
          console.log('Categories API response status:', response.status);
 

@@ -15,6 +15,7 @@ import {
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import Toast from '@/app/components/ui/toast/Toast';
+import { HOST } from '@/app/constants/api';
 
 export default function CreateVoucher() {
    const router = useRouter();
@@ -192,7 +193,7 @@ export default function CreateVoucher() {
 
          // Send request to create voucher
          try {
-            const response = await fetch('http://68.183.226.198:3000/api/v1/vouchers', {
+            const response = await fetch(`${HOST}/api/v1/vouchers`, {
                method: 'POST',
                headers: {
                   'Content-Type': 'application/json',

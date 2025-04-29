@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { Eye, EyeOff } from 'lucide-react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
+import { HOST } from '@/app/constants/api';
 
 export default function Login() {
    const router = useRouter();
@@ -16,11 +17,11 @@ export default function Login() {
    const [password, setPassword] = useState('');
    const [error, setError] = useState('');
    const [loading, setLoading] = useState(false);
-   
+
    // Validation states
    const [emailError, setEmailError] = useState('');
    const [passwordError, setPasswordError] = useState('');
-   
+
    // Regex patterns
    const EMAIL_REGEX = /^[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,6}$/;
    const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
@@ -60,11 +61,11 @@ export default function Login() {
    const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
       e.preventDefault();
       setError('');
-      
+
       // Validate form before submitting
       const isEmailValid = validateEmail(email);
       const isPasswordValid = validatePassword(password);
-      
+
       if (!isEmailValid || !isPasswordValid) {
          return;
       }
@@ -72,7 +73,7 @@ export default function Login() {
       setLoading(true);
 
       try {
-         const response = await fetch(`http://68.183.226.198:3000/api/v1/auth/email/login`, {
+         const response = await fetch(`${HOST}/api/v1/auth/email/login`, {
             method: 'POST',
             headers: {
                'Content-Type': 'application/json',
@@ -174,9 +175,8 @@ export default function Login() {
                      <input
                         type='email'
                         id='email'
-                        className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500 ${
-                           emailError ? 'border-red-500' : 'border-gray-300'
-                        }`}
+                        className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500 ${emailError ? 'border-red-500' : 'border-gray-300'
+                           }`}
                         placeholder='johndo@gmail.com'
                         value={email}
                         onChange={handleEmailChange}
@@ -203,9 +203,8 @@ export default function Login() {
                         <input
                            type={showPassword ? 'text' : 'password'}
                            id='password'
-                           className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500 ${
-                              passwordError ? 'border-red-500' : 'border-gray-300'
-                           }`}
+                           className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500 ${passwordError ? 'border-red-500' : 'border-gray-300'
+                              }`}
                            placeholder='••••••••••'
                            value={password}
                            onChange={handlePasswordChange}

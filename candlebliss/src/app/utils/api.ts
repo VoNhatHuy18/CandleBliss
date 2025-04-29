@@ -2,6 +2,7 @@
  * API utility functions for the Candlebliss application
  */
 import type { User } from '@/app/user/profile/types';
+import { HOST } from '../constants/api';
 
 /**
  * Format a number as Vietnamese currency
@@ -55,7 +56,7 @@ export const fetchUserProfile = async (): Promise<User> => {
          throw new Error('No authentication token found');
       }
 
-      const response = await fetch('http://68.183.226.198:3000/api/v1/auth/me', {
+      const response = await fetch(`${HOST}/api/v1/auth/me`, {
          headers: {
             Authorization: `Bearer ${token}`,
             'Content-Type': 'application/json',

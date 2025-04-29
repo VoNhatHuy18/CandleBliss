@@ -8,6 +8,7 @@ import Header from '@/app/components/user/nav/page';
 import Footer from '@/app/components/user/footer/page';
 import ViewedCarousel from '@/app/components/user/viewedcarousel/page';
 import MenuProfile from '@/app/components/user/menuprofile/MenuProfile';
+import { HOST } from '@/app/constants/api';
 
 const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
 
@@ -75,7 +76,7 @@ const ResetPasswordContent: React.FC = () => {
             throw new Error('User ID not found');
          }
 
-         const response = await fetch(`/api/v1/auth/me`, {
+         const response = await fetch(`${HOST}/api/v1/auth/me`, {
             method: 'PATCH',
             headers: {
                Authorization: `Bearer ${localStorage.getItem('token')}`,

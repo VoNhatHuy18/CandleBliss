@@ -11,6 +11,7 @@ import { format } from 'date-fns';
 import { vi } from 'date-fns/locale';
 import { saveAs } from 'file-saver';
 import * as XLSX from 'xlsx';
+import { HOST } from '@/app/constants/api'
 
 interface Customer {
     id: number;
@@ -77,7 +78,7 @@ export default function CustomerPage() {
                 return;
             }
 
-            const response = await fetch(`http://68.183.226.198:3000/api/v1/users?page=${page}&limit=${pagination.limit}`, {
+            const response = await fetch(`${HOST}/api/v1/users?page=${page}&limit=${pagination.limit}`, {
                 headers: {
                     'Authorization': `Bearer ${token}`
                 }
@@ -114,7 +115,7 @@ export default function CustomerPage() {
             const token = localStorage.getItem('token');
             if (!token) return;
 
-            const response = await fetch(`http://68.183.226.198:3000/api/v1/users/${id}`, {
+            const response = await fetch(`${HOST}/api/v1/users/${id}`, {
                 headers: {
                     'Authorization': `Bearer ${token}`
                 }
@@ -149,7 +150,7 @@ export default function CustomerPage() {
             const token = localStorage.getItem('token');
             if (!token) return;
 
-            const response = await fetch(`http://68.183.226.198:3000/api/v1/users/${selectedCustomer.id}`, {
+            const response = await fetch(`${HOST}/api/v1/users/${selectedCustomer.id}`, {
                 method: 'PATCH',
                 headers: {
                     'Authorization': `Bearer ${token}`,
@@ -185,7 +186,7 @@ export default function CustomerPage() {
             const token = localStorage.getItem('token');
             if (!token) return;
 
-            const response = await fetch(`http://68.183.226.198:3000/api/v1/users/${selectedCustomer.id}`, {
+            const response = await fetch(`${HOST}/api/v1/users/${selectedCustomer.id}`, {
                 method: 'DELETE',
                 headers: {
                     'Authorization': `Bearer ${token}`,

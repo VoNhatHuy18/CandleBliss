@@ -9,6 +9,7 @@ import Footer from '@/app/components/user/footer/page';
 import ViewedCarousel from '@/app/components/user/viewedcarousel/page';
 import MenuProfile from '@/app/components/user/menuprofile/MenuProfile';
 import Toast from '@/app/components/ui/toast/Toast';
+import { HOST } from '@/app/constants/api';
 
 interface Address {
    id?: number;
@@ -173,7 +174,7 @@ export default function AddressPage() {
          const token = localStorage.getItem('token');
          if (!token) return { fullName: '', phone: '' };
 
-         const response = await fetch(`http://68.183.226.198:3000/api/v1/users/${userId}`, {
+         const response = await fetch(`${HOST}/api/v1/users/${userId}`, {
             headers: { Authorization: `Bearer ${token}` },
          });
 
@@ -591,7 +592,7 @@ export default function AddressPage() {
             throw new Error('No authentication token found');
          }
 
-         const response = await fetch(`http://68.183.226.198:3000/api/v1/address/${addressId}`, {
+         const response = await fetch(`${HOST}/api/v1/address/${addressId}`, {
             method: 'DELETE',
             headers: {
                Authorization: `Bearer ${token}`,

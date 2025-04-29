@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import VoucherTag from '@/app/components/user/vouchertags/VoucherTags';
+import { HOST } from '@/app/constants/api';
 
 // Define the voucher interface to match your API response
 interface Voucher {
@@ -36,7 +37,7 @@ export default function VouchersPage() {
             setLoading(true);
             try {
                 // Fetch vouchers data from API using fetch
-                const response = await fetch('http://68.183.226.198:3000/api/v1/vouchers');
+                const response = await fetch(`${HOST}/api/v1/vouchers`);
 
                 if (!response.ok) {
                     throw new Error('Failed to fetch vouchers');

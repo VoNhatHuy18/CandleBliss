@@ -4,6 +4,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { useProductForm } from '@/app/contexts/ProductFormContext';
+import { HOST } from '@/app/constants/api';
 
 import Header from '@/app/components/seller/header/page';
 import MenuSideBar from '@/app/components/seller/menusidebar/page';
@@ -79,7 +80,7 @@ export default function Step1() {
 
          console.log('Fetching categories with token:', token ? 'Token exists' : 'No token');
 
-         const response = await fetch('http://68.183.226.198:3000/api/categories', {
+         const response = await fetch(`${HOST}/api/categories`, {
             headers: {
                Authorization: `Bearer ${token}`,
                'Content-Type': 'application/json',
@@ -207,7 +208,7 @@ export default function Step1() {
 
          // Fetch detailed category information if needed
          const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-         const response = await fetch(`http://68.183.226.198:3000/api/categories/${category.id}`, {
+         const response = await fetch(`${HOST}/api/categories/${category.id}`, {
             headers: {
                Authorization: `Bearer ${token}`,
             },
@@ -370,7 +371,7 @@ export default function Step1() {
             productFormData.append('category_id', categoryId.toString());
          }
 
-         if (videoUrl && videoUrl.trim() !== '') { 
+         if (videoUrl && videoUrl.trim() !== '') {
             console.log('Thêm video URL:', videoUrl);
             productFormData.append('video', videoUrl);
          }
@@ -415,7 +416,7 @@ export default function Step1() {
          console.log('Đang gửi dữ liệu sản phẩm đến máy chủ...');
 
          // Gửi request tạo sản phẩm
-         const productResponse = await fetch('http://68.183.226.198:3000/api/products', {
+         const productResponse = await fetch(`${HOST}/api/products`, {
             method: 'POST',
             headers: {
                Authorization: `Bearer ${token}`,

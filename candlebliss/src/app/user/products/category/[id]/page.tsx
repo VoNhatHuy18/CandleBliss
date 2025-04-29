@@ -10,6 +10,8 @@ import NavBar from '@/app/components/user/nav/page';
 import Footer from '@/app/components/user/footer/page';
 import ChatBot from '@/app/components/user/chatbot/ChatBot';
 import { useParams } from 'next/navigation';
+import { HOST } from '@/app/constants/api';
+
 
 interface ProductImage {
     id: string;
@@ -285,7 +287,7 @@ const fetchRatingsForProducts = async (productIds: number[]) => {
 
     try {
         const ratingPromises = productIds.map(id =>
-            fetch(`http://68.183.226.198:3000/api/rating/get-by-product`, {
+            fetch(`${HOST}/api/rating/get-by-product`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -446,7 +448,7 @@ export default function CategoryProductsPage() {
                 setLoading(true);
 
                 // Fetch category details
-                const categoryResponse = await fetch(`http://68.183.226.198:3000/api/categories/${categoryId}`);
+                const categoryResponse = await fetch(`${HOST}/api/categories/${categoryId}`);
                 if (!categoryResponse.ok) {
                     throw new Error('Category not found');
                 }
@@ -454,7 +456,7 @@ export default function CategoryProductsPage() {
                 setCategory(categoryData);
 
                 // Fetch all products
-                const productsResponse = await fetch('http://68.183.226.198:3000/api/products');
+                const productsResponse = await fetch(`${HOST}/api/products`);
                 if (!productsResponse.ok) {
                     throw new Error('Failed to fetch products');
                 }
@@ -483,7 +485,7 @@ export default function CategoryProductsPage() {
                 }));
 
                 // Fetch prices data
-                const pricesResponse = await fetch('http://68.183.226.198:3000/api/v1/prices', {
+                const pricesResponse = await fetch(`${HOST}/api/v1/prices`, {
                     headers: {
                         Authorization: 'Bearer ' + localStorage.getItem('token'),
                     },
@@ -552,7 +554,7 @@ export default function CategoryProductsPage() {
                         }
                     } else {
                         try {
-                            const detailResponse = await fetch(`http://68.183.226.198:3000/api/products/${product.id}`);
+                            const detailResponse = await fetch(`${HOST}/api/products/${product.id}`);
                             if (detailResponse.ok) {
                                 const detailData = await detailResponse.json();
 

@@ -19,6 +19,7 @@ import {
 } from '@heroicons/react/24/outline';
 import React from 'react';
 import { format, subDays } from 'date-fns';
+import { HOST } from '@/app/constants/api';
 
 interface Image {
     id: string;
@@ -320,7 +321,7 @@ const StockReceiptModal = ({
             if (!token) return;
 
             const response = await fetch(
-                `http://68.183.226.198:3000/api/v1/prices/product-detail/${variantId}`,
+                `${HOST}/api/v1/prices/product-detail/${variantId}`,
                 {
                     headers: {
                         Authorization: `Bearer ${token}`,
@@ -672,7 +673,7 @@ const ProductTable = ({
     products,
     loading,
     fetchAllProductData,
-   
+
     getCategoryNameById,
     showToast, // Destructured prop
     openStockReceiptModal,
@@ -753,7 +754,7 @@ const ProductTable = ({
             const pricePromises = product.details.map(async (detail) => {
                 try {
                     const response = await fetch(
-                        `http://68.183.226.198:3000/api/v1/prices/product-detail/${detail.id}`,
+                        `${HOST}/api/v1/prices/product-detail/${detail.id}`,
                         {
                             headers: {
                                 Authorization: `Bearer ${token}`,
@@ -896,7 +897,7 @@ const ProductTable = ({
             }
 
             const response = await fetch(
-                `http://68.183.226.198:3000/api/product-details/${detailId}`,
+                `${HOST}/api/product-details/${detailId}`,
                 {
                     headers: {
                         Authorization: `Bearer ${token}`,
@@ -944,7 +945,7 @@ const ProductTable = ({
             if (!token) return;
 
             const response = await fetch(
-                `http://68.183.226.198:3000/api/product-details/${detailId}`,
+                `${HOST}/api/product-details/${detailId}`,
                 {
                     headers: {
                         Authorization: `Bearer ${token}`,
@@ -1074,534 +1075,534 @@ const ProductTable = ({
                         <div>Mã sản phẩm</div>
                         <div>Tồn kho</div>
                         <div>Trạng thái</div>
-                </div>
+                    </div>
 
                     {/* Product rows - using currentPageProducts instead of filteredProducts */}
-            {currentPageProducts.map((product) => {
-                const totalStock = product.details?.reduce((sum, detail) => sum + (Number(detail.quantities) || 0), 0) || 0;
-                const activeVariants = product.details?.filter((d) => d.isActive)?.length || 0;
-                const totalVariants = product.details?.length || 0;
-                const isExpanded = expandedProduct === product.id;
-                const isDetailLoading = detailLoading[product.id] || false;
-                const lowStock = product.details?.filter((d) => Number(d.quantities) > 0 && Number(d.quantities) <= 10).length || 0;
-                const outOfStock = product.details?.filter((d) => Number(d.quantities) === 0).length || 0;
+                    {currentPageProducts.map((product) => {
+                        const totalStock = product.details?.reduce((sum, detail) => sum + (Number(detail.quantities) || 0), 0) || 0;
+                        const activeVariants = product.details?.filter((d) => d.isActive)?.length || 0;
+                        const totalVariants = product.details?.length || 0;
+                        const isExpanded = expandedProduct === product.id;
+                        const isDetailLoading = detailLoading[product.id] || false;
+                        const lowStock = product.details?.filter((d) => Number(d.quantities) > 0 && Number(d.quantities) <= 10).length || 0;
+                        const outOfStock = product.details?.filter((d) => Number(d.quantities) === 0).length || 0;
 
-                return (
-                    <div
-                        key={product.id}
-                        className="border-b last:border-b-0 transition hover:bg-gray-50/50"
-                    >
-                        {/* Main product row */}
-                        <div className="grid grid-cols-1 md:grid-cols-5 px-6 py-4">
-                            {/* Mobile view */}
-                            <div className="md:hidden flex justify-between items-center mb-3">
-                                <div className="flex items-center">
-                                    <button
-                                        onClick={() => toggleProductExpansion(product.id)}
-                                        className="mr-2 text-gray-500 hover:text-amber-600"
-                                        aria-expanded={isExpanded}
-                                        aria-label={isExpanded ? 'Thu gọn chi tiết' : 'Xem chi tiết'}
-                                    >
-                                        {isExpanded ? (
-                                            <ChevronDownIcon className="h-5 w-5" />
-                                        ) : (
-                                            <ChevronRightIcon className="h-5 w-5" />
-                                        )}
-                                    </button>
-                                    <div className="h-10 w-10 bg-gray-200 rounded-md overflow-hidden">
-                                        {product.images && product.images.length > 0 ? (
-                                            <Image
-                                                src={product.images[0].path}
-                                                alt={product.name}
-                                                width={40}
-                                                height={40}
-                                                className="object-cover h-full w-full"
-                                                onError={(e) => {
-                                                    const target = e.target as HTMLImageElement;
-                                                    target.src = '/placeholder.png';
-                                                }}
-                                            />
-                                        ) : (
-                                            <div className="flex items-center justify-center h-full w-full text-gray-400">
-                                                <PlusIcon className="h-5 w-5" />
+                        return (
+                            <div
+                                key={product.id}
+                                className="border-b last:border-b-0 transition hover:bg-gray-50/50"
+                            >
+                                {/* Main product row */}
+                                <div className="grid grid-cols-1 md:grid-cols-5 px-6 py-4">
+                                    {/* Mobile view */}
+                                    <div className="md:hidden flex justify-between items-center mb-3">
+                                        <div className="flex items-center">
+                                            <button
+                                                onClick={() => toggleProductExpansion(product.id)}
+                                                className="mr-2 text-gray-500 hover:text-amber-600"
+                                                aria-expanded={isExpanded}
+                                                aria-label={isExpanded ? 'Thu gọn chi tiết' : 'Xem chi tiết'}
+                                            >
+                                                {isExpanded ? (
+                                                    <ChevronDownIcon className="h-5 w-5" />
+                                                ) : (
+                                                    <ChevronRightIcon className="h-5 w-5" />
+                                                )}
+                                            </button>
+                                            <div className="h-10 w-10 bg-gray-200 rounded-md overflow-hidden">
+                                                {product.images && product.images.length > 0 ? (
+                                                    <Image
+                                                        src={product.images[0].path}
+                                                        alt={product.name}
+                                                        width={40}
+                                                        height={40}
+                                                        className="object-cover h-full w-full"
+                                                        onError={(e) => {
+                                                            const target = e.target as HTMLImageElement;
+                                                            target.src = '/placeholder.png';
+                                                        }}
+                                                    />
+                                                ) : (
+                                                    <div className="flex items-center justify-center h-full w-full text-gray-400">
+                                                        <PlusIcon className="h-5 w-5" />
+                                                    </div>
+                                                )}
                                             </div>
-                                        )}
-                                    </div>
-                                    <div className="ml-3">
-                                        <p className="text-sm font-medium text-gray-800">
-                                            {product.name}
-                                        </p>
-                                        <p className="text-xs text-gray-500 mt-0.5">#{product.id}</p>
-                                    </div>
-                                </div>
-
-                            </div>
-
-                            <div className="col-span-2 flex items-center">
-                                <button
-                                    onClick={() => toggleProductExpansion(product.id)}
-                                    className="mr-3 text-gray-500 hover:text-amber-600 hidden md:block"
-                                    aria-expanded={isExpanded}
-                                    aria-label={isExpanded ? 'Thu gọn chi tiết' : 'Xem chi tiết'}
-                                >
-                                    {isExpanded ? (
-                                        <ChevronDownIcon className="h-5 w-5" />
-                                    ) : (
-                                        <ChevronRightIcon className="h-5 w-5" />
-                                    )}
-                                </button>
-
-                                <div className="flex items-center">
-                                    <div className="h-12 w-12 bg-gray-200 rounded-md overflow-hidden mr-3 flex-shrink-0 border">
-                                        {product.images && product.images.length > 0 ? (
-                                            <Image
-                                                src={product.images[0].path}
-                                                alt={product.name}
-                                                width={48}
-                                                height={48}
-                                                className="object-cover h-full w-full"
-                                                onError={(e) => {
-                                                    const target = e.target as HTMLImageElement;
-                                                    target.src = '/placeholder.png';
-                                                }}
-                                            />
-                                        ) : (
-                                            <div className="flex items-center justify-center h-full w-full text-gray-400">
-                                                <PlusIcon className="h-5 w-5" />
+                                            <div className="ml-3">
+                                                <p className="text-sm font-medium text-gray-800">
+                                                    {product.name}
+                                                </p>
+                                                <p className="text-xs text-gray-500 mt-0.5">#{product.id}</p>
                                             </div>
-                                        )}
+                                        </div>
+
                                     </div>
-                                    <div className="truncate">
-                                        <p className="text-sm font-medium text-gray-800 truncate">
-                                            {product.name}
-                                        </p>
-                                        <p className="text-xs text-gray-500 mt-1 truncate">
-                                            {product.category_id
-                                                ? categoryNames[product.category_id]
-                                                    ? `${categoryNames[product.category_id]} `
-                                                    : `Đang tải... (ID: ${product.category_id})`
-                                                : product.categories && product.categories.length > 0
-                                                    ? `${product.categories[0].name} `
-                                                    : 'Chưa có danh mục'}
-                                        </p>
+
+                                    <div className="col-span-2 flex items-center">
+                                        <button
+                                            onClick={() => toggleProductExpansion(product.id)}
+                                            className="mr-3 text-gray-500 hover:text-amber-600 hidden md:block"
+                                            aria-expanded={isExpanded}
+                                            aria-label={isExpanded ? 'Thu gọn chi tiết' : 'Xem chi tiết'}
+                                        >
+                                            {isExpanded ? (
+                                                <ChevronDownIcon className="h-5 w-5" />
+                                            ) : (
+                                                <ChevronRightIcon className="h-5 w-5" />
+                                            )}
+                                        </button>
+
+                                        <div className="flex items-center">
+                                            <div className="h-12 w-12 bg-gray-200 rounded-md overflow-hidden mr-3 flex-shrink-0 border">
+                                                {product.images && product.images.length > 0 ? (
+                                                    <Image
+                                                        src={product.images[0].path}
+                                                        alt={product.name}
+                                                        width={48}
+                                                        height={48}
+                                                        className="object-cover h-full w-full"
+                                                        onError={(e) => {
+                                                            const target = e.target as HTMLImageElement;
+                                                            target.src = '/placeholder.png';
+                                                        }}
+                                                    />
+                                                ) : (
+                                                    <div className="flex items-center justify-center h-full w-full text-gray-400">
+                                                        <PlusIcon className="h-5 w-5" />
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <div className="truncate">
+                                                <p className="text-sm font-medium text-gray-800 truncate">
+                                                    {product.name}
+                                                </p>
+                                                <p className="text-xs text-gray-500 mt-1 truncate">
+                                                    {product.category_id
+                                                        ? categoryNames[product.category_id]
+                                                            ? `${categoryNames[product.category_id]} `
+                                                            : `Đang tải... (ID: ${product.category_id})`
+                                                        : product.categories && product.categories.length > 0
+                                                            ? `${product.categories[0].name} `
+                                                            : 'Chưa có danh mục'}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="hidden md:flex items-center">
+                                        <span className="text-sm text-gray-700">#{product.id}</span>
+                                    </div>
+
+                                    <div className="hidden md:flex items-center">
+                                        <div className="text-sm font-medium">
+                                            <span className={totalStock > 0 ? "text-gray-700" : "text-red-600"}>
+                                                {totalStock}
+                                            </span>
+                                            {lowStock > 0 && (
+                                                <span className="ml-2 text-xs px-1.5 py-0.5 bg-yellow-100 text-yellow-800 rounded-full">
+                                                    {lowStock} sắp hết
+                                                </span>
+                                            )}
+                                            {outOfStock > 0 && (
+                                                <span className="ml-2 text-xs px-1.5 py-0.5 bg-red-100 text-red-800 rounded-full">
+                                                    {outOfStock} hết hàng
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    <div className="hidden md:flex items-center">
+                                        <span
+                                            className={`px-2.5 py-1 text-xs rounded-full ${activeVariants > 0
+                                                ? 'bg-green-100 text-green-800'
+                                                : totalVariants === 0
+                                                    ? 'bg-gray-100 text-gray-800'
+                                                    : 'bg-yellow-100 text-yellow-800'
+                                                }`}
+                                        >
+                                            {activeVariants > 0
+                                                ? 'Đang kinh doanh'
+                                                : totalVariants === 0
+                                                    ? 'Chưa có phiên bản'
+                                                    : 'Chưa kinh doanh'}
+                                        </span>
+                                    </div>
+
+                                    {/* Mobile info */}
+                                    <div className="md:hidden grid grid-cols-2 gap-2 text-sm mt-2">
+                                        <div>
+                                            <span className="text-gray-500">Tồn kho: </span>
+                                            <span className={totalStock > 0 ? "text-gray-700" : "text-red-600"}>
+                                                {totalStock}
+                                            </span>
+                                            {lowStock > 0 && (
+                                                <span className="ml-2 text-xs px-1.5 py-0.5 bg-yellow-100 text-yellow-800 rounded-full">
+                                                    {lowStock} sắp hết
+                                                </span>
+                                            )}
+                                        </div>
+                                        <div className="text-right">
+                                            <span
+                                                className={`text-xs font-medium px-2 py-0.5 rounded-full ${activeVariants > 0
+                                                    ? 'bg-green-100 text-green-800'
+                                                    : totalVariants === 0
+                                                        ? 'bg-gray-100 text-gray-800'
+                                                        : 'bg-yellow-100 text-yellow-800'
+                                                    }`}
+                                            >
+                                                {activeVariants > 0
+                                                    ? 'Đang kinh doanh'
+                                                    : totalVariants === 0
+                                                        ? 'Chưa có phiên bản'
+                                                        : 'Chưa kinh doanh'}
+                                            </span>
+                                        </div>
+                                        <div className="col-span-2 text-xs text-gray-500 mt-1">
+                                            <span>Danh mục: </span>
+                                            <span className="text-gray-700">
+                                                {product.category_id
+                                                    ? categoryNames[product.category_id] ||
+                                                    `Đang tải... (ID: ${product.category_id})`
+                                                    : product.categories && product.categories.length > 0
+                                                        ? `${product.categories[0].name} (ID: ${product.categories[0].id})`
+                                                        : 'Chưa có danh mục'}
+                                            </span>
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
 
-                            <div className="hidden md:flex items-center">
-                                <span className="text-sm text-gray-700">#{product.id}</span>
-                            </div>
+                                {/* Expanded details */}
+                                {isExpanded && (
+                                    <div className="p-4 bg-gray-50 border-t">
+                                        <div className="flex justify-between items-center mb-3">
+                                            <h4 className="text-sm font-medium">Chi tiết kho hàng</h4>
+                                        </div>
 
-                            <div className="hidden md:flex items-center">
-                                <div className="text-sm font-medium">
-                                    <span className={totalStock > 0 ? "text-gray-700" : "text-red-600"}>
-                                        {totalStock}
-                                    </span>
-                                    {lowStock > 0 && (
-                                        <span className="ml-2 text-xs px-1.5 py-0.5 bg-yellow-100 text-yellow-800 rounded-full">
-                                            {lowStock} sắp hết
-                                        </span>
-                                    )}
-                                    {outOfStock > 0 && (
-                                        <span className="ml-2 text-xs px-1.5 py-0.5 bg-red-100 text-red-800 rounded-full">
-                                            {outOfStock} hết hàng
-                                        </span>
-                                    )}
-                                </div>
-                            </div>
-
-                            <div className="hidden md:flex items-center">
-                                <span
-                                    className={`px-2.5 py-1 text-xs rounded-full ${activeVariants > 0
-                                        ? 'bg-green-100 text-green-800'
-                                        : totalVariants === 0
-                                            ? 'bg-gray-100 text-gray-800'
-                                            : 'bg-yellow-100 text-yellow-800'
-                                        }`}
-                                >
-                                    {activeVariants > 0
-                                        ? 'Đang kinh doanh'
-                                        : totalVariants === 0
-                                            ? 'Chưa có phiên bản'
-                                            : 'Chưa kinh doanh'}
-                                </span>
-                            </div>
-
-                            {/* Mobile info */}
-                            <div className="md:hidden grid grid-cols-2 gap-2 text-sm mt-2">
-                                <div>
-                                    <span className="text-gray-500">Tồn kho: </span>
-                                    <span className={totalStock > 0 ? "text-gray-700" : "text-red-600"}>
-                                        {totalStock}
-                                    </span>
-                                    {lowStock > 0 && (
-                                        <span className="ml-2 text-xs px-1.5 py-0.5 bg-yellow-100 text-yellow-800 rounded-full">
-                                            {lowStock} sắp hết
-                                        </span>
-                                    )}
-                                </div>
-                                <div className="text-right">
-                                    <span
-                                        className={`text-xs font-medium px-2 py-0.5 rounded-full ${activeVariants > 0
-                                            ? 'bg-green-100 text-green-800'
-                                            : totalVariants === 0
-                                                ? 'bg-gray-100 text-gray-800'
-                                                : 'bg-yellow-100 text-yellow-800'
-                                            }`}
-                                    >
-                                        {activeVariants > 0
-                                            ? 'Đang kinh doanh'
-                                            : totalVariants === 0
-                                                ? 'Chưa có phiên bản'
-                                                : 'Chưa kinh doanh'}
-                                    </span>
-                                </div>
-                                <div className="col-span-2 text-xs text-gray-500 mt-1">
-                                    <span>Danh mục: </span>
-                                    <span className="text-gray-700">
-                                        {product.category_id
-                                            ? categoryNames[product.category_id] ||
-                                            `Đang tải... (ID: ${product.category_id})`
-                                            : product.categories && product.categories.length > 0
-                                                ? `${product.categories[0].name} (ID: ${product.categories[0].id})`
-                                                : 'Chưa có danh mục'}
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Expanded details */}
-                        {isExpanded && (
-                            <div className="p-4 bg-gray-50 border-t">
-                                <div className="flex justify-between items-center mb-3">
-                                    <h4 className="text-sm font-medium">Chi tiết kho hàng</h4>
-                                </div>
-
-                                {isDetailLoading ? (
-                                    <div className="py-4 flex justify-center">
-                                        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-amber-700"></div>
-                                    </div>
-                                ) : product.details && product.details.length > 0 ? (
-                                    <div className="overflow-x-auto rounded-lg border border-gray-200">
-                                        <table className="min-w-full divide-y divide-gray-200">
-                                            <thead className="bg-gray-100">
-                                                <tr>
-                                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                        Mã phiên bản
-                                                    </th>
-                                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                        Kích thước
-                                                    </th>
-                                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                        Loại
-                                                    </th>
-                                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                        Giá trị
-                                                    </th>
-                                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                        Tồn kho
-                                                    </th>
-                                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                        Giá gốc
-                                                    </th>
-                                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                        Trạng thái
-                                                    </th>
-
-                                                </tr>
-                                            </thead>
-                                            <tbody className="bg-white divide-y divide-gray-200">
-                                                {product.details.map((detail) => {
-                                                    const priceInfo = detailPrices[detail.id] || {
-                                                        base_price: 0,
-                                                        discount_price: null,
-                                                        end_date: null,
-                                                    };
-                                                    return (
-                                                        <tr
-                                                            key={detail.id}
-                                                            className="hover:bg-gray-50 transition-colors"
-                                                        >
-                                                            <td className='px-6 py-4 whitespace-nowrap'>
-                                                                <div className='flex items-center'>
-                                                                    <button
-                                                                        onClick={() => showDetailImages(detail.id)}
-                                                                        className='h-10 w-10 flex-shrink-0 mr-3 border rounded-md overflow-hidden hover:opacity-80 transition-opacity'
-                                                                    >
-                                                                        {detailImagesCache[detail.id]?.length > 0 ? (
-                                                                            // Sử dụng hình ảnh từ cache nếu có
-                                                                            <div className='relative h-full w-full'>
-                                                                                <Image
-                                                                                    src={detailImagesCache[detail.id][0].path}
-                                                                                    alt={`${product.name} - ${detail.size || ''} ${detail.type || ''}`}
-                                                                                    width={40}
-                                                                                    height={40}
-                                                                                    className='object-cover h-full w-full'
-                                                                                    onError={(e) => {
-                                                                                        const target = e.target as HTMLImageElement;
-                                                                                        target.src = '/placeholder.png';
-                                                                                    }}
-                                                                                />
-                                                                                {detailImagesCache[detail.id].length > 1 && (
-                                                                                    <div className='absolute bottom-0 right-0 bg-black bg-opacity-50 text-white text-xs rounded-tl-sm px-1'>
-                                                                                        +{detailImagesCache[detail.id].length - 1}
-                                                                                    </div>
-                                                                                )}
-                                                                            </div>
-                                                                        ) : (
-                                                                            <div className='flex items-center justify-center h-full w-full text-gray-400 bg-gray-100'>
-                                                                                <svg
-                                                                                    xmlns="http://www.w3.org/2000/svg"
-                                                                                    className="h-5 w-5"
-                                                                                    fill="none"
-                                                                                    viewBox="0 0 24 24"
-                                                                                    stroke="currentColor"
-                                                                                >
-                                                                                    <path
-                                                                                        strokeLinecap="round"
-                                                                                        strokeLinejoin="round"
-                                                                                        strokeWidth={1.5}
-                                                                                        d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-                                                                                    />
-                                                                                </svg>
-                                                                            </div>
-                                                                        )}
-                                                                    </button>
-                                                                    <span className='text-gray-900 text-sm'>
-                                                                        #{detail.id}
-                                                                    </span>
-                                                                </div>
-                                                            </td>
-                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                                                                {detail.size || '—'}
-                                                            </td>
-                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                                                                {detail.type || '—'}
-                                                            </td>
-                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                                                                {detail.values || '—'}
-                                                            </td>
-                                                            <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                                                {Number(detail.quantities) === 0 ? (
-                                                                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                                                                        Hết hàng
-                                                                    </span>
-                                                                ) : Number(detail.quantities) <= 10 ? (
-                                                                    <div className="flex items-center">
-                                                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 mr-2">
-                                                                            Sắp hết ({detail.quantities})
-                                                                        </span>
-                                                                        <button
-                                                                            onClick={() => openStockReceiptModal(product.id, detail.id, 'increase')}
-                                                                            className="text-xs text-amber-600 hover:text-amber-800"
-                                                                            title="Nhập thêm hàng"
-                                                                        >
-                                                                            <PlusIcon className="h-4 w-4" />
-                                                                        </button>
-                                                                    </div>
-                                                                ) : (
-                                                                    <span className="font-medium text-gray-700">
-                                                                        {detail.quantities}
-                                                                    </span>
-                                                                )}
-                                                            </td>
-                                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                                                                {priceInfo.base_price
-                                                                    ? formatPrice(priceInfo.base_price)
-                                                                    : '—'}
-                                                            </td>
-                                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                                <span
-                                                                    className={`px-2 py-1 text-xs rounded-full ${detail.isActive
-                                                                        ? 'bg-green-100 text-green-800'
-                                                                        : 'bg-gray-100 text-gray-800'
-                                                                        }`}
-                                                                >
-                                                                    {detail.isActive
-                                                                        ? 'Đang bán'
-                                                                        : 'Ngừng bán'}
-                                                                </span>
-                                                            </td>
+                                        {isDetailLoading ? (
+                                            <div className="py-4 flex justify-center">
+                                                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-amber-700"></div>
+                                            </div>
+                                        ) : product.details && product.details.length > 0 ? (
+                                            <div className="overflow-x-auto rounded-lg border border-gray-200">
+                                                <table className="min-w-full divide-y divide-gray-200">
+                                                    <thead className="bg-gray-100">
+                                                        <tr>
+                                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                                Mã phiên bản
+                                                            </th>
+                                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                                Kích thước
+                                                            </th>
+                                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                                Loại
+                                                            </th>
+                                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                                Giá trị
+                                                            </th>
+                                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                                Tồn kho
+                                                            </th>
+                                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                                Giá gốc
+                                                            </th>
+                                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                                Trạng thái
+                                                            </th>
 
                                                         </tr>
-                                                    );
-                                                })}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                ) : (
-                                    <div className="text-center py-8 text-gray-500 bg-white rounded-lg border border-gray-200">
-                                        <p>
-                                            Sản phẩm này chưa có phiên bản. Hãy thêm phiên bản để bắt đầu nhập kho.
-                                        </p>
+                                                    </thead>
+                                                    <tbody className="bg-white divide-y divide-gray-200">
+                                                        {product.details.map((detail) => {
+                                                            const priceInfo = detailPrices[detail.id] || {
+                                                                base_price: 0,
+                                                                discount_price: null,
+                                                                end_date: null,
+                                                            };
+                                                            return (
+                                                                <tr
+                                                                    key={detail.id}
+                                                                    className="hover:bg-gray-50 transition-colors"
+                                                                >
+                                                                    <td className='px-6 py-4 whitespace-nowrap'>
+                                                                        <div className='flex items-center'>
+                                                                            <button
+                                                                                onClick={() => showDetailImages(detail.id)}
+                                                                                className='h-10 w-10 flex-shrink-0 mr-3 border rounded-md overflow-hidden hover:opacity-80 transition-opacity'
+                                                                            >
+                                                                                {detailImagesCache[detail.id]?.length > 0 ? (
+                                                                                    // Sử dụng hình ảnh từ cache nếu có
+                                                                                    <div className='relative h-full w-full'>
+                                                                                        <Image
+                                                                                            src={detailImagesCache[detail.id][0].path}
+                                                                                            alt={`${product.name} - ${detail.size || ''} ${detail.type || ''}`}
+                                                                                            width={40}
+                                                                                            height={40}
+                                                                                            className='object-cover h-full w-full'
+                                                                                            onError={(e) => {
+                                                                                                const target = e.target as HTMLImageElement;
+                                                                                                target.src = '/placeholder.png';
+                                                                                            }}
+                                                                                        />
+                                                                                        {detailImagesCache[detail.id].length > 1 && (
+                                                                                            <div className='absolute bottom-0 right-0 bg-black bg-opacity-50 text-white text-xs rounded-tl-sm px-1'>
+                                                                                                +{detailImagesCache[detail.id].length - 1}
+                                                                                            </div>
+                                                                                        )}
+                                                                                    </div>
+                                                                                ) : (
+                                                                                    <div className='flex items-center justify-center h-full w-full text-gray-400 bg-gray-100'>
+                                                                                        <svg
+                                                                                            xmlns="http://www.w3.org/2000/svg"
+                                                                                            className="h-5 w-5"
+                                                                                            fill="none"
+                                                                                            viewBox="0 0 24 24"
+                                                                                            stroke="currentColor"
+                                                                                        >
+                                                                                            <path
+                                                                                                strokeLinecap="round"
+                                                                                                strokeLinejoin="round"
+                                                                                                strokeWidth={1.5}
+                                                                                                d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                                                                                            />
+                                                                                        </svg>
+                                                                                    </div>
+                                                                                )}
+                                                                            </button>
+                                                                            <span className='text-gray-900 text-sm'>
+                                                                                #{detail.id}
+                                                                            </span>
+                                                                        </div>
+                                                                    </td>
+                                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                                                                        {detail.size || '—'}
+                                                                    </td>
+                                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                                                                        {detail.type || '—'}
+                                                                    </td>
+                                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                                                                        {detail.values || '—'}
+                                                                    </td>
+                                                                    <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                                                        {Number(detail.quantities) === 0 ? (
+                                                                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                                                                Hết hàng
+                                                                            </span>
+                                                                        ) : Number(detail.quantities) <= 10 ? (
+                                                                            <div className="flex items-center">
+                                                                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 mr-2">
+                                                                                    Sắp hết ({detail.quantities})
+                                                                                </span>
+                                                                                <button
+                                                                                    onClick={() => openStockReceiptModal(product.id, detail.id, 'increase')}
+                                                                                    className="text-xs text-amber-600 hover:text-amber-800"
+                                                                                    title="Nhập thêm hàng"
+                                                                                >
+                                                                                    <PlusIcon className="h-4 w-4" />
+                                                                                </button>
+                                                                            </div>
+                                                                        ) : (
+                                                                            <span className="font-medium text-gray-700">
+                                                                                {detail.quantities}
+                                                                            </span>
+                                                                        )}
+                                                                    </td>
+                                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                                                                        {priceInfo.base_price
+                                                                            ? formatPrice(priceInfo.base_price)
+                                                                            : '—'}
+                                                                    </td>
+                                                                    <td className="px-6 py-4 whitespace-nowrap">
+                                                                        <span
+                                                                            className={`px-2 py-1 text-xs rounded-full ${detail.isActive
+                                                                                ? 'bg-green-100 text-green-800'
+                                                                                : 'bg-gray-100 text-gray-800'
+                                                                                }`}
+                                                                        >
+                                                                            {detail.isActive
+                                                                                ? 'Đang bán'
+                                                                                : 'Ngừng bán'}
+                                                                        </span>
+                                                                    </td>
+
+                                                                </tr>
+                                                            );
+                                                        })}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        ) : (
+                                            <div className="text-center py-8 text-gray-500 bg-white rounded-lg border border-gray-200">
+                                                <p>
+                                                    Sản phẩm này chưa có phiên bản. Hãy thêm phiên bản để bắt đầu nhập kho.
+                                                </p>
+                                            </div>
+                                        )}
                                     </div>
                                 )}
                             </div>
-                        )}
-                    </div>
-                );
-            })}
+                        );
+                    })}
 
-            {/* Pagination Controls */}
-            {totalPages > 1 && (
-                <div className="px-6 py-4 border-t flex items-center justify-between">
-                    <div className="text-sm text-gray-500">
-                        Hiển thị {startIndex + 1} đến {Math.min(endIndex, filteredProducts.length)} trong tổng số {filteredProducts.length} sản phẩm
-                    </div>
-                    <div className="flex space-x-1">
-                        <button
-                            onClick={() => goToPage(currentPage - 1)}
-                            disabled={currentPage === 1}
-                            className="px-3 py-1 border rounded text-sm bg-white text-gray-700 
-                                        disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
-                        >
-                            Trước
-                        </button>
-                        {Array.from({ length: totalPages }, (_, i) => i + 1)
-                            .filter(page => {
-                                // Only show pages near current page for better UX
-                                return (
-                                    page === 1 ||
-                                    page === totalPages ||
-                                    (page >= currentPage - 1 && page <= currentPage + 1)
-                                );
-                            })
-                            .map((page, index, array) => {
-                                // Check if we need to show ellipsis
-                                const showEllipsisBefore = index > 0 && array[index - 1] !== page - 1;
-                                const showEllipsisAfter = index < array.length - 1 && array[index + 1] !== page + 1;
-
-                                return (
-                                    <React.Fragment key={page}>
-                                        {showEllipsisBefore && (
-                                            <span className="px-3 py-1 border bg-white text-gray-500 rounded">
-                                                ...
-                                            </span>
-                                        )}
-                                        <button
-                                            onClick={() => goToPage(page)}
-                                            className={`px-3 py-1 border rounded text-sm ${currentPage === page
-                                                ? 'bg-amber-500 text-white border-amber-500'
-                                                : 'bg-white text-gray-700 hover:bg-gray-50'
-                                                }`}
-                                        >
-                                            {page}
-                                        </button>
-                                        {showEllipsisAfter && (
-                                            <span className="px-3 py-1 border bg-white text-gray-500 rounded">
-                                                ...
-                                            </span>
-                                        )}
-                                    </React.Fragment>
-                                );
-                            })}
-                        <button
-                            onClick={() => goToPage(currentPage + 1)}
-                            disabled={currentPage === totalPages}
-                            className="px-3 py-1 border rounded text-sm bg-white text-gray-700 
-                                        disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
-                        >
-                            Tiếp
-                        </button>
-                    </div>
-                </div>
-            )}
-        </div>
-    )
-}
-{/* Modal for viewing product detail images */ }
-{
-    detailImagesModal && (
-        <div className='fixed inset-0 bg-black/70 flex items-center justify-center z-50'>
-            <div className='bg-white rounded-lg p-4 max-w-3xl mx-4 w-full shadow-xl'>
-                <div className='flex justify-between items-center mb-4'>
-                    <h3 className='text-lg font-medium text-gray-900'>
-                        Hình ảnh phiên bản #{detailImagesModal.detailId}
-                    </h3>
-                    <button
-                        onClick={() => setDetailImagesModal(null)}
-                        className='text-gray-500 hover:text-gray-700'
-                    >
-                        <svg className='h-6 w-6' fill='none' viewBox='0 0 24 24' stroke='currentColor'>
-                            <path
-                                strokeLinecap='round'
-                                strokeLinejoin='round'
-                                strokeWidth={2}
-                                d='M6 18L18 6M6 6l12 12'
-                            />
-                        </svg>
-                    </button>
-                </div>
-
-                <div className='flex flex-col items-center'>
-                    {detailImagesModal.isLoading ? (
-                        <div className='py-20 flex flex-col items-center justify-center'>
-                            <div className='animate-spin rounded-full h-12 w-12 border-b-2 border-amber-700 mb-4'></div>
-                            <p className='text-gray-500'>Đang tải hình ảnh...</p>
-                        </div>
-                    ) : (
-                        <>
-                            {/* Main image */}
-                            <div className='relative w-full h-64 md:h-96 mb-4 bg-gray-100 rounded-lg overflow-hidden'>
-                                <Image
-                                    src={detailImagesModal.images[detailImagesModal.currentImageIndex].path}
-                                    alt={`Product detail image`}
-                                    fill
-                                    className='object-contain'
-                                    onError={(e) => {
-                                        const target = e.target as HTMLImageElement;
-                                        target.src = '/placeholder.png';
-                                    }}
-                                />
+                    {/* Pagination Controls */}
+                    {totalPages > 1 && (
+                        <div className="px-6 py-4 border-t flex items-center justify-between">
+                            <div className="text-sm text-gray-500">
+                                Hiển thị {startIndex + 1} đến {Math.min(endIndex, filteredProducts.length)} trong tổng số {filteredProducts.length} sản phẩm
                             </div>
+                            <div className="flex space-x-1">
+                                <button
+                                    onClick={() => goToPage(currentPage - 1)}
+                                    disabled={currentPage === 1}
+                                    className="px-3 py-1 border rounded text-sm bg-white text-gray-700 
+                                        disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                                >
+                                    Trước
+                                </button>
+                                {Array.from({ length: totalPages }, (_, i) => i + 1)
+                                    .filter(page => {
+                                        // Only show pages near current page for better UX
+                                        return (
+                                            page === 1 ||
+                                            page === totalPages ||
+                                            (page >= currentPage - 1 && page <= currentPage + 1)
+                                        );
+                                    })
+                                    .map((page, index, array) => {
+                                        // Check if we need to show ellipsis
+                                        const showEllipsisBefore = index > 0 && array[index - 1] !== page - 1;
+                                        const showEllipsisAfter = index < array.length - 1 && array[index + 1] !== page + 1;
 
-                            {/* Thumbnails */}
-                            {detailImagesModal.images.length > 1 && (
-                                <div className='flex space-x-2 overflow-x-auto max-w-full py-2'>
-                                    {detailImagesModal.images.map((image, index) => (
-                                        <button
-                                            key={image.id}
-                                            onClick={() => setDetailImagesModal({
-                                                ...detailImagesModal,
-                                                currentImageIndex: index
-                                            })}
-                                            className={`h-16 w-16 flex-shrink-0 rounded border-2 ${detailImagesModal.currentImageIndex === index
-                                                ? 'border-amber-600'
-                                                : 'border-transparent hover:border-gray-300'
-                                                }`}
-                                        >
-                                            <div className='relative h-full w-full'>
-                                                <Image
-                                                    src={image.path}
-                                                    alt={`Thumbnail ${index + 1}`}
-                                                    fill
-                                                    className='object-cover rounded'
-                                                    onError={(e) => {
-                                                        const target = e.target as HTMLImageElement;
-                                                        target.src = '/placeholder.png';
-                                                    }}
-                                                />
-                                            </div>
-                                        </button>
-                                    ))}
-                                </div>
-                            )}
-                        </>
+                                        return (
+                                            <React.Fragment key={page}>
+                                                {showEllipsisBefore && (
+                                                    <span className="px-3 py-1 border bg-white text-gray-500 rounded">
+                                                        ...
+                                                    </span>
+                                                )}
+                                                <button
+                                                    onClick={() => goToPage(page)}
+                                                    className={`px-3 py-1 border rounded text-sm ${currentPage === page
+                                                        ? 'bg-amber-500 text-white border-amber-500'
+                                                        : 'bg-white text-gray-700 hover:bg-gray-50'
+                                                        }`}
+                                                >
+                                                    {page}
+                                                </button>
+                                                {showEllipsisAfter && (
+                                                    <span className="px-3 py-1 border bg-white text-gray-500 rounded">
+                                                        ...
+                                                    </span>
+                                                )}
+                                            </React.Fragment>
+                                        );
+                                    })}
+                                <button
+                                    onClick={() => goToPage(currentPage + 1)}
+                                    disabled={currentPage === totalPages}
+                                    className="px-3 py-1 border rounded text-sm bg-white text-gray-700 
+                                        disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                                >
+                                    Tiếp
+                                </button>
+                            </div>
+                        </div>
                     )}
                 </div>
+            )
+            }
+            {/* Modal for viewing product detail images */}
+            {
+                detailImagesModal && (
+                    <div className='fixed inset-0 bg-black/70 flex items-center justify-center z-50'>
+                        <div className='bg-white rounded-lg p-4 max-w-3xl mx-4 w-full shadow-xl'>
+                            <div className='flex justify-between items-center mb-4'>
+                                <h3 className='text-lg font-medium text-gray-900'>
+                                    Hình ảnh phiên bản #{detailImagesModal.detailId}
+                                </h3>
+                                <button
+                                    onClick={() => setDetailImagesModal(null)}
+                                    className='text-gray-500 hover:text-gray-700'
+                                >
+                                    <svg className='h-6 w-6' fill='none' viewBox='0 0 24 24' stroke='currentColor'>
+                                        <path
+                                            strokeLinecap='round'
+                                            strokeLinejoin='round'
+                                            strokeWidth={2}
+                                            d='M6 18L18 6M6 6l12 12'
+                                        />
+                                    </svg>
+                                </button>
+                            </div>
 
-                <div className='mt-4 flex justify-end'>
-                    <button
-                        onClick={() => setDetailImagesModal(null)}
-                        className='px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300'
-                    >
-                        Đóng
-                    </button>
-                </div>
-            </div>
-        </div>
-    )
-}
+                            <div className='flex flex-col items-center'>
+                                {detailImagesModal.isLoading ? (
+                                    <div className='py-20 flex flex-col items-center justify-center'>
+                                        <div className='animate-spin rounded-full h-12 w-12 border-b-2 border-amber-700 mb-4'></div>
+                                        <p className='text-gray-500'>Đang tải hình ảnh...</p>
+                                    </div>
+                                ) : (
+                                    <>
+                                        {/* Main image */}
+                                        <div className='relative w-full h-64 md:h-96 mb-4 bg-gray-100 rounded-lg overflow-hidden'>
+                                            <Image
+                                                src={detailImagesModal.images[detailImagesModal.currentImageIndex].path}
+                                                alt={`Product detail image`}
+                                                fill
+                                                className='object-contain'
+                                                onError={(e) => {
+                                                    const target = e.target as HTMLImageElement;
+                                                    target.src = '/placeholder.png';
+                                                }}
+                                            />
+                                        </div>
+
+                                        {/* Thumbnails */}
+                                        {detailImagesModal.images.length > 1 && (
+                                            <div className='flex space-x-2 overflow-x-auto max-w-full py-2'>
+                                                {detailImagesModal.images.map((image, index) => (
+                                                    <button
+                                                        key={image.id}
+                                                        onClick={() => setDetailImagesModal({
+                                                            ...detailImagesModal,
+                                                            currentImageIndex: index
+                                                        })}
+                                                        className={`h-16 w-16 flex-shrink-0 rounded border-2 ${detailImagesModal.currentImageIndex === index
+                                                            ? 'border-amber-600'
+                                                            : 'border-transparent hover:border-gray-300'
+                                                            }`}
+                                                    >
+                                                        <div className='relative h-full w-full'>
+                                                            <Image
+                                                                src={image.path}
+                                                                alt={`Thumbnail ${index + 1}`}
+                                                                fill
+                                                                className='object-cover rounded'
+                                                                onError={(e) => {
+                                                                    const target = e.target as HTMLImageElement;
+                                                                    target.src = '/placeholder.png';
+                                                                }}
+                                                            />
+                                                        </div>
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </>
+                                )}
+                            </div>
+
+                            <div className='mt-4 flex justify-end'>
+                                <button
+                                    onClick={() => setDetailImagesModal(null)}
+                                    className='px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300'
+                                >
+                                    Đóng
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )
+            }
         </div >
     );
 };
@@ -1701,7 +1702,7 @@ const InventoryHistoryModal = ({
             console.log('Using token:', token ? 'Token exists' : 'No token');
 
             const response = await fetch(
-                `http://68.183.226.198:3000/api/inventory`,
+                `${HOST}/api/inventory`,
                 {
                     headers: {
                         Authorization: `Bearer ${token}`,
@@ -2181,7 +2182,7 @@ export default function Warehouse() {
             setLoading(true);
 
             // 1. Fetch all products first to get IDs
-            const productsResponse = await fetch('http://68.183.226.198:3000/api/products', {
+            const productsResponse = await fetch(`${HOST}/api/products`, {
                 headers: headers,
             });
 
@@ -2195,7 +2196,7 @@ export default function Warehouse() {
             const detailedProductsPromises = productsData.map(async (product: Product) => {
                 try {
                     const detailResponse = await fetch(
-                        `http://68.183.226.198:3000/api/products/${product.id}`,
+                        `${HOST}/api/products/${product.id}`,
                         {
                             headers: headers,
                         },
@@ -2254,7 +2255,7 @@ export default function Warehouse() {
 
             // 3. Fetch all prices
             try {
-                const allPricesResponse = await fetch('http://68.183.226.198:3000/api/v1/prices', {
+                const allPricesResponse = await fetch(`${HOST}/api/v1/prices`, {
                     headers: headers,
                 });
 
@@ -2310,7 +2311,7 @@ export default function Warehouse() {
 
                 // Sửa lại URL API endpoint đúng với cấu trúc của bạn
                 const response = await fetch(
-                    `http://68.183.226.198:3000/api/categories/${categoryId}`,
+                    `${HOST}/api/categories/${categoryId}`,
                     {
                         headers: {
                             Authorization: `Bearer ${token}`,
@@ -2391,7 +2392,7 @@ export default function Warehouse() {
 
             // First, we'll make a DELETE request to the API
             const response = await fetch(
-                `http://68.183.226.198:3000/api/products/${productToDelete}`,
+                `${HOST}/api/products/${productToDelete}`,
                 {
                     method: 'DELETE',
                     headers: {
@@ -2538,7 +2539,7 @@ export default function Warehouse() {
             };
 
             // Gọi API nhập/xuất kho
-            const response = await fetch('http://68.183.226.198:3000/api/inventory', {
+            const response = await fetch(`${HOST}/api/inventory`, {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${token}`,

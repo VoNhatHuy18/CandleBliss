@@ -15,6 +15,7 @@ import {
    EyeIcon,
    PlusIcon,
 } from '@heroicons/react/24/outline';
+import { HOST } from '@/app/constants/api';
 
 // Định nghĩa các interface
 interface Image {
@@ -224,7 +225,7 @@ export default function ProductDetail() {
                return;
             }
 
-            const response = await fetch(`http://68.183.226.198:3000/api/products/${productId}`, {
+            const response = await fetch(`${HOST}/api/products/${productId}`, {
                headers: {
                   Authorization: `Bearer ${token}`,
                },
@@ -283,7 +284,7 @@ export default function ProductDetail() {
          const token = localStorage.getItem('token') || sessionStorage.getItem('token');
          if (!token) return;
 
-         const response = await fetch(`http://68.183.226.198:3000/api/categories/${categoryId}`, {
+         const response = await fetch(`${HOST}/api/categories/${categoryId}`, {
             headers: {
                Authorization: `Bearer ${token}`,
             },
@@ -314,7 +315,7 @@ export default function ProductDetail() {
          const pricePromises = details.map(async (detail) => {
             try {
                const response = await fetch(
-                  `http://68.183.226.198:3000/api/v1/prices/product-detail/${detail.id}`,
+                  `${HOST}/api/v1/prices/product-detail/${detail.id}`,
                   {
                      headers: {
                         Authorization: `Bearer ${token}`,
@@ -408,7 +409,7 @@ export default function ProductDetail() {
          }
 
          const response = await fetch(
-            `http://68.183.226.198:3000/api/product-details/${detailId}`,
+            `${HOST}/api/product-details/${detailId}`,
             {
                headers: {
                   Authorization: `Bearer ${token}`,
@@ -468,7 +469,7 @@ export default function ProductDetail() {
             return;
          }
 
-         const response = await fetch(`http://68.183.226.198:3000/api/products/${productId}`, {
+         const response = await fetch(`${HOST}/api/products/${productId}`, {
             method: 'DELETE',
             headers: {
                Authorization: `Bearer ${token}`,

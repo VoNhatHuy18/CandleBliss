@@ -10,9 +10,10 @@ import Footer from '@/app/components/user/footer/page';
 import { EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
 import Image from 'next/image';
 import AuthService from '@/app/utils/authService';
+import { HOST } from '@/app/constants/api';
 
 // Cấu hình chung cho API - dễ dàng thay đổi cổng hoặc domain khi cần
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://68.183.226.198:3000';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || `${HOST}`;
 
 export default function SignInPage() {
    const router = useRouter();

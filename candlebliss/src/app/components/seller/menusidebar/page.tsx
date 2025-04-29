@@ -16,6 +16,8 @@ import {
    ChevronUp,
    Globe, // Import Globe icon for store/client navigation
 } from 'lucide-react';
+import { HOST } from '@/app/constants/api';
+
 
 interface Order {
    id: number;
@@ -46,7 +48,7 @@ export default function MenuSideBar() {
       const fetchNewOrders = async () => {
          setIsLoading(true);
          try {
-            const response = await fetch('http://68.183.226.198:3000/api/orders/all');
+            const response = await fetch(`${HOST}/api/orders/all`);
             const data = await response.json();
 
             // Danh sách trạng thái cần theo dõi để hiển thị badge

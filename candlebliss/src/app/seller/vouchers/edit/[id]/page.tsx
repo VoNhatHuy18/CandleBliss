@@ -4,6 +4,7 @@ import Head from 'next/head';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { FiInfo, FiAlertCircle, FiSave } from 'react-icons/fi';
+import { HOST } from '@/app/constants/api';
 
 import Header from '@/app/components/seller/header/page';
 import MenuSideBar from '@/app/components/seller/menusidebar/page';
@@ -58,7 +59,7 @@ export default function EditVoucher() {
 
             // Fetch voucher data from API
             const response = await fetch(
-               `http://68.183.226.198:3000/api/v1/vouchers/${params.id}`,
+               `${HOST}/api/v1/vouchers/${params.id}`,
                {
                   method: 'GET',
                   headers: {
@@ -177,7 +178,7 @@ export default function EditVoucher() {
          }
 
          // Send update request to API
-         const response = await fetch(`http://68.183.226.198:3000/api/v1/vouchers/${params.id}`, {
+         const response = await fetch(`${HOST}/api/v1/vouchers/${params.id}`, {
             method: 'PATCH',
             headers: {
                'Content-Type': 'application/json',

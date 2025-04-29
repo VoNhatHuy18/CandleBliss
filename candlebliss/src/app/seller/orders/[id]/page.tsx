@@ -8,6 +8,7 @@ import { CheckCircleIcon as CheckCircleOutline, ExclamationCircleIcon, ArrowLeft
 import Toast from '@/app/components/ui/toast/Toast';
 import Header from '@/app/components/seller/header/page';
 import MenuSideBar from '@/app/components/seller/menusidebar/page';
+import { HOST } from '@/app/constants/api';
 
 // Interfaces
 interface OrderItem {
@@ -184,7 +185,7 @@ export default function OrderDetailPage() {
 
                 // Updated API URL format
                 const response = await fetch(
-                    `http://68.183.226.198:3000/api/orders/{id}?id=${params.id}`,
+                    `${HOST}/api/orders/{id}?id=${params.id}`,
                     {
                         headers: {
                             Authorization: `Bearer ${token}`,
@@ -228,7 +229,7 @@ export default function OrderDetailPage() {
             if (item.product_id && !fetchedProducts[item.product_id]) {
                 try {
                     const productResponse = await fetch(
-                        `http://68.183.226.198:3000/api/products/${item.product_id}`,
+                        `${HOST}/api/products/${item.product_id}`,
                         {
                             headers: {
                                 Authorization: `Bearer ${token}`,
@@ -293,7 +294,7 @@ export default function OrderDetailPage() {
             const token = localStorage.getItem('token');
             if (!token) return;
 
-            const response = await fetch(`http://68.183.226.198:3000/api/v1/users/${userId}`, {
+            const response = await fetch(`${HOST}/api/v1/users/${userId}`, {
                 headers: {
                     Authorization: `Bearer ${token}`
                 }
@@ -343,7 +344,7 @@ export default function OrderDetailPage() {
             // Use query parameter format with updated API URL format
             const encodedStatus = encodeURIComponent(newStatus);
             const response = await fetch(
-                `http://68.183.226.198:3000/api/orders/{id}/status?id=${order?.id}&status=${encodedStatus}`,
+                `${HOST}/api/orders/{id}/status?id=${order?.id}&status=${encodedStatus}`,
                 {
                     method: 'PATCH',
                     headers: {

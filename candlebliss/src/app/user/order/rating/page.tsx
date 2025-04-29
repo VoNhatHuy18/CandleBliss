@@ -8,6 +8,7 @@ import Header from '@/app/components/user/nav/page';
 import Footer from '@/app/components/user/footer/page';
 import Toast from '@/app/components/ui/toast/Toast';
 import AuthService from '@/app/utils/authService';
+import { HOST } from '@/app/constants/api';
 
 // Interface for order item
 interface OrderItem {
@@ -196,7 +197,7 @@ function OrderRatingContent() {
                     try {
                         console.log(`Fetching product with ID: ${item.product_id}`);
                         const productResponse = await fetch(
-                            `http://68.183.226.198:3000/api/products/${item.product_id}`,
+                            `${HOST}/api/products/${item.product_id}`,
                             {
                                 headers: {
                                     Authorization: `Bearer ${token}`,
@@ -265,7 +266,7 @@ function OrderRatingContent() {
             }
 
             const response = await fetch(
-                `http://68.183.226.198:3000/api/orders/${id}?id=${id}`,
+                `${HOST}/api/orders/${id}?id=${id}`,
                 {
                     headers: {
                         Authorization: `Bearer ${token}`,
@@ -365,7 +366,7 @@ function OrderRatingContent() {
 
             // Sử dụng API để lấy tất cả đơn hàng của người dùng
             const response = await fetch(
-                `http://68.183.226.198:3000/api/orders?user_id=${uid}`,
+                `${HOST}/api/orders?user_id=${uid}`,
                 {
                     headers: {
                         Authorization: `Bearer ${token}`,
@@ -387,7 +388,7 @@ function OrderRatingContent() {
 
             // Tiếp theo, kiểm tra trạng thái đánh giá của mỗi đơn hàng
             const userRatingsResponse = await fetch(
-                `http://68.183.226.198:3000/api/rating/user/${uid}`,
+                `${HOST}/api/rating/user/${uid}`,
                 {
                     headers: {
                         'Authorization': `Bearer ${token}`
@@ -452,7 +453,7 @@ function OrderRatingContent() {
 
             // First check user's own ratings
             const userRatingsResponse = await fetch(
-                `http://68.183.226.198:3000/api/rating/user/${uid}`,
+                `${HOST}/api/rating/user/${uid}`,
                 {
                     headers: {
                         'Authorization': `Bearer ${token}`
@@ -475,7 +476,7 @@ function OrderRatingContent() {
             }
 
             // Then get all ratings for the products
-            const response = await fetch(`http://68.183.226.198:3000/api/rating/get-by-product`, {
+            const response = await fetch(`${HOST}/api/rating/get-by-product`, {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${token}`,
@@ -523,7 +524,7 @@ function OrderRatingContent() {
                 return null;
             }
 
-            const response = await fetch('http://68.183.226.198:3000/api/v1/auth/me', {
+            const response = await fetch(`${HOST}/api/v1/auth/me`, {
                 headers: {
                     Authorization: `Bearer ${token}`
                 }
@@ -704,7 +705,7 @@ function OrderRatingContent() {
 
             // Option 1: Send as a single object (not in an array)
             const response = await fetch(
-                `http://68.183.226.198:3000/api/rating/upsert`,
+                `${HOST}/api/rating/upsert`,
                 {
                     method: 'POST',
                     headers: {
@@ -720,7 +721,7 @@ function OrderRatingContent() {
                 console.log('Single object format failed, trying array format...');
 
                 const arrayResponse = await fetch(
-                    `http://68.183.226.198:3000/api/rating/upsert`,
+                    `${HOST}/api/rating/upsert`,
                     {
                         method: 'POST',
                         headers: {

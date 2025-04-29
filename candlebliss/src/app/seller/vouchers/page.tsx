@@ -5,6 +5,7 @@ import MenuSidebar from '@/app/components/seller/menusidebar/page';
 import VoucherTag from '@/app/components/seller/vouchertags/VoucherTag';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { HOST } from '@/app/constants/api';
 
 // Define the voucher interface to match your API response
 interface Voucher {
@@ -47,7 +48,7 @@ export default function VoucherPage() {
             }
 
             // Fetch vouchers data from API
-            const response = await fetch('http://68.183.226.198:3000/api/v1/vouchers', {
+            const response = await fetch(`${HOST}/api/v1/vouchers`, {
                method: 'GET',
                headers: {
                   'Content-Type': 'application/json',

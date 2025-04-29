@@ -1,3 +1,4 @@
+import { HOST } from '../constants/api';
 import { useCart } from '../contexts/CartContext';
 
 export const useCartActions = () => {
@@ -13,7 +14,7 @@ export const useCartActions = () => {
       }
 
       try {
-         const response = await fetch('http://68.183.226.198:3000/api/cart/item', {
+         const response = await fetch(`${HOST}/api/cart/item`, {
             method: 'POST',
             headers: {
                'Content-Type': 'application/json',

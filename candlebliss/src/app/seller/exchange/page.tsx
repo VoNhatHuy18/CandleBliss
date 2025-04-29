@@ -22,6 +22,7 @@ import {
 import Toast from '@/app/components/ui/toast/Toast';
 import MenuSideBar from '@/app/components/seller/menusidebar/page';
 import Header from '@/app/components/seller/header/page';
+import { HOST } from '@/app/constants/api';
 
 // Interfaces
 interface OrderItem {
@@ -200,7 +201,7 @@ export default function ExchangePage() {
                 return;
             }
 
-            const response = await fetch('http://68.183.226.198:3000/api/orders/all', {
+            const response = await fetch(`${HOST}/api/orders/all`, {
                 headers: {
                     Authorization: `Bearer ${token}`,
                 },
@@ -254,7 +255,7 @@ export default function ExchangePage() {
                 if (!order.user && order.user_id) {
                     try {
                         const userResponse = await fetch(
-                            `http://68.183.226.198:3000/api/v1/users/${order.user_id}`,
+                            `${HOST}/api/v1/users/${order.user_id}`,
                             {
                                 headers: { Authorization: `Bearer ${token}` },
                             },
@@ -285,7 +286,7 @@ export default function ExchangePage() {
                         try {
                             console.log(`Fetching product with ID: ${item.product_id}`);
                             const productResponse = await fetch(
-                                `http://68.183.226.198:3000/api/products/${item.product_id}`,
+                                `${HOST}/api/products/${item.product_id}`,
                                 {
                                     headers: {
                                         Authorization: `Bearer ${token}`,
@@ -355,7 +356,7 @@ export default function ExchangePage() {
                     ) {
                         try {
                             const detailResponse = await fetch(
-                                `http://68.183.226.198:3000/api/product-details/${item.product_detail_id}`,
+                                `${HOST}/api/product-details/${item.product_detail_id}`,
                                 {
                                     headers: {
                                         Authorization: `Bearer ${token}`,
@@ -377,7 +378,7 @@ export default function ExchangePage() {
                                 if (detailData.product_id && (!item.product || !item.product.name)) {
                                     try {
                                         const productResponse = await fetch(
-                                            `http://68.183.226.198:3000/api/products/${detailData.product_id}`,
+                                            `${HOST}/api/products/${detailData.product_id}`,
                                             {
                                                 headers: {
                                                     Authorization: `Bearer ${token}`,
@@ -588,7 +589,7 @@ export default function ExchangePage() {
             // Use query parameter for status instead of JSON body
             const encodedStatus = encodeURIComponent(newStatus);
             const response = await fetch(
-                `http://68.183.226.198:3000/api/orders/${selectedOrder.id}/status?status=${encodedStatus}`,
+                `${HOST}/api/orders/${selectedOrder.id}/status?status=${encodedStatus}`,
                 {
                     method: 'PATCH',
                     headers: {

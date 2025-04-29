@@ -12,7 +12,7 @@ import {
    FiInfo,
    FiAlertCircle,
 } from 'react-icons/fi';
-
+import { HOST } from '@/app/constants/api';
 import Header from '@/app/components/seller/header/page';
 import MenuSideBar from '@/app/components/seller/menusidebar/page';
 
@@ -71,7 +71,7 @@ export default function VoucherDetail() {
 
             // Fetch voucher data from API
             const response = await fetch(
-               `http://68.183.226.198:3000/api/v1/vouchers/${params.id}`,
+               `${HOST}/api/v1/vouchers/${params.id}`,
                {
                   method: 'GET',
                   headers: {
@@ -145,7 +145,7 @@ export default function VoucherDetail() {
 
       try {
          const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-         const response = await fetch(`http://68.183.226.198:3000/api/v1/vouchers/${params.id}/remove`, {
+         const response = await fetch(`${HOST}/api/v1/vouchers/${params.id}/remove`, {
             method: 'DELETE',
             headers: {
                'Content-Type': 'application/json',
@@ -172,7 +172,7 @@ export default function VoucherDetail() {
          const newStatus = !voucher?.isActive;
 
          const response = await fetch(
-            `http://68.183.226.198:3000/api/v1/vouchers/${params.id}/status`,
+            `${HOST}/api/v1/vouchers/${params.id}/status`,
             {
                method: 'PATCH',
                headers: {
@@ -284,10 +284,10 @@ export default function VoucherDetail() {
       status === 'Còn hiệu lực'
          ? 'text-green-600 bg-green-50'
          : status === 'Chưa bắt đầu'
-         ? 'text-blue-600 bg-blue-50'
-         : status === 'Đã hủy'
-         ? 'text-red-600 bg-red-50'
-         : 'text-gray-600 bg-gray-100';
+            ? 'text-blue-600 bg-blue-50'
+            : status === 'Đã hủy'
+               ? 'text-red-600 bg-red-50'
+               : 'text-gray-600 bg-gray-100';
 
    return (
       <div className='flex min-h-screen bg-[#f8f5f0]'>
@@ -574,11 +574,10 @@ export default function VoucherDetail() {
                               </Link>
                               <button
                                  onClick={handleToggleStatus}
-                                 className={`px-4 py-2 ${
-                                    voucher.isActive
+                                 className={`px-4 py-2 ${voucher.isActive
                                        ? 'bg-blue-500 hover:bg-blue-600'
                                        : 'bg-green-500 hover:bg-green-600'
-                                 } text-white rounded-md focus:outline-none focus:ring-2 focus:ring-opacity-50 w-full mb-2`}
+                                    } text-white rounded-md focus:outline-none focus:ring-2 focus:ring-opacity-50 w-full mb-2`}
                               >
                                  {voucher.isActive ? 'Tạm dừng' : 'Kích hoạt'}
                               </button>

@@ -6,6 +6,7 @@ import MenuSidebar from '@/app/components/seller/menusidebar/page';
 import { PlusCircle, Edit2, Trash2, Search, RefreshCw } from 'lucide-react';
 import Toast from '@/app/components/ui/toast/Toast';
 import Link from 'next/link';
+import { HOST } from '@/app/constants/api';
 
 // Update the Category interface to match the actual API response structure
 interface Category {
@@ -26,7 +27,6 @@ interface ToastState {
 }
 
 // Update to the correct API endpoint
-const API_BASE_URL = '/api/categories';
 
 export default function CategoriesPage() {
     const [categories, setCategories] = useState<Category[]>([]);
@@ -62,13 +62,11 @@ export default function CategoriesPage() {
         setToast(prev => ({ ...prev, show: false }));
     };
 
-    // Update the fetchCategories function to handle 302 redirects
+    // Update the fetchCategories function to be more robust
     const fetchCategories = async () => {
         setIsLoading(true);
         try {
-            // Add credentials to follow redirects if there's an auth issue
-            const response = await fetch(API_BASE_URL, {
-                credentials: 'include',
+            const response = await fetch(`${HOST}/api/categories`, {
                 headers: {
                     'Cache-Control': 'no-store'
                 }
@@ -146,6 +144,8 @@ export default function CategoriesPage() {
         } catch (error) {
             console.error('Error fetching categories:', error);
             showToast('Failed to load categories', 'error');
+            setCategories([]);
+            setFilteredCategories([]);
         } finally {
             setIsLoading(false);
         }
@@ -211,13 +211,12 @@ export default function CategoriesPage() {
         try {
             if (currentCategory) {
                 // Update existing category
-                const response = await fetch(`${API_BASE_URL}/${currentCategory.id}`, {
+                const response = await fetch(`${HOST}/api/categories/${currentCategory.id}`, {
                     method: 'PATCH',
                     headers: {
                         'Content-Type': 'application/json',
                         'Cache-Control': 'no-store'
                     },
-                    credentials: 'include',
                     body: JSON.stringify(formData),
                 });
 
@@ -235,15 +234,16 @@ export default function CategoriesPage() {
                 } else {
                     showToast('Category updated successfully', 'success');
                 }
+
+                showToast('Category updated successfully', 'success');
             } else {
                 // Create new category
-                const response = await fetch(API_BASE_URL, {
+                const response = await fetch(`${HOST}/api/categories`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                         'Cache-Control': 'no-store'
                     },
-                    credentials: 'include',
                     body: JSON.stringify(formData),
                 });
 
@@ -261,6 +261,8 @@ export default function CategoriesPage() {
                 } else {
                     showToast('Category created successfully', 'success');
                 }
+
+                showToast('Category created successfully', 'success');
             }
 
             setIsModalOpen(false);
@@ -276,12 +278,11 @@ export default function CategoriesPage() {
         if (!currentCategory) return;
 
         try {
-            const response = await fetch(`${API_BASE_URL}/${currentCategory.id}`, {
+            const response = await fetch(`${HOST}/api/categories/${currentCategory.id}`, {
                 method: 'DELETE',
                 headers: {
                     'Cache-Control': 'no-store'
                 },
-                credentials: 'include',
             });
 
             console.log('Delete response status:', response.status);
@@ -299,6 +300,7 @@ export default function CategoriesPage() {
                 showToast('Category deleted successfully', 'success');
             }
 
+            showToast('Category deleted successfully', 'success');
             setIsDeleteModalOpen(false);
             fetchCategories();
         } catch (error) {

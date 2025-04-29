@@ -10,6 +10,7 @@ import Toast from '@/app/components/ui/toast/Toast';
 import { retryOrderPayment } from '@/app/utils/orderUtils';
 import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
 import OrderActionModal from '@/app/components/user/orderactionmodals/OrderActionModals';
+import { HOST } from '@/app/constants/api';
 
 // Interfaces
 interface OrderItem {
@@ -261,7 +262,7 @@ export default function OrderPage() {
             }
 
             const response = await fetch(
-               `http://68.183.226.198:3000/api/orders?user_id=${userId}`,
+               `${HOST}/api/orders?user_id=${userId}`,
                {
                   headers: {
                      Authorization: `Bearer ${token}`,
@@ -308,7 +309,7 @@ export default function OrderPage() {
                   try {
                      console.log(`Fetching product with ID: ${item.product_id}`);
                      const productResponse = await fetch(
-                        `http://68.183.226.198:3000/api/products/${item.product_id}`,
+                        `${HOST}/api/products/${item.product_id}`,
                         {
                            headers: {
                               Authorization: `Bearer ${token}`,
@@ -439,7 +440,7 @@ export default function OrderPage() {
          // Use query parameter format instead of request body
          const encodedStatus = encodeURIComponent('Hoàn thành');
          const response = await fetch(
-            `http://68.183.226.198:3000/api/orders/${orderId}/status?status=${encodedStatus}`,
+            `${HOST}/api/orders/${orderId}/status?status=${encodedStatus}`,
             {
                method: 'PATCH',
                headers: {
@@ -534,7 +535,7 @@ export default function OrderPage() {
 
             // First update to "Thanh toán thất bại"
             const response = await fetch(
-               `http://68.183.226.198:3000/api/orders/${orderId}/status`,
+               `${HOST}/api/orders/${orderId}/status`,
                {
                   method: 'PATCH',
                   headers: {
@@ -558,7 +559,7 @@ export default function OrderPage() {
                // Then update to "Đã hủy" after a short delay
                setTimeout(async () => {
                   const cancelResponse = await fetch(
-                     `http://68.183.226.198:3000/api/orders/${orderId}/status`,
+                     `${HOST}/api/orders/${orderId}/status`,
                      {
                         method: 'PATCH',
                         headers: {
@@ -652,7 +653,7 @@ export default function OrderPage() {
             // Use query parameter for status with proper URL encoding
             const encodedStatus = encodeURIComponent('Đang xử lý');
             const response = await fetch(
-               `http://68.183.226.198:3000/api/orders/${order.id}/status?status=${encodedStatus}`,
+               `${HOST}/api/orders/${order.id}/status?status=${encodedStatus}`,
                {
                   method: 'PATCH',
                   headers: {
@@ -842,7 +843,7 @@ export default function OrderPage() {
 
          // Send the request with FormData
          const response = await fetch(
-            `http://68.183.226.198:3000/api/orders/cancel-or-return/${selectedOrderId}`,
+            `${HOST}/api/orders/cancel-or-return/${selectedOrderId}`,
             {
                method: 'PATCH',
                headers: {

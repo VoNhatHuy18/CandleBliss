@@ -15,7 +15,7 @@ import {
     StarIcon,
     ChatBubbleLeftEllipsisIcon,
 } from '@heroicons/react/24/outline';
-
+import {HOST} from '@/app/constants/api';
 // Interface definitions
 interface User {
     id: number;
@@ -667,7 +667,7 @@ export default function ReviewsManagement() {
             }
 
             // Lấy tất cả sản phẩm của seller
-            const productsResponse = await fetch('http://68.183.226.198:3000/api/products', {
+            const productsResponse = await fetch(`${HOST}/api/products`, {
                 headers: {
                     Authorization: `Bearer ${token}`,
                 },
@@ -687,7 +687,7 @@ export default function ReviewsManagement() {
             }
 
             // Lấy tất cả người dùng
-            const usersResponse = await fetch('http://68.183.226.198:3000/api/v1/users', {
+            const usersResponse = await fetch(`${HOST}/api/v1/users`, {
                 headers: {
                     Authorization: `Bearer ${token}`,
                 },
@@ -719,7 +719,7 @@ export default function ReviewsManagement() {
             // Lấy đánh giá cho từng sản phẩm của seller
             for (const product of productsData) {
                 try {
-                    const ratingResponse = await fetch('http://68.183.226.198:3000/api/rating/get-by-product', {
+                    const ratingResponse = await fetch(`${HOST}/api/rating/get-by-product`, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -856,7 +856,7 @@ export default function ReviewsManagement() {
             }
 
             // API không hỗ trợ xóa trực tiếp, nên chúng ta cập nhật với giá trị rỗng/0
-            const response = await fetch('http://68.183.226.198:3000/api/rating/upsert', {
+            const response = await fetch(`${HOST}/api/rating/upsert`, {
                 method: 'POST',
                 headers: {
                     Authorization: `Bearer ${token}`,

@@ -17,6 +17,8 @@ import {
    PhotoIcon,
    XMarkIcon,
 } from '@heroicons/react/24/outline';
+import { HOST } from '@/app/constants/api';
+
 
 // Cập nhật interface Image để khớp với cấu trúc dữ liệu trả về
 interface Image {
@@ -164,7 +166,7 @@ export default function EditProduct() {
                return;
             }
 
-            const response = await fetch(`http://68.183.226.198:3000/api/products/${productId}`, {
+            const response = await fetch(`${HOST}/api/products/${productId}`, {
                headers: {
                   Authorization: `Bearer ${token}`,
                },
@@ -241,7 +243,7 @@ export default function EditProduct() {
 
          console.log('Fetching categories with token:', token ? 'Token exists' : 'No token');
 
-         const response = await fetch('http://68.183.226.198:3000/api/categories', {
+         const response = await fetch(`${HOST}/api/categories`, {
             headers: {
                Authorization: `Bearer ${token}`,
                'Content-Type': 'application/json',
@@ -366,7 +368,7 @@ export default function EditProduct() {
 
          // Fetch detailed category information if needed
          const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-         const response = await fetch(`http://68.183.226.198:3000/api/categories/${category.id}`, {
+         const response = await fetch(`${HOST}/api/categories/${category.id}`, {
             headers: {
                Authorization: `Bearer ${token}`,
             },
@@ -427,7 +429,7 @@ export default function EditProduct() {
          const pricePromises = details.map(async (detail) => {
             try {
                const response = await fetch(
-                  `http://68.183.226.198:3000/api/v1/prices/product-detail/${detail.id}`,
+                  `${HOST}/api/v1/prices/product-detail/${detail.id}`,
                   {
                      headers: {
                         Authorization: `Bearer ${token}`,
@@ -624,7 +626,7 @@ export default function EditProduct() {
             const token = localStorage.getItem('token') || sessionStorage.getItem('token');
             if (!token) throw new Error('No authentication token found');
 
-            const response = await fetch(`http://68.183.226.198:3000/api/products/${productId}`, {
+            const response = await fetch(`${HOST}/api/products/${productId}`, {
                method: 'PATCH',
                headers: {
                   Authorization: `Bearer ${token}`,
@@ -674,7 +676,7 @@ export default function EditProduct() {
 
          console.log('Refetching product details for ID:', productId);
 
-         const response = await fetch(`http://68.183.226.198:3000/api/products/${productId}`, {
+         const response = await fetch(`${HOST}/api/products/${productId}`, {
             headers: {
                Authorization: `Bearer ${token}`,
             },
@@ -742,7 +744,7 @@ export default function EditProduct() {
          formData.append('image_id', imageId);
          formData.append('action', 'remove_image'); // Đảm bảo backend hiểu đây là hành động xóa ảnh
 
-         const response = await fetch(`http://68.183.226.198:3000/api/products/${productId}`, {
+         const response = await fetch(`${HOST}/api/products/${productId}`, {
             method: 'PATCH',
             headers: {
                Authorization: `Bearer ${token}`,
@@ -846,7 +848,7 @@ export default function EditProduct() {
 
          // Sử dụng API PATCH /api/product-details/{id}
          const response = await fetch(
-            `http://68.183.226.198:3000/api/product-details/${detailId}`,
+            `${HOST}/api/product-details/${detailId}`,
             {
                method: 'PATCH',
                headers: {
@@ -919,7 +921,7 @@ export default function EditProduct() {
          console.log('Sending basic product update data:', basicProductData);
 
          // Cập nhật thông tin cơ bản sản phẩm
-         const response = await fetch(`http://68.183.226.198:3000/api/products/${productId}`, {
+         const response = await fetch(`${HOST}/api/products/${productId}`, {
             method: 'PATCH',
             headers: {
                Authorization: `Bearer ${token}`,
@@ -963,7 +965,7 @@ export default function EditProduct() {
 
                   // Gọi API cập nhật chi tiết sản phẩm
                   const detailRes = await fetch(
-                     `http://68.183.226.198:3000/api/product-details/${detail.id}`,
+                     `${HOST}/api/product-details/${detail.id}`,
                      {
                         method: 'PATCH',
                         headers: {
@@ -1014,7 +1016,7 @@ export default function EditProduct() {
                // Call API with better error handling
                try {
                   const detailRes = await fetch(
-                     `http://68.183.226.198:3000/api/product-details/${detail.id}`,
+                     `${HOST}/api/product-details/${detail.id}`,
                      {
                         method: 'PATCH',
                         headers: {
@@ -1118,7 +1120,7 @@ export default function EditProduct() {
                console.log(`Updating price for detail ${detailId} with:`, priceData);
 
                const priceRes = await fetch(
-                  `http://68.183.226.198:3000/api/v1/prices/${detailId}`,
+                  `${HOST}/api/v1/prices/${detailId}`,
                   {
                      method: 'PATCH',
                      headers: {
@@ -1186,7 +1188,7 @@ export default function EditProduct() {
             formData.append('images', file);
          });
 
-         const response = await fetch(`http://68.183.226.198:3000/api/products/${productId}`, {
+         const response = await fetch(`${HOST}/api/products/${productId}`, {
             method: 'PATCH',
             headers: {
                Authorization: `Bearer ${token}`,
@@ -1232,7 +1234,7 @@ export default function EditProduct() {
    //       }
 
    //       const response = await fetch(
-   //          `http://68.183.226.198:3000/api/product-details/${detailId}`,
+   //          ``${HOST}`/api/product-details/${detailId}`,
    //          {
    //             headers: {
    //                Authorization: `Bearer ${token}`,
@@ -1285,7 +1287,7 @@ export default function EditProduct() {
          formData.append('action', 'remove_image');
 
          const response = await fetch(
-            `http://68.183.226.198:3000/api/product-details/${detailId}`,
+            `${HOST}/api/product-details/${detailId}`,
             {
                method: 'PATCH',
                headers: {
@@ -1349,7 +1351,7 @@ export default function EditProduct() {
          }
 
          const response = await fetch(
-            `http://68.183.226.198:3000/api/product-details/${detailId}`,
+            `${HOST}/api/product-details/${detailId}`,
             {
                headers: {
                   Authorization: `Bearer ${token}`,

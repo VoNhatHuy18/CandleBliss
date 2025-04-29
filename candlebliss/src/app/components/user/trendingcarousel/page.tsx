@@ -4,6 +4,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Eye, ChevronLeft, ChevronRight } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
+import { HOST } from '@/app/constants/api';
+
 interface ProductImage {
    id: string;
    path: string;
@@ -68,7 +70,7 @@ const fetchRatingsForProducts = async (productIds: number[]) => {
 
    try {
       const ratingPromises = productIds.map(id =>
-         fetch(`http://68.183.226.198:3000/api/rating/get-by-product`, {
+         fetch(`${HOST}/api/rating/get-by-product`, {
             method: 'POST',
             headers: {
                'Content-Type': 'application/json'
@@ -346,7 +348,7 @@ export default function CandlesCarousel() {
       const fetchProducts = async () => {
          try {
             // 1. Lấy danh sách sản phẩm cơ bản
-            const productsResponse = await fetch('http://68.183.226.198:3000/api/products');
+            const productsResponse = await fetch(`${HOST}/api/products`);
             if (!productsResponse.ok) {
                throw new Error('Failed to fetch products');
             }
@@ -363,7 +365,7 @@ export default function CandlesCarousel() {
             const detailedProducts = await Promise.all(
                normalizedProducts.map(async (product) => {
                   try {
-                     const detailResponse = await fetch(`http://68.183.226.198:3000/api/products/${product.id}`);
+                     const detailResponse = await fetch(`${HOST}/api/products/${product.id}`);
                      if (detailResponse.ok) {
                         const detailData = await detailResponse.json();
                         return {
@@ -389,7 +391,7 @@ export default function CandlesCarousel() {
             // 4. Lấy thông tin giá
             try {
                // Fetch prices data
-               const pricesResponse = await fetch('http://68.183.226.198:3000/api/v1/prices', {
+               const pricesResponse = await fetch(`${HOST}/api/v1/prices`, {
                   headers: {
                      Authorization: 'Bearer ' + localStorage.getItem('token'),
                   },

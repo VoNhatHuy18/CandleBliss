@@ -6,6 +6,7 @@ import Header from '@/app/components/seller/header/page';
 import MenuSideBar from '@/app/components/seller/menusidebar/page';
 import { useRouter } from 'next/navigation';
 import { useProductForm } from '@/app/contexts/ProductFormContext';
+import { HOST } from '@/app/constants/api';
 
 // Define the variant interface
 interface Variant {
@@ -315,7 +316,7 @@ export default function Step2() {
 
             // Gửi request tạo chi tiết sản phẩm
             setLoadingMessage(`Đang lưu thông tin phiên bản ${i + 1}...`);
-            const detailResponse = await fetch('http://68.183.226.198:3000/api/product-details', {
+            const detailResponse = await fetch(`${HOST}/api/product-details`, {
                method: 'POST',
                headers: {
                   Authorization: `Bearer ${token}`,

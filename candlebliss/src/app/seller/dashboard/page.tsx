@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { Package, ShoppingBag, CreditCard, Users } from 'lucide-react';
-
+import { HOST } from '@/app/constants/api';
 import Header from '@/app/components/seller/header/page';
 import MenuSideBar from '@/app/components/seller/menusidebar/page';
 import Link from 'next/link';
@@ -109,7 +109,7 @@ export default function Dashboard() {
          if (!order.user && order.user_id && !fetchedUserIds[order.user_id]) {
             try {
                const userResponse = await fetch(
-                  `http://68.183.226.198:3000/api/v1/users/${order.user_id}`,
+                  `${HOST}/api/v1/users/${order.user_id}`,
                   {
                      headers: { Authorization: `Bearer ${token}` },
                   }
@@ -156,7 +156,7 @@ export default function Dashboard() {
                return;
             }
 
-            const response = await fetch('http://68.183.226.198:3000/api/orders/all', {
+            const response = await fetch(`${HOST}/api/orders/all`, {
                headers: {
                   Authorization: `Bearer ${token}`,
                },

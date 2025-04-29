@@ -8,7 +8,7 @@ import { EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
 import Image from 'next/image';
 import Toast from '@/app/components/ui/toast/Toast';
 import AuthService from '@/app/utils/authService';
-
+import { HOST } from '@/app/constants/api';
 export default function SignUpPage() {
    const router = useRouter();
    const [showPassword, setShowPassword] = useState<boolean>(false);
@@ -192,7 +192,7 @@ export default function SignUpPage() {
    // Xử lý đăng nhập với Google
    const handleGoogleSignup = () => {
       try {
-         window.location.href = 'http://68.183.226.198:3000/api/v1/auth/google';
+         window.location.href = `${HOST}/api/v1/auth/google`;
       } catch (error) {
          console.error('Google signup error:', error);
          showToastMessage('Đăng ký bằng Google thất bại', 'error');
@@ -235,7 +235,7 @@ export default function SignUpPage() {
             phone,
          };
 
-         const response = await fetch('http://68.183.226.198:3000/api/v1/auth/email/register', {
+         const response = await fetch(`${HOST}/api/v1/auth/email/register`, {
             method: 'POST',
             headers: {
                'Content-Type': 'application/json',

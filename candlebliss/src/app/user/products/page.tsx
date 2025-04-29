@@ -9,7 +9,7 @@ import { useSearchParams } from 'next/navigation';
 import NavBar from '@/app/components/user/nav/page';
 import Footer from '@/app/components/user/footer/page';
 import ChatBot from '@/app/components/user/chatbot/ChatBot';
-
+import { HOST } from '@/app/constants/api'
 
 interface ProductImage {
    id: string;
@@ -315,7 +315,7 @@ const fetchRatingsForProducts = async (productIds: number[]) => {
 
    try {
       const ratingPromises = productIds.map(id =>
-         fetch(`http://68.183.226.198:3000/api/rating/get-by-product`, {
+         fetch(`${HOST}/api/rating/get-by-product`, {
             method: 'POST',
             headers: {
                'Content-Type': 'application/json'
@@ -607,7 +607,7 @@ export default function ProductPage() {
       const fetchProducts = async () => {
          try {
             // 1. Lấy danh sách sản phẩm cơ bản
-            const productsResponse = await fetch('http://68.183.226.198:3000/api/products');
+            const productsResponse = await fetch(`${HOST}/api/products`);
             if (!productsResponse.ok) {
                throw new Error('Failed to fetch products');
             }
@@ -621,8 +621,8 @@ export default function ProductPage() {
 
             // 2. Lấy thêm thông tin về giá
             try {
-               // Fetch prices data
-               const pricesResponse = await fetch('http://68.183.226.198:3000/api/v1/prices', {
+               // Fetch prices dat
+               const pricesResponse = await fetch(`${HOST}/api/v1/prices`, {
                   headers: {
                      Authorization: 'Bearer ' + localStorage.getItem('token'),
                   },
@@ -704,7 +704,7 @@ export default function ProductPage() {
 
                      // Nếu không có giá, thử lấy chi tiết từ API riêng
                      try {
-                        const detailResponse = await fetch(`http://68.183.226.198:3000/api/products/${product.id}`);
+                        const detailResponse = await fetch(`${HOST}/api/products/${product.id}`);
                         if (detailResponse.ok) {
                            const detailData = await detailResponse.json();
 
@@ -749,7 +749,7 @@ export default function ProductPage() {
                   }
                   try {
                      // Lấy rating từ API (tương tự như trong trang product detail)
-                     const ratingResponse = await fetch(`http://68.183.226.198:3000/api/rating/get-by-product`, {
+                     const ratingResponse = await fetch(`${HOST}/api/rating/get-by-product`, {
                         method: 'POST',
                         headers: {
                            'Content-Type': 'application/json'

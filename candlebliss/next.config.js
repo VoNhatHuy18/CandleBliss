@@ -1,10 +1,13 @@
 /** @type {import('next').NextConfig} */
+
+const { HOST } = require('./src/app/constants/api.tsx');
+
 const nextConfig = {
    async rewrites() {
       return [
          {
             source: '/api/:path*',
-            destination: 'http://68.183.226.198:3000/api/:path*',
+            destination: `${HOST}/api/:path*`,
          },
       ];
    },

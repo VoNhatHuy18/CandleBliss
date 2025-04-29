@@ -7,6 +7,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import Toast from '@/app/components/ui/toast/Toast'; // Add Toast import
+import { HOST } from '@/app/constants/api';
 
 // Interface for variant that's compatible with both Step2 and Step3
 interface Variant {
@@ -204,7 +205,7 @@ export default function Step3() {
 
             console.log('Sending price data:', priceData);
 
-            const priceResponse = await fetch('http://68.183.226.198:3000/api/v1/prices', {
+            const priceResponse = await fetch(`${HOST}/api/v1/prices`, {
                method: 'POST',
                headers: {
                   'Content-Type': 'application/json',
