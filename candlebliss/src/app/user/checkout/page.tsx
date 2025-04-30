@@ -85,10 +85,11 @@ const formatPrice = (price: number): string => {
    }).format(price);
 };
 
-// Thêm hàm kiểm tra tính hợp lệ của voucher
+// Cập nhật hàm kiểm tra tính hợp lệ của voucher
 const isVoucherValid = (
    voucher: Voucher,
    currentSubTotal: number,
+   userId: number | null
 ): { valid: boolean; message?: string } => {
    // Kiểm tra voucher có đang hoạt động không
    if (!voucher.isActive || voucher.isDeleted) {
@@ -122,6 +123,17 @@ const isVoucherValid = (
       };
    }
 
+   // THÊM KIỂM TRA: Số lần sử dụng voucher của người dùng
+   if (userId && voucher.usage_per_customer > 0) {
+      const usageCount = getVoucherUsageCount(voucher.id, userId);
+      if (usageCount >= voucher.usage_per_customer) {
+         return {
+            valid: false,
+            message: `Bạn đã sử dụng hết số lần cho phép với mã giảm giá này (tối đa ${voucher.usage_per_customer} lần)`
+         };
+      }
+   }
+
    // Voucher hợp lệ
    return { valid: true };
 };
@@ -152,6 +164,37 @@ const calculateDiscountAmount = (voucher: Voucher, currentSubTotal: number): num
    discountAmount = Math.min(discountAmount, currentSubTotal); // Đảm bảo không giảm quá giá trị đơn hàng
 
    return discountAmount;
+};
+
+// Tạo helper function để quản lý lịch sử sử dụng voucher
+const getVoucherUsageHistory = () => {
+   const history = localStorage.getItem('voucherUsageHistory');
+   return history ? JSON.parse(history) : {};
+};
+
+const saveVoucherUsage = (voucherId: number, userId: number) => {
+   const history = getVoucherUsageHistory();
+
+   // Nếu chưa có lịch sử cho user này, tạo mới
+   if (!history[userId]) {
+      history[userId] = {};
+   }
+
+   // Nếu chưa có lịch sử cho voucher này, khởi tạo là 0
+   if (!history[userId][voucherId]) {
+      history[userId][voucherId] = 0;
+   }
+
+   // Tăng số lần sử dụng lên 1
+   history[userId][voucherId]++;
+
+   // Lưu lại lịch sử
+   localStorage.setItem('voucherUsageHistory', JSON.stringify(history));
+};
+
+const getVoucherUsageCount = (voucherId: number, userId: number) => {
+   const history = getVoucherUsageHistory();
+   return history[userId]?.[voucherId] || 0;
 };
 
 export default function CheckoutPage() {
@@ -425,6 +468,48 @@ export default function CheckoutPage() {
 
       init();
    }, []);
+
+   // Thêm vào useEffect để kiểm tra voucher đã áp dụng khi load trang
+   useEffect(() => {
+      // Lấy voucher đã áp dụng từ localStorage nếu có
+      const savedVoucher = localStorage.getItem('appliedVoucher');
+      if (savedVoucher && userId) {
+         try {
+            const voucherData = JSON.parse(savedVoucher);
+
+            // Kiểm tra số lần sử dụng
+            if (voucherData.usage_per_customer > 0) {
+               const usageCount = getVoucherUsageCount(voucherData.id, userId);
+               if (usageCount >= voucherData.usage_per_customer) {
+                  // Người dùng đã sử dụng đủ số lần cho phép
+                  localStorage.removeItem('appliedVoucher');
+                  showToastMessage(
+                     `Bạn đã sử dụng hết số lần cho phép với mã giảm giá này (tối đa ${voucherData.usage_per_customer} lần)`,
+                     'error'
+                  );
+                  return;
+               }
+            }
+
+            // Kiểm tra thời gian hiệu lực và các điều kiện khác
+            const now = new Date();
+            const startDate = new Date(voucherData.start_date);
+            const endDate = new Date(voucherData.end_date);
+
+            if (now < startDate || now > endDate || !voucherData.isActive) {
+               // Voucher hết hạn hoặc vô hiệu, xóa khỏi localStorage
+               localStorage.removeItem('appliedVoucher');
+               showToastMessage('Mã giảm giá đã hết hạn hoặc không còn hiệu lực', 'error');
+               return;
+            }
+
+            // ...code hiện tại...
+         } catch (error) {
+            console.error('Error parsing saved voucher:', error);
+            localStorage.removeItem('appliedVoucher');
+         }
+      }
+   }, [subTotal, userId]);
 
    // Thêm vào useEffect để load voucher đã áp dụng từ cart
    useEffect(() => {
@@ -1208,7 +1293,7 @@ export default function CheckoutPage() {
       }
    };
 
-   // Cập nhật lại hàm applyVoucher với các hàm trợ giúp
+   // Cập nhật hàm áp dụng voucher
    const applyVoucher = async () => {
       if (!voucherCode.trim()) {
          setVoucherError('Vui lòng nhập mã giảm giá');
@@ -1219,46 +1304,21 @@ export default function CheckoutPage() {
          setApplyingVoucher(true);
          setVoucherError('');
 
-         // Bước 1: Lấy tất cả vouchers
-         const allVouchersResponse = await fetch(`${HOST}/api/v1/vouchers`, {
+         // Vì bạn có API /api/v1/vouchers/code/{code}, nên dùng nó thay vì lấy toàn bộ vouchers
+         const voucherResponse = await fetch(`${HOST}/api/v1/vouchers/code/${voucherCode.trim()}`, {
             headers: {
                Authorization: `Bearer ${localStorage.getItem('token') || ''}`,
             },
          });
 
-         if (!allVouchersResponse.ok) {
-            throw new Error('Không thể lấy danh sách mã giảm giá');
+         if (!voucherResponse.ok) {
+            throw new Error('Mã giảm giá không tồn tại hoặc đã hết hiệu lực');
          }
 
-         const allVouchers = await allVouchersResponse.json();
+         const voucher = await voucherResponse.json();
 
-         // Tìm ID của voucher theo mã code
-         const matchingVoucher = allVouchers.find(
-            (v: { code: string }) => v.code.toLowerCase() === voucherCode.trim().toLowerCase(),
-         );
-
-         if (!matchingVoucher) {
-            throw new Error('Mã giảm giá không tồn tại');
-         }
-
-         // Bước 2: Lấy thông tin chi tiết của voucher theo ID
-         const voucherDetailResponse = await fetch(
-            `${HOST}/api/v1/vouchers/${matchingVoucher.id}`,
-            {
-               headers: {
-                  Authorization: `Bearer ${localStorage.getItem('token') || ''}`,
-               },
-            },
-         );
-
-         if (!voucherDetailResponse.ok) {
-            throw new Error('Không thể lấy thông tin mã giảm giá');
-         }
-
-         const voucher = await voucherDetailResponse.json();
-
-         // Kiểm tra tính hợp lệ của voucher
-         const validationResult = isVoucherValid(voucher, subTotal);
+         // Kiểm tra tính hợp lệ của voucher, bao gồm số lần sử dụng
+         const validationResult = isVoucherValid(voucher, subTotal, userId);
          if (!validationResult.valid) {
             throw new Error(validationResult.message);
          }
@@ -1440,6 +1500,11 @@ export default function CheckoutPage() {
                console.log(`Đã cập nhật phương thức thanh toán: ${paymentMethod}`);
             } catch (error) {
                console.error('Lỗi khi cập nhật phương thức thanh toán:', error);
+            }
+
+            // Thêm: Nếu đặt hàng thành công và có sử dụng voucher, cập nhật lịch sử sử dụng
+            if (appliedVoucher && userId) {
+               saveVoucherUsage(appliedVoucher.id, userId);
             }
 
             // Xóa giỏ hàng và voucher sau khi đặt hàng thành công

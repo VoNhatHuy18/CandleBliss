@@ -602,7 +602,7 @@ export default function ProductPage() {
       setFilteredProducts(newFilteredProducts);
    }, [searchQuery, selectedPriceRange, sortOption, products]);
 
-   // Sửa phần xử lý dữ liệu API để lưu sản phẩm gốc
+   // phần xử lý dữ liệu API để lưu sản phẩm gốc
    useEffect(() => {
       const fetchProducts = async () => {
          try {
