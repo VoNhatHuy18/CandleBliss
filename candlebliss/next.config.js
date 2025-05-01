@@ -1,7 +1,7 @@
 /** @type {import('next').NextConfig} */
 
-const { HOST } = require('./src/app/constants/api.tsx');
-
+const HOST = 'http://68.183.226.198:3000';
+module.exports = { HOST };
 const nextConfig = {
    async rewrites() {
       return [
