@@ -9,7 +9,7 @@ import { useSearchParams } from 'next/navigation';
 import NavBar from '@/app/components/user/nav/page';
 import Footer from '@/app/components/user/footer/page';
 import ChatBot from '@/app/components/user/chatbot/ChatBot';
-import { HOST } from '@/app/constants/api'
+import { HOST } from '@/app/constants/api';
 
 interface ProductImage {
    id: string;
@@ -44,6 +44,7 @@ interface Product {
    video: string;
    images: ProductImage | ProductImage[];
    details?: ProductDetail[]; // Add the 'details' property as optional
+   reviewCount?: number; // Add this
 }
 
 interface ProductCardProps {
@@ -87,16 +88,16 @@ interface PriceRange {
 // Thêm StarDisplay component từ trang chi tiết sản phẩm
 const StarDisplay = ({ rating }: { rating: number }) => {
    return (
-      <div className="flex">
+      <div className='flex'>
          {[1, 2, 3, 4, 5].map((star) => (
             <svg
                key={star}
-               xmlns="http://www.w3.org/2000/svg"
+               xmlns='http://www.w3.org/2000/svg'
                className={`h-4 w-4 ${star <= rating ? 'text-yellow-400' : 'text-gray-300'}`}
-               viewBox="0 0 20 20"
-               fill="currentColor"
+               viewBox='0 0 20 20'
+               fill='currentColor'
             >
-               <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+               <path d='M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z' />
             </svg>
          ))}
       </div>
@@ -133,10 +134,11 @@ const ProductCard = ({
                {variants.map((variant) => (
                   <button
                      key={variant.detailId}
-                     className={`text-xs px-2 py-1 border rounded ${selectedVariant === variant.detailId
-                        ? 'border-orange-500 bg-orange-50'
-                        : 'border-gray-300'
-                        }`}
+                     className={`text-xs px-2 py-1 border rounded ${
+                        selectedVariant === variant.detailId
+                           ? 'border-orange-500 bg-orange-50'
+                           : 'border-gray-300'
+                     }`}
                      onClick={() => handleVariantChange(variant.detailId)}
                   >
                      {variant.size} - {variant.type}
@@ -314,29 +316,34 @@ const fetchRatingsForProducts = async (productIds: number[]) => {
    if (!productIds.length) return {};
 
    try {
-      const ratingPromises = productIds.map(id =>
+      const ratingPromises = productIds.map((id) =>
          fetch(`${HOST}/api/rating/get-by-product`, {
             method: 'POST',
             headers: {
-               'Content-Type': 'application/json'
+               'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ product_id: id })
-         }).then(res => res.ok ? res.json() : [])
+            body: JSON.stringify({ product_id: id }),
+         }).then((res) => (res.ok ? res.json() : [])),
       );
 
       const ratingsResults = await Promise.all(ratingPromises);
 
-      // Map ratings to product IDs
-      const ratingsMap: Record<number, number> = {};
+      // Map ratings and review counts to product IDs
+      const ratingsMap: Record<number, { rating: number; reviewCount: number }> = {};
 
       productIds.forEach((id, index) => {
          const productRatings = ratingsResults[index];
          if (Array.isArray(productRatings) && productRatings.length > 0) {
-            const totalRating = productRatings.reduce((sum, item) =>
-               sum + (item.rating || item.avg_rating || 0), 0);
-            ratingsMap[id] = productRatings.length > 0 ? totalRating / productRatings.length : 5;
+            const totalRating = productRatings.reduce(
+               (sum, item) => sum + (item.rating || item.avg_rating || 0),
+               0,
+            );
+            ratingsMap[id] = {
+               rating: productRatings.length > 0 ? totalRating / productRatings.length : 5,
+               reviewCount: productRatings.length,
+            };
          } else {
-            ratingsMap[id] = 0; // Default rating
+            ratingsMap[id] = { rating: 0, reviewCount: 0 }; // Default rating
          }
       });
 
@@ -358,6 +365,7 @@ export default function ProductPage() {
          discountPrice?: string;
          rating: number;
          imageUrl: string;
+         reviewCount?: number; // Added reviewCount property
          variants?: Array<{
             detailId: number;
             size: string;
@@ -377,6 +385,7 @@ export default function ProductPage() {
          discountPrice?: string;
          rating: number;
          imageUrl: string;
+         reviewCount?: number; // Added reviewCount property here
          variants?: Array<{
             detailId: number;
             size: string;
@@ -399,23 +408,26 @@ export default function ProductPage() {
    const productsPerPage = 24;
 
    // Thêm state để lưu trữ sản phẩm gốc theo đúng thứ tự ban đầu
-   const [originalProducts, setOriginalProducts] = useState<Array<{
-      id: number;
-      title: string;
-      description: string;
-      price: string;
-      discountPrice?: string;
-      rating: number;
-      imageUrl: string;
-      variants?: Array<{
-         detailId: number;
-         size: string;
-         type: string;
-         basePrice: string;
+   const [originalProducts, setOriginalProducts] = useState<
+      Array<{
+         id: number;
+         title: string;
+         description: string;
+         price: string;
          discountPrice?: string;
-         inStock: boolean;
-      }>;
-   }>>([]);
+         rating: number;
+         imageUrl: string;
+         reviewCount?: number; // Add the reviewCount property here
+         variants?: Array<{
+            detailId: number;
+            size: string;
+            type: string;
+            basePrice: string;
+            discountPrice?: string;
+            inStock: boolean;
+         }>;
+      }>
+   >([]);
 
    // Define price ranges for filtering
    const priceRanges: PriceRange[] = [
@@ -429,6 +441,7 @@ export default function ProductPage() {
    // Define sorting options
    const sortOptions: SortOption[] = [
       { value: 'default', label: 'Mặc định' },
+      { value: 'rating-desc', label: 'Đánh giá cao nhất' }, // Add this new option
       { value: 'price-asc', label: 'Giá tăng dần' },
       { value: 'price-desc', label: 'Giá giảm dần' },
       { value: 'name-asc', label: 'Tên A-Z' },
@@ -453,6 +466,7 @@ export default function ProductPage() {
          discountPrice?: string;
          rating: number;
          imageUrl: string;
+         reviewCount?: number; // Make sure reviewCount is used here
          variants?: Array<{
             detailId: number;
             size: string;
@@ -470,6 +484,7 @@ export default function ProductPage() {
          discountPrice?: string;
          rating: number;
          imageUrl: string;
+         reviewCount?: number; // Make sure reviewCount is used here
          variants?: Array<{
             detailId: number;
             size: string;
@@ -481,7 +496,7 @@ export default function ProductPage() {
       }>,
       query: string,
       priceRange: PriceRange | null,
-      sort: string
+      sort: string,
    ) => {
       // First filter by search query
       let result;
@@ -516,8 +531,8 @@ export default function ProductPage() {
 
             // Check if any variant has a discount
             if (product.variants && product.variants.length > 0) {
-               return product.variants.some(variant =>
-                  variant.discountPrice && parseFloat(variant.discountPrice) > 0
+               return product.variants.some(
+                  (variant) => variant.discountPrice && parseFloat(variant.discountPrice) > 0,
                );
             }
 
@@ -529,7 +544,9 @@ export default function ProductPage() {
          result = result.filter((product) => {
             // Get actual price considering discounts
             const productPrice = product.discountPrice
-               ? parseFloat(calculateDiscountedPrice(product.price, product.discountPrice).toString())
+               ? parseFloat(
+                    calculateDiscountedPrice(product.price, product.discountPrice).toString(),
+                 )
                : parseFloat(product.price);
 
             return productPrice >= priceRange.min && productPrice <= priceRange.max;
@@ -539,6 +556,16 @@ export default function ProductPage() {
       // Áp dụng sắp xếp (ngoại trừ mặc định)
       if (sort !== 'default') {
          switch (sort) {
+            case 'rating-desc':
+               result.sort((a, b) => {
+                  // First sort by rating (highest first)
+                  if (b.rating !== a.rating) {
+                     return b.rating - a.rating;
+                  }
+                  // If ratings are equal, sort by number of reviews (highest first)
+                  return (b.reviewCount || 0) - (a.reviewCount || 0);
+               });
+               break;
             case 'price-asc':
                result.sort((a, b) => {
                   const priceA = a.discountPrice
@@ -573,7 +600,6 @@ export default function ProductPage() {
       return result;
    };
 
-
    // Helper function to calculate discounted price
    const calculateDiscountedPrice = (basePrice: string, discountPercent: string) => {
       const basePriceNum = parseFloat(basePrice);
@@ -596,7 +622,7 @@ export default function ProductPage() {
          originalProducts,
          searchQuery,
          selectedPriceRange,
-         sortOption
+         sortOption,
       );
 
       setFilteredProducts(newFilteredProducts);
@@ -638,7 +664,7 @@ export default function ProductPage() {
                const productPricesMap: { [productId: number]: Price[] } = {};
 
                // Nhóm prices theo productId trong product_detail
-               pricesData.forEach(price => {
+               pricesData.forEach((price) => {
                   if (price.product_detail && price.product_detail.productId) {
                      const productId = price.product_detail.productId;
                      if (!productPricesMap[productId]) {
@@ -648,145 +674,183 @@ export default function ProductPage() {
                   }
                });
 
-               console.log('Product price mappings created for', Object.keys(productPricesMap).length, 'products');
-               const productIds = normalizedProducts.map(p => p.id);
+               console.log(
+                  'Product price mappings created for',
+                  Object.keys(productPricesMap).length,
+                  'products',
+               );
+               const productIds = normalizedProducts.map((p) => p.id);
                const ratingsMap = await fetchRatingsForProducts(productIds);
                // 4. Xây dựng mảng sản phẩm hiển thị với thông tin giá
-               const mappedProducts = await Promise.all(normalizedProducts.map(async (product) => {
-                  console.log(`Processing product ${product.id}: ${product.name}`);
+               const mappedProducts = await Promise.all(
+                  normalizedProducts.map(async (product) => {
+                     console.log(`Processing product ${product.id}: ${product.name}`);
 
-                  // Default values
-                  let basePrice = '0';
-                  let discountPrice: string | undefined = undefined;
-                  let variants: Array<{
-                     detailId: number;
-                     size: string;
-                     type: string;
-                     basePrice: string;
-                     discountPrice?: string;
-                     inStock: boolean;
-                  }> = [];
+                     // Default values
+                     let basePrice = '0';
+                     let discountPrice: string | undefined = undefined;
+                     let variants: Array<{
+                        detailId: number;
+                        size: string;
+                        type: string;
+                        basePrice: string;
+                        discountPrice?: string;
+                        inStock: boolean;
+                     }> = [];
 
-                  // Lấy ảnh đầu tiên làm ảnh hiển thị
-                  const imageUrl = product.images && product.images.length > 0
-                     ? product.images[0].path
-                     : null;
+                     // Lấy ảnh đầu tiên làm ảnh hiển thị
+                     const imageUrl =
+                        product.images && product.images.length > 0 ? product.images[0].path : null;
 
-                  // Tìm giá dựa trên productId
-                  const productPrices = productPricesMap[product.id] || [];
+                     // Tìm giá dựa trên productId
+                     const productPrices = productPricesMap[product.id] || [];
 
-                  if (productPrices.length > 0) {
-                     console.log(`Found ${productPrices.length} prices for product ${product.id}`);
+                     if (productPrices.length > 0) {
+                        console.log(
+                           `Found ${productPrices.length} prices for product ${product.id}`,
+                        );
 
-                     // Tạo variants từ productPrices
-                     variants = productPrices.map(price => {
-                        const detail = price.product_detail;
-                        return {
-                           detailId: detail.id,
-                           size: detail.size || 'Default',
-                           type: detail.type || 'Standard',
-                           basePrice: price.base_price.toString(),
-                           discountPrice: price.discount_price ? price.discount_price.toString() : undefined,
-                           inStock: detail.quantities > 0 && detail.isActive
-                        };
-                     });
+                        // Tạo variants từ productPrices
+                        variants = productPrices.map((price) => {
+                           const detail = price.product_detail;
+                           return {
+                              detailId: detail.id,
+                              size: detail.size || 'Default',
+                              type: detail.type || 'Standard',
+                              basePrice: price.base_price.toString(),
+                              discountPrice: price.discount_price
+                                 ? price.discount_price.toString()
+                                 : undefined,
+                              inStock: detail.quantities > 0 && detail.isActive,
+                           };
+                        });
 
-                     // Sắp xếp theo giá từ thấp đến cao
-                     variants.sort((a, b) => Number(a.basePrice) - Number(b.basePrice));
+                        // Sắp xếp theo giá từ thấp đến cao
+                        variants.sort((a, b) => Number(a.basePrice) - Number(b.basePrice));
 
-                     // Lấy giá thấp nhất làm giá mặc định
-                     if (variants.length > 0) {
-                        basePrice = variants[0].basePrice;
-                        discountPrice = variants[0].discountPrice;
-                     }
-                  } else {
-                     console.log(`No prices found for product ${product.id} - fetching details`);
+                        // Lấy giá thấp nhất làm giá mặc định
+                        if (variants.length > 0) {
+                           basePrice = variants[0].basePrice;
+                           discountPrice = variants[0].discountPrice;
+                        }
+                     } else {
+                        console.log(`No prices found for product ${product.id} - fetching details`);
 
-                     // Nếu không có giá, thử lấy chi tiết từ API riêng
-                     try {
-                        const detailResponse = await fetch(`${HOST}/api/products/${product.id}`);
-                        if (detailResponse.ok) {
-                           const detailData = await detailResponse.json();
+                        // Nếu không có giá, thử lấy chi tiết từ API riêng
+                        try {
+                           const detailResponse = await fetch(`${HOST}/api/products/${product.id}`);
+                           if (detailResponse.ok) {
+                              const detailData = await detailResponse.json();
 
-                           if (detailData.details && detailData.details.length > 0) {
-                              console.log(`Found ${detailData.details.length} details from specific API`);
+                              if (detailData.details && detailData.details.length > 0) {
+                                 console.log(
+                                    `Found ${detailData.details.length} details from specific API`,
+                                 );
 
-                              // Tìm giá cho từng detail trong details
-                              const detailIds = detailData.details.map((d: ProductDetail) => d.id);
+                                 // Tìm giá cho từng detail trong details
+                                 const detailIds = detailData.details.map(
+                                    (d: ProductDetail) => d.id,
+                                 );
 
-                              // Lấy prices cho các detail này từ pricesData
-                              const detailPrices = pricesData.filter(
-                                 price => price.product_detail && detailIds.includes(price.product_detail.id)
-                              );
+                                 // Lấy prices cho các detail này từ pricesData
+                                 const detailPrices = pricesData.filter(
+                                    (price) =>
+                                       price.product_detail &&
+                                       detailIds.includes(price.product_detail.id),
+                                 );
 
-                              if (detailPrices.length > 0) {
-                                 // Tạo variants từ detailPrices
-                                 variants = detailPrices.map(price => {
-                                    const detail = price.product_detail;
-                                    return {
-                                       detailId: detail.id,
-                                       size: detail.size || 'Default',
-                                       type: detail.type || 'Standard',
-                                       basePrice: price.base_price.toString(),
-                                       discountPrice: price.discount_price ? price.discount_price.toString() : undefined,
-                                       inStock: detail.quantities > 0 && detail.isActive
-                                    };
-                                 });
+                                 if (detailPrices.length > 0) {
+                                    // Tạo variants từ detailPrices
+                                    variants = detailPrices.map((price) => {
+                                       const detail = price.product_detail;
+                                       return {
+                                          detailId: detail.id,
+                                          size: detail.size || 'Default',
+                                          type: detail.type || 'Standard',
+                                          basePrice: price.base_price.toString(),
+                                          discountPrice: price.discount_price
+                                             ? price.discount_price.toString()
+                                             : undefined,
+                                          inStock: detail.quantities > 0 && detail.isActive,
+                                       };
+                                    });
 
-                                 // Sắp xếp theo giá từ thấp đến cao
-                                 variants.sort((a, b) => Number(a.basePrice) - Number(b.basePrice));
+                                    // Sắp xếp theo giá từ thấp đến cao
+                                    variants.sort(
+                                       (a, b) => Number(a.basePrice) - Number(b.basePrice),
+                                    );
 
-                                 if (variants.length > 0) {
-                                    basePrice = variants[0].basePrice;
-                                    discountPrice = variants[0].discountPrice;
+                                    if (variants.length > 0) {
+                                       basePrice = variants[0].basePrice;
+                                       discountPrice = variants[0].discountPrice;
+                                    }
                                  }
                               }
                            }
-                        }
-                     } catch (detailErr) {
-                        console.error(`Error fetching details for product ${product.id}:`, detailErr);
-                     }
-                  }
-                  try {
-                     // Lấy rating từ API (tương tự như trong trang product detail)
-                     const ratingResponse = await fetch(`${HOST}/api/rating/get-by-product`, {
-                        method: 'POST',
-                        headers: {
-                           'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({ product_id: product.id })
-                     });
-
-                     if (ratingResponse.ok) {
-                        const ratingsData = await ratingResponse.json();
-                        if (Array.isArray(ratingsData) && ratingsData.length > 0) {
-                           // Tính rating trung bình từ tất cả các đánh giá
-                           const totalRating = ratingsData.reduce((sum, item) =>
-                              sum + (item.rating || item.avg_rating || 0), 0);
-
-                           // Assign directly to ratingsMap instead of unused productRating variable
-                           ratingsMap[product.id] = ratingsData.length > 0
-                              ? totalRating / ratingsData.length
-                              : 5;
+                        } catch (detailErr) {
+                           console.error(
+                              `Error fetching details for product ${product.id}:`,
+                              detailErr,
+                           );
                         }
                      }
-                  } catch (ratingErr) {
-                     console.error(`Lỗi khi lấy rating cho sản phẩm ${product.id}:`, ratingErr);
+                     try {
+                        // Lấy rating từ API (tương tự như trong trang product detail)
+                        const ratingResponse = await fetch(`${HOST}/api/rating/get-by-product`, {
+                           method: 'POST',
+                           headers: {
+                              'Content-Type': 'application/json',
+                           },
+                           body: JSON.stringify({ product_id: product.id }),
+                        });
+
+                        if (ratingResponse.ok) {
+                           const ratingsData = await ratingResponse.json();
+                           if (Array.isArray(ratingsData) && ratingsData.length > 0) {
+                              // Tính rating trung bình từ tất cả các đánh giá
+                              const totalRating = ratingsData.reduce(
+                                 (sum, item) => sum + (item.rating || item.avg_rating || 0),
+                                 0,
+                              );
+
+                              // Assign directly to ratingsMap instead of unused productRating variable
+                              ratingsMap[product.id] = {
+                                 rating:
+                                    ratingsData.length > 0 ? totalRating / ratingsData.length : 5,
+                                 reviewCount: ratingsData.length,
+                              };
+                           }
+                        }
+                     } catch (ratingErr) {
+                        console.error(`Lỗi khi lấy rating cho sản phẩm ${product.id}:`, ratingErr);
+                     }
+
+                     // Inside your product mapping code, modify to include reviewCount:
+                     return {
+                        id: product.id,
+                        title: product.name,
+                        description: product.description,
+                        price: basePrice,
+                        discountPrice: discountPrice,
+                        rating: ratingsMap[product.id]?.rating || 0,
+                        reviewCount: ratingsMap[product.id]?.reviewCount || 0, // Add reviewCount here
+                        imageUrl: imageUrl || '/images/placeholder.jpg',
+                        variants: variants.length > 0 ? variants : undefined,
+                     };
+                  }),
+               );
+
+               // Sort the products by rating before setting to state
+               mappedProducts.sort((a, b) => {
+                  // First sort by rating (highest first)
+                  if (b.rating !== a.rating) {
+                     return b.rating - a.rating;
                   }
+                  // If ratings are equal, sort by number of reviews (highest first)
+                  return (b.reviewCount || 0) - (a.reviewCount || 0);
+               });
 
-                  return {
-                     id: product.id,
-                     title: product.name,
-                     description: product.description,
-                     price: basePrice,
-                     discountPrice: discountPrice,
-                     rating: ratingsMap[product.id] || 0, // Lấy rating từ map đã chuẩn bị trước
-                     imageUrl: imageUrl || '/images/placeholder.jpg',
-                     variants: variants.length > 0 ? variants : undefined,
-                  };
-               }));
-
-               setOriginalProducts(mappedProducts); // Lưu trữ sản phẩm gốc với thứ tự ban đầu
+               setOriginalProducts(mappedProducts); // Store sorted products as original list
                setProducts(mappedProducts);
                setFilteredProducts(mappedProducts);
             } catch (priceErr) {
@@ -817,7 +881,7 @@ export default function ProductPage() {
             originalProducts,
             searchQuery,
             selectedPriceRange,
-            newSortOption
+            newSortOption,
          );
 
          setFilteredProducts(newFilteredProducts);
@@ -839,7 +903,7 @@ export default function ProductPage() {
             originalProducts,
             searchQuery,
             range,
-            sortOption
+            sortOption,
          );
 
          setFilteredProducts(newFilteredProducts);
@@ -862,7 +926,7 @@ export default function ProductPage() {
             originalProducts,
             query,
             selectedPriceRange,
-            sortOption
+            sortOption,
          );
 
          setFilteredProducts(newFilteredProducts);
@@ -879,7 +943,7 @@ export default function ProductPage() {
             originalProducts,
             searchQuery,
             selectedPriceRange,
-            sortOption
+            sortOption,
          );
          setFilteredProducts(newFilteredProducts);
       }
@@ -927,8 +991,9 @@ export default function ProductPage() {
          <div className='flex flex-col lg:flex-row max-w-7xl mx-auto'>
             {/* Price Filter Sidebar - show/hide on mobile with animation */}
             <div
-               className={`lg:w-64 lg:block fixed lg:relative top-0 left-0 h-full lg:h-auto z-40 bg-white lg:bg-transparent shadow-lg lg:shadow-none overflow-y-auto transition-all duration-300 transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
-                  } px-4 pt-16 lg:pt-0 lg:px-8 mb-6`}
+               className={`lg:w-64 lg:block fixed lg:relative top-0 left-0 h-full lg:h-auto z-40 bg-white lg:bg-transparent shadow-lg lg:shadow-none overflow-y-auto transition-all duration-300 transform ${
+                  isSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+               } px-4 pt-16 lg:pt-0 lg:px-8 mb-6`}
             >
                <div className='bg-white p-4 rounded-lg shadow-sm'>
                   <h3 className='font-medium text-gray-800 mb-3'>Lọc sản phẩm</h3>
@@ -939,10 +1004,11 @@ export default function ProductPage() {
                         <div className='flex items-center'>
                            <button
                               onClick={() => handlePriceRangeChange(null)}
-                              className={`text-sm w-full py-2 px-3 text-left rounded-md transition-colors ${selectedPriceRange === null
-                                 ? 'bg-amber-100 text-amber-800'
-                                 : 'text-gray-700 hover:bg-gray-100'
-                                 }`}
+                              className={`text-sm w-full py-2 px-3 text-left rounded-md transition-colors ${
+                                 selectedPriceRange === null
+                                    ? 'bg-amber-100 text-amber-800'
+                                    : 'text-gray-700 hover:bg-gray-100'
+                              }`}
                            >
                               Tất cả
                            </button>
@@ -952,10 +1018,11 @@ export default function ProductPage() {
                            <div key={idx} className='flex items-center'>
                               <button
                                  onClick={() => handlePriceRangeChange(range)}
-                                 className={`text-sm w-full py-2 px-3 text-left rounded-md transition-colors ${selectedPriceRange === range
-                                    ? 'bg-amber-100 text-amber-800'
-                                    : 'text-gray-700 hover:bg-gray-100'
-                                    }`}
+                                 className={`text-sm w-full py-2 px-3 text-left rounded-md transition-colors ${
+                                    selectedPriceRange === range
+                                       ? 'bg-amber-100 text-amber-800'
+                                       : 'text-gray-700 hover:bg-gray-100'
+                                 }`}
                               >
                                  {range.label}
                               </button>
@@ -969,11 +1036,19 @@ export default function ProductPage() {
                      <div className='space-y-2'>
                         <div className='flex items-center'>
                            <button
-                              onClick={() => handlePriceRangeChange({ min: 0, max: Infinity, label: 'Sản phẩm khuyến mãi', hasDiscount: true })}
-                              className={`text-sm w-full py-2 px-3 text-left rounded-md transition-colors ${selectedPriceRange?.hasDiscount === true
-                                 ? 'bg-amber-100 text-amber-800'
-                                 : 'text-gray-700 hover:bg-gray-100'
-                                 }`}
+                              onClick={() =>
+                                 handlePriceRangeChange({
+                                    min: 0,
+                                    max: Infinity,
+                                    label: 'Sản phẩm khuyến mãi',
+                                    hasDiscount: true,
+                                 })
+                              }
+                              className={`text-sm w-full py-2 px-3 text-left rounded-md transition-colors ${
+                                 selectedPriceRange?.hasDiscount === true
+                                    ? 'bg-amber-100 text-amber-800'
+                                    : 'text-gray-700 hover:bg-gray-100'
+                              }`}
                            >
                               Đang giảm giá
                            </button>
@@ -989,15 +1064,17 @@ export default function ProductPage() {
                   <p className='text-sm text-gray-600'>
                      {filteredProducts.length} sản phẩm
                      {searchQuery ? ` cho "${searchQuery}"` : ''}
-                     {selectedPriceRange ?
-                        selectedPriceRange.hasDiscount ?
-                           ' đang được giảm giá' :
-                           ` trong khoảng giá ${selectedPriceRange.label}`
+                     {selectedPriceRange
+                        ? selectedPriceRange.hasDiscount
+                           ? ' đang được giảm giá'
+                           : ` trong khoảng giá ${selectedPriceRange.label}`
                         : ''}
                   </p>
 
                   <div className='flex items-center'>
-                     <label htmlFor='sort' className='text-sm text-gray-600 mr-2'>Sắp xếp:</label>
+                     <label htmlFor='sort' className='text-sm text-gray-600 mr-2'>
+                        Sắp xếp:
+                     </label>
                      <select
                         id='sort'
                         className='text-sm border rounded-md py-1.5 px-3 bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-amber-500'
@@ -1031,7 +1108,9 @@ export default function ProductPage() {
                         <p className='text-gray-600 mb-4'>
                            Không tìm thấy sản phẩm phù hợp
                            {searchQuery ? ` với "${searchQuery}"` : ''}
-                           {selectedPriceRange ? ` trong khoảng giá ${selectedPriceRange.label}` : ''}
+                           {selectedPriceRange
+                              ? ` trong khoảng giá ${selectedPriceRange.label}`
+                              : ''}
                         </p>
                         <button
                            className='px-6 py-2 bg-amber-100 hover:bg-amber-200 text-[#553C26] rounded-md transition-colors'
@@ -1069,8 +1148,9 @@ export default function ProductPage() {
                      {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
                         <button
                            key={page}
-                           className={`px-3 py-1 ${currentPage === page ? 'bg-gray-200 font-medium' : 'hover:bg-gray-100'
-                              } rounded-md text-gray-700`}
+                           className={`px-3 py-1 ${
+                              currentPage === page ? 'bg-gray-200 font-medium' : 'hover:bg-gray-100'
+                           } rounded-md text-gray-700`}
                            onClick={() => setCurrentPage(page)}
                         >
                            {page}
@@ -1084,7 +1164,7 @@ export default function ProductPage() {
          {/* Add a semi-transparent overlay when sidebar is open on mobile */}
          {isSidebarOpen && (
             <div
-               className="fixed inset-0 bg-black bg-opacity-50 z-30 lg:hidden"
+               className='fixed inset-0 bg-black bg-opacity-50 z-30 lg:hidden'
                onClick={() => setIsSidebarOpen(false)}
             />
          )}

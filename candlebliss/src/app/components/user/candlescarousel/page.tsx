@@ -103,10 +103,11 @@ const ProductCard = ({
                {variants.map((variant) => (
                   <button
                      key={variant.detailId}
-                     className={`text-xs px-2 py-1 border rounded ${selectedVariant === variant.detailId
-                        ? 'border-orange-500 bg-orange-50'
-                        : 'border-gray-300'
-                        }`}
+                     className={`text-xs px-2 py-1 border rounded ${
+                        selectedVariant === variant.detailId
+                           ? 'border-orange-500 bg-orange-50'
+                           : 'border-gray-300'
+                     }`}
                      onClick={() => handleVariantChange(variant.detailId)}
                   >
                      {variant.size} - {variant.type}
@@ -120,16 +121,16 @@ const ProductCard = ({
 
    const StarDisplay = ({ rating }: { rating: number }) => {
       return (
-         <div className="flex">
+         <div className='flex'>
             {[1, 2, 3, 4, 5].map((star) => (
                <svg
                   key={star}
-                  xmlns="http://www.w3.org/2000/svg"
+                  xmlns='http://www.w3.org/2000/svg'
                   className={`h-4 w-4 ${star <= rating ? 'text-yellow-400' : 'text-gray-300'}`}
-                  viewBox="0 0 20 20"
-                  fill="currentColor"
+                  viewBox='0 0 20 20'
+                  fill='currentColor'
                >
-                  <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                  <path d='M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z' />
                </svg>
             ))}
          </div>
@@ -273,14 +274,14 @@ const fetchRatingsForProducts = async (productIds: number[]) => {
    if (!productIds.length) return {};
 
    try {
-      const ratingPromises = productIds.map(id =>
+      const ratingPromises = productIds.map((id) =>
          fetch(`${HOST}/api/rating/get-by-product`, {
             method: 'POST',
             headers: {
-               'Content-Type': 'application/json'
+               'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ product_id: id })
-         }).then(res => res.ok ? res.json() : [])
+            body: JSON.stringify({ product_id: id }),
+         }).then((res) => (res.ok ? res.json() : [])),
       );
 
       const ratingsResults = await Promise.all(ratingPromises);
@@ -291,8 +292,10 @@ const fetchRatingsForProducts = async (productIds: number[]) => {
       productIds.forEach((id, index) => {
          const productRatings = ratingsResults[index];
          if (Array.isArray(productRatings) && productRatings.length > 0) {
-            const totalRating = productRatings.reduce((sum, item) =>
-               sum + (item.rating || item.avg_rating || 0), 0);
+            const totalRating = productRatings.reduce(
+               (sum, item) => sum + (item.rating || item.avg_rating || 0),
+               0,
+            );
             ratingsMap[id] = productRatings.length > 0 ? totalRating / productRatings.length : 5;
          } else {
             ratingsMap[id] = 0; // Default rating
@@ -375,14 +378,14 @@ export default function CandlesCarousel() {
                   product.categoryId === CANDLES_CATEGORY_ID ||
                   product.category_id === CANDLES_CATEGORY_ID ||
                   product.category?.id === CANDLES_CATEGORY_ID ||
-                  product.categories?.some(cat => cat.id === CANDLES_CATEGORY_ID)
+                  product.categories?.some((cat) => cat.id === CANDLES_CATEGORY_ID)
                );
             });
 
             // Nếu không tìm thấy sản phẩm nào theo ID, lọc theo từ khóa liên quan đến nến
             if (candleProducts.length === 0) {
                console.log('Không tìm thấy sản phẩm theo category ID, đang thử lọc theo tên...');
-               candleProducts = productsData.filter(product => {
+               candleProducts = productsData.filter((product) => {
                   const name = product.name?.toLowerCase() || '';
                   const desc = product.description?.toLowerCase() || '';
                   return (
@@ -421,11 +424,11 @@ export default function CandlesCarousel() {
                      console.error(`Lỗi khi lấy chi tiết cho sản phẩm ${product.id}:`, detailErr);
                      return product;
                   }
-               })
+               }),
             );
 
             // Get product IDs for batch ratings fetch
-            const productIds = detailedProducts.map(p => p.id);
+            const productIds = detailedProducts.map((p) => p.id);
 
             // Fetch ratings for all products in a single batch
             const ratingsMap = await fetchRatingsForProducts(productIds);
@@ -451,13 +454,17 @@ export default function CandlesCarousel() {
                const detailPricesMap: { [detailId: number]: Price } = {};
 
                // Map giá theo ID của chi tiết sản phẩm
-               pricesData.forEach(price => {
+               pricesData.forEach((price) => {
                   if (price.product_detail && price.product_detail.id) {
                      detailPricesMap[price.product_detail.id] = price;
                   }
                });
 
-               console.log('Tạo mapping giá cho', Object.keys(detailPricesMap).length, 'chi tiết sản phẩm');
+               console.log(
+                  'Tạo mapping giá cho',
+                  Object.keys(detailPricesMap).length,
+                  'chi tiết sản phẩm',
+               );
 
                // Map sản phẩm với giá chính xác dựa trên chi tiết
                const mappedProducts = detailedProducts.map((product) => {
@@ -480,23 +487,26 @@ export default function CandlesCarousel() {
                   }> = [];
 
                   // Try to find prices for this product
-                  const productPrices = pricesData.filter(price =>
-                     price.product_detail && price.product_detail.productId === product.id
+                  const productPrices = pricesData.filter(
+                     (price) =>
+                        price.product_detail && price.product_detail.productId === product.id,
                   );
 
                   if (productPrices.length > 0) {
                      console.log(`Found ${productPrices.length} prices for product ${product.id}`);
 
                      // Create variants from productPrices
-                     productPrices.forEach(price => {
+                     productPrices.forEach((price) => {
                         const detail = price.product_detail;
                         variants.push({
                            detailId: detail.id,
                            size: detail.size || 'Default',
                            type: detail.type || 'Standard',
                            basePrice: price.base_price.toString(),
-                           discountPrice: price.discount_price ? price.discount_price.toString() : undefined,
-                           inStock: detail.quantities > 0 && detail.isActive
+                           discountPrice: price.discount_price
+                              ? price.discount_price.toString()
+                              : undefined,
+                           inStock: detail.quantities > 0 && detail.isActive,
                         });
                      });
                   }
@@ -506,33 +516,47 @@ export default function CandlesCarousel() {
 
                      // Create a map of detail IDs to prices for efficient lookup
                      const detailPricesMap: { [detailId: number]: Price } = {};
-                     pricesData.forEach(price => {
+                     pricesData.forEach((price) => {
                         if (price.product_detail && price.product_detail.id) {
                            detailPricesMap[price.product_detail.id] = price;
                         }
                      });
 
                      // Process each variant (detail) of the product
-                     product.details.forEach((detail: { id: string | number; size: string; type: string; quantities: number; isActive: boolean; }) => {
-                        console.log(`Processing variant ${detail.id} for product ${product.id}`);
+                     product.details.forEach(
+                        (detail: {
+                           id: string | number;
+                           size: string;
+                           type: string;
+                           quantities: number;
+                           isActive: boolean;
+                        }) => {
+                           console.log(`Processing variant ${detail.id} for product ${product.id}`);
 
-                        // Find price for this variant based on detail ID
-                        const price = detailPricesMap[Number(detail.id)];
+                           // Find price for this variant based on detail ID
+                           const price = detailPricesMap[Number(detail.id)];
 
-                        if (price) {
-                           console.log(`Found price for variant ${detail.id}: ${price.base_price}`);
-                           variants.push({
-                              detailId: Number(detail.id),
-                              size: detail.size || 'Default',
-                              type: detail.type || 'Standard',
-                              basePrice: price.base_price.toString(),
-                              discountPrice: price.discount_price ? price.discount_price.toString() : undefined,
-                              inStock: detail.quantities > 0 && detail.isActive
-                           });
-                        } else {
-                           console.log(`Warning: No price found for variant ${detail.id} of product ${product.id}`);
-                        }
-                     });
+                           if (price) {
+                              console.log(
+                                 `Found price for variant ${detail.id}: ${price.base_price}`,
+                              );
+                              variants.push({
+                                 detailId: Number(detail.id),
+                                 size: detail.size || 'Default',
+                                 type: detail.type || 'Standard',
+                                 basePrice: price.base_price.toString(),
+                                 discountPrice: price.discount_price
+                                    ? price.discount_price.toString()
+                                    : undefined,
+                                 inStock: detail.quantities > 0 && detail.isActive,
+                              });
+                           } else {
+                              console.log(
+                                 `Warning: No price found for variant ${detail.id} of product ${product.id}`,
+                              );
+                           }
+                        },
+                     );
                   }
 
                   // Sort variants by price (lowest to highest)
@@ -592,11 +616,12 @@ export default function CandlesCarousel() {
       console.log('View detail clicked for product ID:', productId);
    };
 
-
    return (
       <div className='bg-[#F1EEE9] py-8'>
          <div className='max-w-7xl mx-auto px-4'>
-            <h2 className='text-2xl font-semibold text-[#553C26] mb-6 text-center'>Nến Thơm Nổi Bật</h2>
+            <h2 className='text-2xl font-semibold text-[#553C26] mb-6 text-center'>
+               Nến Thơm Nổi Bật
+            </h2>
 
             {loading && (
                <div className='flex justify-center items-center h-64'>
@@ -605,9 +630,7 @@ export default function CandlesCarousel() {
             )}
 
             {error && (
-               <div className='bg-red-50 text-red-700 p-4 rounded-md my-4 text-center'>
-                  {error}
-               </div>
+               <div className='bg-red-50 text-red-700 p-4 rounded-md my-4 text-center'>{error}</div>
             )}
 
             {!loading && !error && products.length === 0 && (
@@ -646,14 +669,11 @@ export default function CandlesCarousel() {
                         {Array.from({ length: totalSlides }).map((_, slideIndex) => {
                            const slideProducts = products.slice(
                               slideIndex * itemsPerSlide,
-                              slideIndex * itemsPerSlide + itemsPerSlide
+                              slideIndex * itemsPerSlide + itemsPerSlide,
                            );
 
                            return (
-                              <div
-                                 key={slideIndex}
-                                 className='flex-none w-full'
-                              >
+                              <div key={slideIndex} className='flex-none w-full'>
                                  <div className='grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4'>
                                     {slideProducts.map((product) => (
                                        <ProductCard
@@ -682,8 +702,9 @@ export default function CandlesCarousel() {
                         <button
                            key={index}
                            onClick={() => setCurrentSlide(index)}
-                           className={`w-3 h-3 rounded-full ${index === currentSlide ? 'bg-[#553C26]' : 'bg-gray-300'
-                              } transition-colors`}
+                           className={`w-3 h-3 rounded-full ${
+                              index === currentSlide ? 'bg-[#553C26]' : 'bg-gray-300'
+                           } transition-colors`}
                            aria-label={`Go to slide ${index + 1}`}
                         />
                      ))}
@@ -693,7 +714,7 @@ export default function CandlesCarousel() {
 
             {/* View all products link */}
             <div className='text-center mt-8'>
-               <Link href='/user/products/candles'>
+               <Link href='/user/products/category/4'>
                   <button className='px-6 py-2 bg-[#553C26] text-white rounded-full  gap-2 hover:bg-amber-600 transition-colors font-mont font-medium'>
                      Xem tất cả nến thơm
                   </button>
