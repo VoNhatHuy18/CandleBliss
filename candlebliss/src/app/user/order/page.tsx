@@ -162,7 +162,7 @@ const PaymentCountdown = ({
 }: {
    createdAt: string;
    orderId: number;
-   onTimeout: (orderId: number) => void;
+   onTimeout: (orderId: number, status: string) => void;
    status: string;
 }) => {
    const [timeLeft, setTimeLeft] = useState<number>(0);
@@ -173,7 +173,12 @@ const PaymentCountdown = ({
          const createdTime = new Date(createdAt).getTime();
          const now = new Date().getTime();
          const timePassed = now - createdTime;
-         const timeoutMs = 15 * 60 * 1000; // 15 minutes
+
+         // Đang chờ thanh toán: 15 phút
+         // Thanh toán thất bại: 1 ngày (24 giờ)
+         const timeoutMs = status === 'Đang chờ thanh toán'
+            ? 15 * 60 * 1000  // 15 minutes 
+            : 24 * 60 * 1000; // 24 hours
 
          const remaining = timeoutMs - timePassed;
          return Math.max(0, Math.floor(remaining / 1000)); // Return seconds left
@@ -184,9 +189,9 @@ const PaymentCountdown = ({
       setTimeLeft(initialTimeLeft);
 
       // If time already expired, call onTimeout immediately
-      if (initialTimeLeft <= 0 && !timedOut && status === 'Đang chờ thanh toán') {
+      if (initialTimeLeft <= 0 && !timedOut) {
          setTimedOut(true);
-         onTimeout(orderId);
+         onTimeout(orderId, status);
          return;
       }
 
@@ -196,10 +201,10 @@ const PaymentCountdown = ({
          setTimeLeft(remaining);
 
          // When time runs out, call callback to update order status
-         if (remaining <= 0 && !timedOut && status === 'Đang chờ thanh toán') {
+         if (remaining <= 0 && !timedOut) {
             clearInterval(timer);
             setTimedOut(true);
-            onTimeout(orderId);
+            onTimeout(orderId, status);
          }
       }, 1000);
 
@@ -211,18 +216,26 @@ const PaymentCountdown = ({
       return <span className='text-red-600 text-sm font-medium'>Hết thời gian thanh toán</span>;
    }
 
-   // Display time remaining
-   const minutes = Math.floor(timeLeft / 60);
-   const seconds = timeLeft % 60;
-
-   return (
-      <span
-         className={`text-sm font-medium ${timeLeft < 300 ? 'text-red-600' : 'text-orange-600'}`}
-      >
-         {status === 'Đang chờ thanh toán' ? 'Thanh toán lại còn: ' : 'Thanh toán còn: '}
-         {minutes}:{seconds < 10 ? `0${seconds}` : seconds}
-      </span>
-   );
+   // Format the time differently based on status
+   if (status === 'Đang chờ thanh toán') {
+      // For waiting payment, show minutes and seconds
+      const minutes = Math.floor(timeLeft / 60);
+      const seconds = timeLeft % 60;
+      return (
+         <span className={`text-sm font-medium ${timeLeft < 180 ? 'text-red-600' : 'text-orange-600'}`}>
+            Thanh toán còn: {minutes}:{seconds < 10 ? `0${seconds}` : seconds}
+         </span>
+      );
+   } else {
+      // For failed payment, show hours and minutes
+      const hours = Math.floor(timeLeft / 3600);
+      const minutes = Math.floor((timeLeft % 3600) / 60);
+      return (
+         <span className={`text-sm font-medium ${timeLeft < 3600 ? 'text-red-600' : 'text-orange-600'}`}>
+            Thanh toán còn: {hours}h:{minutes < 10 ? `0${minutes}` : minutes}m
+         </span>
+      );
+   }
 };
 
 export default function OrderPage() {
@@ -555,94 +568,111 @@ export default function OrderPage() {
    // Thêm hàm này trong component OrderPage
 
    // Hàm cập nhật trạng thái đơn hàng khi hết thời gian thanh toán
-   const handlePaymentTimeout = useCallback(
-      async (orderId: number) => {
-         try {
-            const token = localStorage.getItem('token');
-            if (!token) return;
+   const handlePaymentTimeout = useCallback(async (orderId: number, currentStatus: string) => {
+      try {
+         const token = localStorage.getItem('token');
+         if (!token) return;
 
-            // Use query parameter format instead of request body for better compatibility
-            const encodedStatus = encodeURIComponent('Thanh toán thất bại');
-            const response = await fetch(
-               `${HOST}/api/orders/${orderId}/status?status=${encodedStatus}`,
-               {
-                  method: 'PATCH',
-                  headers: {
-                     Authorization: `Bearer ${token}`,
-                     'Content-Type': 'application/json',
-                  },
+         // Determine the next status based on current status
+         let nextStatus;
+         if (currentStatus === 'Đang chờ thanh toán') {
+            nextStatus = 'Thanh toán thất bại';
+         } else if (currentStatus === 'Thanh toán thất bại') {
+            nextStatus = 'Đã hủy';
+         } else {
+            return; // Exit if not a relevant status
+         }
+
+         const encodedStatus = encodeURIComponent(nextStatus);
+         const response = await fetch(
+            `${HOST}/api/orders/${orderId}/status?status=${encodedStatus}`,
+            {
+               method: 'PATCH',
+               headers: {
+                  Authorization: `Bearer ${token}`,
+                  'Content-Type': 'application/json',
                },
+            }
+         );
+
+         if (response.ok) {
+            // Update local state
+            setOrders((prevOrders) =>
+               prevOrders.map((order) =>
+                  order.id === orderId ? { ...order, status: nextStatus } : order
+               )
             );
 
-            if (response.ok) {
-               // Update local state to display new status immediately
-               setOrders((prevOrders) =>
-                  prevOrders.map((order) =>
-                     order.id === orderId ? { ...order, status: 'Thanh toán thất bại' } : order,
-                  ),
+            if (nextStatus === 'Thanh toán thất bại') {
+               showToastMessage(
+                  `Đơn hàng #${orderId} đã hết thời gian thanh toán và chuyển sang trạng thái Thanh toán thất bại. Bạn còn 24h để thanh toán lại.`,
+                  'error'
                );
-
-               // Then update to "Đã hủy" after a short delay
-               setTimeout(async () => {
-                  const encodedCancelStatus = encodeURIComponent('Đã hủy');
-                  const cancelResponse = await fetch(
-                     `${HOST}/api/orders/${orderId}/status?status=${encodedCancelStatus}`,
-                     {
-                        method: 'PATCH',
-                        headers: {
-                           Authorization: `Bearer ${token}`,
-                           'Content-Type': 'application/json',
-                        },
-                     },
-                  );
-
-                  if (cancelResponse.ok) {
-                     setOrders((prevOrders) =>
-                        prevOrders.map((order) =>
-                           order.id === orderId ? { ...order, status: 'Đã hủy' } : order,
-                        ),
-                     );
-                  }
-               }, 1000); // Wait 1 second before updating to cancelled
-
-               // Show toast notification
-               showToastMessage(`Đơn hàng #${orderId} đã hết thời gian thanh toán`, 'error');
             } else {
-               console.error('Failed to update order status:', await response.text());
+               showToastMessage(
+                  `Đơn hàng #${orderId} đã quá hạn thanh toán và tự động hủy`,
+                  'error'
+               );
             }
-         } catch (error) {
-            console.error('Error handling payment timeout:', error);
+         } else {
+            console.error('Failed to update order status:', await response.text());
          }
-      },
-      [showToastMessage],
-   );
+      } catch (error) {
+         console.error('Error handling payment timeout:', error);
+      }
+   }, [showToastMessage]);
 
    // Thêm hàm kiểm tra các đơn hàng chưa thanh toán khi component mount
    const checkPendingPayments = useCallback(() => {
-      // Filter orders specifically with "Đang chờ thanh toán" status
+      // Filter orders with "Đang chờ thanh toán" and "Thanh toán thất bại" statuses
       const pendingOrders = orders.filter(
-         (order) => order.status === 'Đang chờ thanh toán' && order.method_payment !== 'COD',
+         (order) => order.status === 'Đang chờ thanh toán' && order.method_payment !== 'COD'
+      );
+
+      const failedOrders = orders.filter(
+         (order) => order.status === 'Thanh toán thất bại' && order.method_payment !== 'COD'
       );
 
       if (pendingOrders.length > 0) {
-         // Show warning toast - only show when there are orders needing payment
+         // Show warning toast for pending orders
          showToastMessage(
-            'Lưu ý: Đơn hàng sẽ tự động chuyển sang Thanh toán thất bại sau 15 phút',
-            'info',
+            'Lưu ý: Đơn hàng chưa thanh toán sẽ tự động chuyển sang Thanh toán thất bại sau 15 phút',
+            'info'
          );
       }
 
-      // Check for orders that have passed the payment deadline
+      if (failedOrders.length > 0) {
+         // Show warning toast for failed orders
+         showToastMessage(
+            'Lưu ý: Đơn hàng thanh toán thất bại sẽ tự động hủy sau 1 ngày nếu không thanh toán lại',
+            'info'
+         );
+      }
+
+      // Check orders that have passed the deadline
       const now = new Date().getTime();
+
+      // Check pending orders (15 minutes timeout)
       pendingOrders.forEach((order) => {
          const createdTime = new Date(order.createdAt).getTime();
          const timePassed = now - createdTime;
          const timeoutMs = 15 * 60 * 1000; // 15 minutes
 
          if (timePassed >= timeoutMs) {
-            // If an order has already passed the timeout threshold, update it immediately
-            console.log(`Order ${order.id} payment time has expired, updating status...`);
-            handlePaymentTimeout(order.id);
+            console.log(`Order ${order.id} payment time (15min) has expired, updating status...`);
+            handlePaymentTimeout(order.id, 'Đang chờ thanh toán');
+         }
+      });
+
+      // Check failed payment orders (24 hours timeout)
+      failedOrders.forEach((order) => {
+         const createdTime = new Date(order.createdAt).getTime();
+         const timePassed = now - createdTime;
+         const timeoutMs = 24 * 60 * 60 * 1000; // 24 hours
+
+         if (timePassed >= timeoutMs) {
+            console.log(`Order ${order.id} extended payment time (24h) has expired, updating status...`);
+            handlePaymentTimeout(order.id, 'Thanh toán thất bại');
          }
       });
    }, [orders, handlePaymentTimeout, showToastMessage]);
@@ -719,12 +749,43 @@ export default function OrderPage() {
             return;
          }
 
+         // First update the order status to "Đang chờ thanh toán"
+         const token = localStorage.getItem('token');
+         if (!token) {
+            showToastMessage('Phiên đăng nhập hết hạn, vui lòng đăng nhập lại', 'error');
+            router.push('/user/signin');
+            return;
+         }
+
+         // Update order status to "Đang chờ thanh toán"
+         const encodedStatus = encodeURIComponent('Đang chờ thanh toán');
+         const statusResponse = await fetch(
+            `${HOST}/api/orders/${orderId}/status?status=${encodedStatus}`,
+            {
+               method: 'PATCH',
+               headers: {
+                  Authorization: `Bearer ${token}`,
+                  'Content-Type': 'application/json',
+               },
+            }
+         );
+
+         if (!statusResponse.ok) {
+            throw new Error('Không thể cập nhật trạng thái đơn hàng');
+         }
+
+         // Update local state
+         setOrders((prevOrders) =>
+            prevOrders.map((order) =>
+               order.id === orderId ? { ...order, status: 'Đang chờ thanh toán', createdAt: new Date().toISOString() } : order
+            )
+         );
+
          // Save the pending order ID in localStorage for verification after payment
          localStorage.setItem('pendingOrderId', orderId.toString());
 
          // Check if it's MOMO payment or other method
          if (orderToRetry.method_payment === 'MOMO') {
-            // For MOMO, get a new payment link and redirect
             try {
                const paymentLink = await retryOrderPayment(orderId);
 
@@ -736,7 +797,6 @@ export default function OrderPage() {
             } catch (error) {
                console.error('Error creating MOMO payment:', error);
                showToastMessage('Không thể tạo liên kết thanh toán MOMO', 'error');
-               setLoading(false);
             }
          } else if (orderToRetry.method_payment === 'BANKING') {
             // For BANKING, show banking information
@@ -895,8 +955,8 @@ export default function OrderPage() {
             actionType === 'cancel'
                ? 'Đơn hàng đã được hủy thành công'
                : actionType === 'exchange'
-               ? 'Yêu cầu đổi/trả hàng đã được gửi'
-               : 'Yêu cầu trả hàng hoàn tiền đã được gửi',
+                  ? 'Yêu cầu đổi/trả hàng đã được gửi'
+                  : 'Yêu cầu trả hàng hoàn tiền đã được gửi',
             'success',
          );
       } catch (error) {
@@ -1066,11 +1126,10 @@ export default function OrderPage() {
             <div className='flex overflow-x-auto mb-6 gap-2'>
                <Link
                   href='/user/order'
-                  className={`px-4 py-2 whitespace-nowrap rounded-md ${
-                     !statusFilter
-                        ? 'bg-orange-100 text-orange-700 font-medium'
-                        : 'bg-white hover:bg-gray-100'
-                  }`}
+                  className={`px-4 py-2 whitespace-nowrap rounded-md ${!statusFilter
+                     ? 'bg-orange-100 text-orange-700 font-medium'
+                     : 'bg-white hover:bg-gray-100'
+                     }`}
                >
                   Tất cả
                </Link>
@@ -1078,11 +1137,10 @@ export default function OrderPage() {
                   <Link
                      key={status}
                      href={`/user/order?status=${encodeURIComponent(status)}`}
-                     className={`px-4 py-2 whitespace-nowrap rounded-md ${
-                        statusFilter === status
-                           ? 'bg-orange-100 text-orange-700 font-medium'
-                           : 'bg-white hover:bg-gray-100'
-                     }`}
+                     className={`px-4 py-2 whitespace-nowrap rounded-md ${statusFilter === status
+                        ? 'bg-orange-100 text-orange-700 font-medium'
+                        : 'bg-white hover:bg-gray-100'
+                        }`}
                   >
                      {status}
                   </Link>
@@ -1135,6 +1193,29 @@ export default function OrderPage() {
                                        status={order.status}
                                     />
                                  )}
+                              {/* Countdown timer for "Đang chờ thanh toán" status */}
+                              {order.status === 'Đang chờ thanh toán' &&
+                                 order.method_payment !== 'COD' && (
+                                    <PaymentCountdown
+                                       createdAt={order.createdAt}
+                                       orderId={order.id}
+                                       onTimeout={handlePaymentTimeout}
+                                       status={order.status}
+                                    />
+                                 )
+                              }
+
+                              {/* Countdown timer for "Thanh toán thất bại" status */}
+                              {order.status === 'Thanh toán thất bại' &&
+                                 order.method_payment !== 'COD' && (
+                                    <PaymentCountdown
+                                       createdAt={order.createdAt}
+                                       orderId={order.id}
+                                       onTimeout={handlePaymentTimeout}
+                                       status={order.status}
+                                    />
+                                 )
+                              }
                            </div>
                            <div className='flex items-center'>
                               {order.method_payment && (
@@ -1150,10 +1231,10 @@ export default function OrderPage() {
                                        {order.method_payment === 'COD'
                                           ? 'Thanh toán khi nhận hàng'
                                           : order.method_payment === 'BANKING'
-                                          ? 'Chuyển khoản ngân hàng'
-                                          : order.method_payment === 'MOMO'
-                                          ? 'Ví MoMo'
-                                          : 'Không xác định'}
+                                             ? 'Chuyển khoản ngân hàng'
+                                             : order.method_payment === 'MOMO'
+                                                ? 'Ví MoMo'
+                                                : 'Không xác định'}
                                     </span>
                                  </div>
                               )}
@@ -1166,9 +1247,8 @@ export default function OrderPage() {
                            {order.item.map((item, index) => (
                               <div
                                  key={item.id}
-                                 className={`flex py-3 ${
-                                    index < order.item.length - 1 ? 'border-b border-gray-100' : ''
-                                 }`}
+                                 className={`flex py-3 ${index < order.item.length - 1 ? 'border-b border-gray-100' : ''
+                                    }`}
                               >
                                  <div className='relative w-16 h-16 bg-gray-100 rounded'>
                                     {/* Use product images instead of product detail images */}
@@ -1262,13 +1342,13 @@ export default function OrderPage() {
                                     Chi tiết
                                  </Link>
 
-                                 {/* Retry Payment button - chỉ hiển thị khi đơn hàng đang chờ thanh toán và còn trong thời gian cho phép */}
-                                 {order.status === 'Đang chờ thanh toán' &&
+                                 {/* Retry Payment button - hiển thị cho cả trạng thái Đang chờ thanh toán và Thanh toán thất bại */}
+                                 {(order.status === 'Đang chờ thanh toán' || order.status === 'Thanh toán thất bại') &&
                                     (() => {
                                        const createdTime = new Date(order.createdAt).getTime();
                                        const now = new Date().getTime();
                                        const timePassed = now - createdTime;
-                                       const timeoutMs = 15 * 60 * 1000; // 15 phút
+                                       const timeoutMs = 24 * 60 * 60 * 1000; // 1 ngày (24 giờ)
 
                                        if (timePassed < timeoutMs) {
                                           return (
@@ -1314,13 +1394,13 @@ export default function OrderPage() {
                                  {(order.status === 'Đơn hàng vừa được tạo' ||
                                     order.status === 'Đang xử lý' ||
                                     order.status === 'Đang chờ thanh toán') && (
-                                    <button
-                                       onClick={() => handleCancelOrder(order.id)}
-                                       className='text-sm text-red-600 border border-red-300 bg-white hover:bg-red-50 px-3 py-1 rounded'
-                                    >
-                                       Hủy đơn
-                                    </button>
-                                 )}
+                                       <button
+                                          onClick={() => handleCancelOrder(order.id)}
+                                          className='text-sm text-red-600 border border-red-300 bg-white hover:bg-red-50 px-3 py-1 rounded'
+                                       >
+                                          Hủy đơn
+                                       </button>
+                                    )}
 
                                  {/* Show Complete button for any order in "Đang giao hàng" status */}
                                  {order.status === 'Đang giao hàng' && (
@@ -1353,13 +1433,13 @@ export default function OrderPage() {
                                  {/* Show Review button */}
                                  {(order.status === 'Hoàn thành' ||
                                     order.status === 'Đổi trả thành công') && (
-                                    <Link
-                                       href={`/user/order/rating`}
-                                       className='text-sm text-green-600 border border-green-300 bg-white hover:bg-green-50 px-3 py-1 rounded'
-                                    >
-                                       Đánh giá
-                                    </Link>
-                                 )}
+                                       <Link
+                                          href={`/user/order/rating`}
+                                          className='text-sm text-green-600 border border-green-300 bg-white hover:bg-green-50 px-3 py-1 rounded'
+                                       >
+                                          Đánh giá
+                                       </Link>
+                                    )}
                               </div>
                            </div>
                         </div>
@@ -1373,11 +1453,10 @@ export default function OrderPage() {
                   <button
                      onClick={() => paginate(currentPage - 1)}
                      disabled={currentPage === 1}
-                     className={`flex items-center px-3 py-1 rounded ${
-                        currentPage === 1
-                           ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                           : 'bg-white text-gray-700 hover:bg-gray-50'
-                     }`}
+                     className={`flex items-center px-3 py-1 rounded ${currentPage === 1
+                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                        : 'bg-white text-gray-700 hover:bg-gray-50'
+                        }`}
                   >
                      <ChevronLeftIcon className='w-4 h-4 mr-1' />
                      Trước
@@ -1389,11 +1468,10 @@ export default function OrderPage() {
                         <button
                            key={pageNumber}
                            onClick={() => paginate(pageNumber)}
-                           className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                              currentPage === pageNumber
-                                 ? 'bg-orange-600 text-white'
-                                 : 'bg-white hover:bg-gray-50 text-gray-700'
-                           }`}
+                           className={`w-8 h-8 rounded-full flex items-center justify-center ${currentPage === pageNumber
+                              ? 'bg-orange-600 text-white'
+                              : 'bg-white hover:bg-gray-50 text-gray-700'
+                              }`}
                         >
                            {pageNumber}
                         </button>
@@ -1403,11 +1481,10 @@ export default function OrderPage() {
                   <button
                      onClick={() => paginate(currentPage + 1)}
                      disabled={currentPage === totalPages}
-                     className={`flex items-center px-3 py-1 rounded ${
-                        currentPage === totalPages
-                           ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                           : 'bg-white text-gray-700 hover:bg-gray-50'
-                     }`}
+                     className={`flex items-center px-3 py-1 rounded ${currentPage === totalPages
+                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                        : 'bg-white text-gray-700 hover:bg-gray-50'
+                        }`}
                   >
                      Tiếp
                      <ChevronRightIcon className='w-4 h-4 ml-1' />
@@ -1426,8 +1503,8 @@ export default function OrderPage() {
                actionType === 'cancel'
                   ? 'Hủy đơn hàng'
                   : actionType === 'exchange'
-                  ? 'Yêu cầu đổi/trả hàng'
-                  : 'Yêu cầu trả hàng hoàn tiền'
+                     ? 'Yêu cầu đổi/trả hàng'
+                     : 'Yêu cầu trả hàng hoàn tiền'
             }
             actionType={actionType}
             onSubmit={handleActionSubmit}

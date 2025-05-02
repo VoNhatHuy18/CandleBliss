@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { useParams, useRouter } from 'next/navigation';
 import { CheckCircleIcon } from '@heroicons/react/24/solid';
-import { CheckCircleIcon as CheckCircleOutline, ExclamationCircleIcon, ArrowLeftIcon, PrinterIcon } from '@heroicons/react/24/outline';
+import { CheckCircleIcon as ExclamationCircleIcon, ArrowLeftIcon, PrinterIcon } from '@heroicons/react/24/outline';
 import Toast from '@/app/components/ui/toast/Toast';
 import Header from '@/app/components/seller/header/page';
 import MenuSideBar from '@/app/components/seller/menusidebar/page';
@@ -66,42 +66,6 @@ interface Order {
     customer_phone?: string;
 }
 
-// Status groups for the timeline
-const STATUS_GROUPS = [
-    {
-        title: 'Đơn hàng đã đặt',
-        statuses: ['Đơn hàng vừa được tạo', 'Đang chờ thanh toán', 'Thanh toán thất bại', 'Thanh toán thành công']
-    },
-    {
-        title: 'Xử lý đơn hàng',
-        statuses: ['Đang xử lý', 'Đã đặt hàng']
-    },
-    {
-        title: 'Đang giao hàng',
-        statuses: ['Đang giao hàng']
-    },
-    {
-        title: 'Hoàn thành',
-        statuses: ['Hoàn thành']
-    }
-];
-
-// Cancellation and return status groups
-const CANCEL_RETURN_GROUPS = [
-    {
-        title: 'Đơn hàng đã hủy',
-        statuses: ['Đã huỷ']
-    },
-    {
-        title: 'Đổi/Trả hàng',
-        statuses: ['Đổi trả hàng', 'Đã chấp nhận đổi trả', 'Đã hoàn thành đổi trả và hoàn tiền', 'Đã từ chối đổi trả']
-    },
-    {
-        title: 'Hoàn tiền',
-        statuses: ['Trả hàng hoàn tiền', 'Đang chờ hoàn tiền', 'Hoàn tiền thành công', 'Hoàn tiền thất bại']
-    }
-];
-
 // Order status colors
 const orderStatusColors: Record<string, { bg: string; text: string; border: string }> = {
     'Đơn hàng vừa được tạo': { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200' },
@@ -144,13 +108,167 @@ const formatDate = (dateString: string): string => {
     });
 };
 
+// First, add this new helper function after the existing formatDate function
+const processOrderStatusHistory = (order: Order) => {
+    // Create a default timeline based on order status
+    return generateDefaultStatusTimeline(order);
+};
+
+// Add this function to generate default status timeline
+const generateDefaultStatusTimeline = (order: Order) => {
+    // Define possible status flows
+    const orderStatusFlows = {
+        // COD flow
+        cod: [
+            'Đơn hàng vừa được tạo',
+            'Đang xử lý',
+            'Đang giao hàng',
+            'Hoàn thành'
+        ],
+        // Online payment successful flow
+        onlinePaymentSuccess: [
+            'Đơn hàng vừa được tạo',
+            'Đang chờ thanh toán',
+            'Thanh toán thành công',
+            'Đang giao hàng',
+            'Hoàn thành'
+        ],
+        // Online payment failed flow
+        onlinePaymentFailed: [
+            'Đơn hàng vừa được tạo',
+            'Đang chờ thanh toán',
+            'Thanh toán thất bại',
+            'Đã hủy'
+        ],
+        // Return success flow
+        returnSuccess: [
+            'Đơn hàng vừa được tạo',
+            'Đang xử lý',
+            'Đang giao hàng',
+            'Đã giao hàng',
+            'Đổi trả hàng',
+            'Xác nhận đổi trả',
+            'Đang giao hàng',
+            'Đổi trả thành công'
+        ],
+        // Return fail flow
+        returnFail: [
+            'Đơn hàng vừa được tạo',
+            'Đang xử lý',
+            'Đang giao hàng',
+            'Đã giao hàng',
+            'Đổi trả hàng',
+            'Từ chối đổi trả',
+            'Đổi trả thất bại'
+        ],
+        // Refund success flow
+        refundSuccess: [
+            'Đơn hàng vừa được tạo',
+            'Đang xử lý',
+            'Đang giao hàng',
+            'Đã giao hàng',
+            'Trả hàng hoàn tiền',
+            'Đang chờ hoàn tiền',
+            'Hoàn tiền thành công'
+        ],
+        // Refund fail flow
+        refundFail: [
+            'Đơn hàng vừa được tạo',
+            'Đang xử lý',
+            'Đang giao hàng',
+            'Đã giao hàng',
+            'Trả hàng hoàn tiền',
+            'Đang chờ hoàn tiền',
+            'Hoàn tiền thất bại'
+        ],
+    };
+
+    // Select appropriate flow based on current status
+    let orderStatusFlow = orderStatusFlows.cod; // Default to COD flow
+
+    // Check for special statuses to determine the flow
+    if (order.status === 'Đã hủy') {
+        // Special case for canceled orders
+        return [
+            {
+                status: 'Đơn hàng vừa được tạo',
+                updatedAt: order.createdAt
+            },
+            {
+                status: 'Đã hủy',
+                updatedAt: order.updatedAt
+            }
+        ];
+    }
+
+    // Determine flow based on current status
+    if (['Đang chờ thanh toán', 'Thanh toán thành công'].includes(order.status)) {
+        orderStatusFlow = orderStatusFlows.onlinePaymentSuccess;
+    }
+    else if (order.status === 'Thanh toán thất bại') {
+        orderStatusFlow = orderStatusFlows.onlinePaymentFailed;
+    }
+    else if (['Đổi trả hàng', 'Xác nhận đổi trả', 'Đổi trả thành công'].includes(order.status)) {
+        orderStatusFlow = orderStatusFlows.returnSuccess;
+    }
+    else if (['Từ chối đổi trả', 'Đổi trả thất bại'].includes(order.status)) {
+        orderStatusFlow = orderStatusFlows.returnFail;
+    }
+    else if (['Trả hàng hoàn tiền', 'Đang chờ hoàn tiền', 'Hoàn tiền thành công'].includes(order.status)) {
+        orderStatusFlow = orderStatusFlows.refundSuccess;
+    }
+    else if (order.status === 'Hoàn tiền thất bại') {
+        orderStatusFlow = orderStatusFlows.refundFail;
+    }
+
+    // Find current status position in flow
+    const currentStatusIndex = orderStatusFlow.indexOf(order.status);
+
+    if (currentStatusIndex === -1) {
+        // Case: status not in flow
+        return [
+            {
+                status: 'Đơn hàng vừa được tạo',
+                updatedAt: order.createdAt
+            },
+            {
+                status: order.status,
+                updatedAt: order.updatedAt
+            }
+        ];
+    }
+
+    // Calculate time between created and updated date
+    const createTime = new Date(order.createdAt).getTime();
+    const updateTime = new Date(order.updatedAt).getTime();
+
+    // Create timeline from creation to current status
+    const timeline = [];
+
+    // Calculate average time between statuses
+    const timePerStatus = (updateTime - createTime) / (currentStatusIndex || 1);
+
+    // Add all statuses up to current status
+    for (let i = 0; i <= currentStatusIndex; i++) {
+        timeline.push({
+            status: orderStatusFlow[i],
+            updatedAt: i === 0
+                ? order.createdAt
+                : i === currentStatusIndex
+                    ? order.updatedAt
+                    : new Date(createTime + timePerStatus * i).toISOString()
+        });
+    }
+
+    return timeline;
+};
+
 // Main component
 export default function OrderDetailPage() {
     const params = useParams();
     const router = useRouter();
     const [order, setOrder] = useState<Order | null>(null);
     const [loading, setLoading] = useState(true);
-    const [statusUpdating, setStatusUpdating] = useState(false);
     const [fetchedProducts, setFetchedProducts] = useState<Record<string, boolean>>({});
     const [toast, setToast] = useState({
         show: false,
@@ -321,140 +439,6 @@ export default function OrderDetailPage() {
             console.error('Error fetching customer info:', error);
         }
     };
-
-    // Function to update order status
-    const updateOrderStatus = async (newStatus: string) => {
-        // Confirmation dialog based on status
-        const confirmMessage = `Bạn có chắc chắn muốn cập nhật trạng thái đơn hàng thành "${newStatus}"?`;
-
-        if (!confirm(confirmMessage)) {
-            return;
-        }
-
-        try {
-            setStatusUpdating(true);
-            const token = localStorage.getItem('token');
-
-            if (!token) {
-                showToastMessage('Phiên đăng nhập hết hạn, vui lòng đăng nhập lại', 'error');
-                router.push('/seller/login');
-                return;
-            }
-
-            // Use query parameter format with updated API URL format
-            const encodedStatus = encodeURIComponent(newStatus);
-            const response = await fetch(
-                `${HOST}/api/orders/{id}/status?id=${order?.id}&status=${encodedStatus}`,
-                {
-                    method: 'PATCH',
-                    headers: {
-                        Authorization: `Bearer ${token}`,
-                        'Content-Type': 'application/json',
-                    }
-                }
-            );
-
-            if (!response.ok) {
-                throw new Error('Không thể cập nhật trạng thái đơn hàng');
-            }
-
-            // Update local state
-            if (order) {
-                setOrder({
-                    ...order,
-                    status: newStatus,
-                    updatedAt: new Date().toISOString()
-                });
-            }
-
-            showToastMessage(`Đã cập nhật trạng thái đơn hàng thành "${newStatus}"`, 'success');
-        } catch (error) {
-            console.error('Error updating order status:', error);
-            showToastMessage('Có lỗi xảy ra khi cập nhật trạng thái đơn hàng', 'error');
-        } finally {
-            setStatusUpdating(false);
-        }
-    };
-
-    // Check if status is in a cancelled or return flow
-    const isInCancelOrReturnFlow = (status: string): boolean => {
-        return CANCEL_RETURN_GROUPS.some(group =>
-            group.statuses.includes(status)
-        );
-    };
-
-
-
-    // Render status options based on current status
-    const renderStatusOptions = () => {
-        if (!order) return null;
-
-        const currentStatus = order.status;
-
-        // Available transitions based on current status
-        const statusTransitions: Record<string, string[]> = {
-            'Đơn hàng vừa được tạo': ['Đang xử lý', 'Đã huỷ'],
-            'Đang chờ thanh toán': ['Đã huỷ'],
-            'Thanh toán thành công': ['Đang xử lý', 'Đã huỷ'],
-            'Thanh toán thất bại': ['Đã huỷ'],
-            'Đang xử lý': ['Đã đặt hàng', 'Đã huỷ'],
-            'Đã đặt hàng': ['Đang giao hàng', 'Đã huỷ'],
-            'Đang giao hàng': ['Hoàn thành', 'Đã huỷ'],
-            'Đổi trả hàng': ['Đã chấp nhận đổi trả', 'Đã từ chối đổi trả'],
-            'Đã chấp nhận đổi trả': ['Đã hoàn thành đổi trả và hoàn tiền'],
-            'Trả hàng hoàn tiền': ['Đang chờ hoàn tiền', 'Đã từ chối đổi trả'],
-            'Đang chờ hoàn tiền': ['Hoàn tiền thành công', 'Hoàn tiền thất bại'],
-        };
-
-        const availableStatuses = statusTransitions[currentStatus] || [];
-
-        if (availableStatuses.length === 0) {
-            return <p className="text-sm text-gray-500">Không có cập nhật trạng thái nào khả dụng.</p>;
-        }
-
-        return (
-            <div className="flex flex-wrap gap-2 mt-2">
-                {availableStatuses.map(status => {
-                    const colorSet = orderStatusColors[status];
-                    return (
-                        <button
-                            key={status}
-                            onClick={() => updateOrderStatus(status)}
-                            disabled={statusUpdating}
-                            className={`px-3 py-1 text-sm rounded-full border ${colorSet.border} ${colorSet.bg} ${colorSet.text} hover:opacity-80 transition-opacity`}
-                        >
-                            {statusUpdating ? 'Đang xử lý...' : status}
-                        </button>
-                    );
-                })}
-            </div>
-        );
-    };
-
-    // Xác định các nhóm timeline và active group dựa trên trạng thái đơn hàng
-    const getTimelineAndActiveGroup = (order: Order | null) => {
-        if (!order) return { timelineGroups: [], activeGroupIndex: -1 };
-
-        const status = order.status;
-        let timelineGroups = STATUS_GROUPS;
-        let activeGroupIndex = -1;
-
-        // Xác định xem đơn hàng có đang trong luồng hủy/đổi trả không
-        if (isInCancelOrReturnFlow(status)) {
-            timelineGroups = CANCEL_RETURN_GROUPS;
-        }
-
-        // Tìm vị trí nhóm active
-        for (let i = 0; i < timelineGroups.length; i++) {
-            if (timelineGroups[i].statuses.includes(status)) {
-                activeGroupIndex = i;
-                break;
-            }
-        }
-
-        return { timelineGroups, activeGroupIndex };
-    };
-
     return (
         <div className="flex min-h-screen bg-gray-50">
             {/* Sidebar - thêm fixed để cố định khi cuộn */}
@@ -563,16 +547,12 @@ export default function OrderDetailPage() {
                                                 </div>
                                             )}
 
-                                            <div className={`px-4 py-1.5 rounded-full ${orderStatusColors[order.status]?.bg || 'bg-gray-100'} ${orderStatusColors[order.status]?.text || 'text-gray-700'} ${orderStatusColors[order.status]?.border || 'border-gray-200'} border font-medium`}>
+                                            <div className={`px-4 py-1.5 rounded-full ${orderStatusColors[order.status]?.bg || 'bg-gray-100'} ${orderStatusColors[order.status]?.text || 'text-gray-700'} ${orderStatusColors[order.status]?.border || 'border-gray-200'} border font-medium print:hidden`}>
                                                 {order.status}
                                             </div>
                                         </div>
 
-                                        {/* Ẩn phần cập nhật trạng thái khi in */}
-                                        <div className="p-3 bg-gray-50 rounded-lg border border-gray-100 w-full print:hidden">
-                                            <p className="font-medium text-sm mb-2">Cập nhật trạng thái:</p>
-                                            {renderStatusOptions()}
-                                        </div>
+
                                     </div>
                                 </div>
 
@@ -596,43 +576,52 @@ export default function OrderDetailPage() {
                             <div className="bg-white rounded-xl shadow-sm p-6 mb-6 border border-gray-100 print:hidden">
                                 <h2 className="text-lg font-medium mb-6">Tiến trình đơn hàng</h2>
 
-                                {(() => {
-                                    const { timelineGroups, activeGroupIndex } = getTimelineAndActiveGroup(order);
-                                    return (
-                                        <div className="relative">
-                                            {/* Timeline line */}
-                                            <div className="absolute left-2.5 top-0 h-full w-0.5 bg-gray-200"></div>
+                                <div className="relative">
+                                    {/* Timeline Line */}
+                                    <div className="absolute left-3 top-0 h-full w-0.5 bg-gray-200"></div>
 
-                                            {timelineGroups.map((group, index) => {
-                                                const isActive = index <= activeGroupIndex;
-                                                const isCurrentGroup = index === activeGroupIndex;
+                                    {/* Timeline Steps */}
+                                    {processOrderStatusHistory(order).map((statusUpdate, index) => {
+                                        const statusColor = orderStatusColors[statusUpdate.status] || {
+                                            bg: 'bg-gray-50',
+                                            text: 'text-gray-700',
+                                            border: 'border-gray-200'
+                                        };
 
-                                                return (
-                                                    <div key={group.title} className="relative pl-10 pb-8">
-                                                        {/* Timeline dot */}
-                                                        <div className="absolute left-0 -mt-0.5">
-                                                            {isActive ? (
-                                                                <CheckCircleIcon className="h-5 w-5 text-green-500" />
-                                                            ) : (
-                                                                <CheckCircleOutline className="h-5 w-5 text-gray-300" />
-                                                            )}
-                                                        </div>
+                                        const isCancelled = statusUpdate.status === 'Đã hủy';
+                                        const isCompleted = statusUpdate.status === 'Hoàn thành';
+                                        const isPaymentFailed = statusUpdate.status === 'Thanh toán thất bại';
+                                        const isRefundFailed = statusUpdate.status === 'Hoàn tiền thất bại';
 
-                                                        <div className={`mb-1 font-medium ${isActive ? 'text-gray-900' : 'text-gray-400'}`}>
-                                                            {group.title}
-                                                        </div>
+                                        // Determine appropriate icon
+                                        let StatusIcon = CheckCircleIcon;
+                                        if (isCancelled || isPaymentFailed || isRefundFailed) {
+                                            StatusIcon = ExclamationCircleIcon;
+                                        }
 
-                                                        {isCurrentGroup && (
-                                                            <div className="text-sm text-gray-500">
-                                                                {order.status} ({formatDate(order.updatedAt)})
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
-                                    );
-                                })()}
+                                        return (
+                                            <div key={index} className="relative flex items-start mb-8">
+                                                <div className={`flex items-center justify-center w-6 h-6 rounded-full z-10 
+                                                    ${statusColor.bg} ${statusColor.text} border ${statusColor.border}`}>
+                                                    <StatusIcon className="h-4 w-4" />
+                                                </div>
+                                                <div className="ml-4">
+                                                    <h3 className={`font-medium ${isCancelled || isPaymentFailed || isRefundFailed
+                                                        ? 'text-red-600'
+                                                        : isCompleted
+                                                            ? 'text-green-600'
+                                                            : ''
+                                                        }`}>
+                                                        {statusUpdate.status}
+                                                    </h3>
+                                                    <p className="text-sm text-gray-500">
+                                                        {formatDate(statusUpdate.updatedAt)}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
 
                                 {/* Cancellation reason if available */}
                                 {order.cancelReason && (

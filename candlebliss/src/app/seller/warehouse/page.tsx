@@ -20,6 +20,7 @@ import {
 import React from 'react';
 import { format, subDays } from 'date-fns';
 import { HOST } from '@/app/constants/api';
+import * as XLSX from 'xlsx';
 
 interface Image {
     id: string;
@@ -1612,10 +1613,13 @@ const InventoryHistoryModal = ({
     isOpen,
     onClose,
     products, // Thêm tham số products vào đây
+    showToast,
 }: {
     isOpen: boolean;
     onClose: () => void;
     products: ProductViewModel[]; // Thêm tham số này
+    showToast: (message: string, type: 'success' | 'error' | 'info') => void; // Add this type
+
 }) => {
     // Existing states remain the same
     const [loading, setLoading] = useState(true);
@@ -1797,11 +1801,23 @@ const InventoryHistoryModal = ({
         if (!filters.searchTerm.trim()) return history;
 
         const searchLower = filters.searchTerm.toLowerCase();
-        return history.filter(item =>
-            (item.product_detail?.product?.name || '').toLowerCase().includes(searchLower) ||
-            `${item.product_detail?.size || ''} ${item.product_detail?.type || ''} ${item.product_detail?.values || ''}`.toLowerCase().includes(searchLower) ||
-            item.product_detail_id.toString().includes(searchLower)
-        );
+        return history.filter(item => {
+            // Existing search conditions
+            const productNameMatch = (item.product_detail?.product?.name || '').toLowerCase().includes(searchLower);
+            const variantInfoMatch = `${item.product_detail?.size || ''} ${item.product_detail?.type || ''} ${item.product_detail?.values || ''}`.toLowerCase().includes(searchLower);
+            const idMatch = item.product_detail_id.toString().includes(searchLower);
+
+            // Add operation type matching
+            const operationTypeMatch =
+                (item.status === 'increase' && 'Nhập kho'.includes(searchLower)) ||
+                (item.status === 'decrease' && 'Xuất kho'.includes(searchLower));
+
+            // Add date matching (search for date in format DD/MM/YYYY or YYYY-MM-DD)
+            const dateMatch = format(new Date(item.created_at), 'dd/MM/yyyy').includes(searchLower) ||
+                format(new Date(item.created_at), 'yyyy-MM-dd').includes(searchLower);
+
+            return productNameMatch || variantInfoMatch || idMatch || operationTypeMatch || dateMatch;
+        });
     }, [history, filters.searchTerm]);
 
     // Calculate pagination
@@ -1825,6 +1841,69 @@ const InventoryHistoryModal = ({
 
         return groups;
     }, [displayedHistory]);
+
+    // Function to convert inventory history to CSV format
+    const exportToXLSX = () => {
+        if (!filteredHistory.length) {
+            showToast('Không có dữ liệu để xuất', 'info');
+            return;
+        }
+
+        try {
+            // Create a new workbook
+            const workbook = XLSX.utils.book_new();
+            
+            // Convert data to array format for XLSX
+            const data = filteredHistory.map(item => {
+              const productInfo = item.product_detail?.product ? 
+                {
+                  name: item.product_detail.product.name,
+                  size: item.product_detail.size || '',
+                  type: item.product_detail.type || '',
+                  values: item.product_detail.values || '',
+                } : 
+                getProductInfo(item.product_detail_id);
+              
+              return {
+                'Mã giao dịch': item.id,
+                'Thời gian': format(new Date(item.created_at), 'dd/MM/yyyy HH:mm:ss'),
+                'Sản phẩm': productInfo.name,
+                'Mã sản phẩm': item.product_detail_id,
+                'Phiên bản': [productInfo.size, productInfo.type, productInfo.values].filter(Boolean).join(' '),
+                'Số lượng': item.quantity,
+                'Loại giao dịch': item.status === 'increase' ? 'Nhập kho' : 'Xuất kho',
+                'Người thực hiện': item.update_by || 'Hệ thống'
+              };
+            });
+            
+            // Create worksheet from data
+            const worksheet = XLSX.utils.json_to_sheet(data);
+            
+            // Set column widths for better readability
+            const colWidths = [
+              { wch: 10 }, // Mã giao dịch
+              { wch: 20 }, // Thời gian
+              { wch: 30 }, // Sản phẩm
+              { wch: 12 }, // Mã sản phẩm
+              { wch: 25 }, // Phiên bản
+              { wch: 10 }, // Số lượng
+              { wch: 15 }, // Loại giao dịch
+              { wch: 15 }  // Người thực hiện
+            ];
+            worksheet['!cols'] = colWidths;
+            
+            // Add the worksheet to the workbook
+            XLSX.utils.book_append_sheet(workbook, worksheet, 'Lịch sử nhập xuất kho');
+            
+            // Write the workbook and trigger download
+            XLSX.writeFile(workbook, `lich-su-kho-${format(new Date(), 'dd-MM-yyyy')}.xlsx`);
+            
+            showToast('Xuất dữ liệu thành công', 'success');
+          } catch (error) {
+            console.error('Error exporting data:', error);
+            showToast('Không thể xuất dữ liệu: ' + (error instanceof Error ? error.message : 'Lỗi không xác định'), 'error');
+          }
+        };
 
     if (!isOpen) return null;
 
@@ -1907,15 +1986,25 @@ const InventoryHistoryModal = ({
                         <div className="text-sm text-gray-600">
                             {!loading && `Hiển thị ${filteredHistory.length} kết quả`}
                         </div>
-                        <button
-                            onClick={fetchInventoryHistory}
-                            className="flex items-center text-amber-600 hover:text-amber-800"
-                        >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                            </svg>
-                            Làm mới
-                        </button>
+                        <div className="flex gap-2">
+                            <button
+                                onClick={exportToXLSX}
+                                className="flex items-center text-green-600 hover:text-green-800"
+                                disabled={loading || filteredHistory.length === 0}
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                </svg>
+                                Xuất Excel
+                            </button>
+                            <button
+                                onClick={fetchInventoryHistory}
+                                className="flex items-center text-amber-600 hover:text-amber-800"
+                            >
+                                <MagnifyingGlassIcon className="h-5 w-5 mr-1" />
+                                Tìm kiếm
+                            </button>
+                        </div>
                     </div>
 
                     {/* History content */}
@@ -2766,6 +2855,7 @@ export default function Warehouse() {
                             isOpen={isHistoryModalOpen}
                             onClose={() => setIsHistoryModalOpen(false)}
                             products={products}
+                            showToast={showToast}
                         />
                     )}
 
@@ -2809,5 +2899,6 @@ function isPromotionActive(end_date: string | null | undefined) {
         return true; // If date parsing fails, assume it's active
     }
 }
+
 
 

@@ -772,17 +772,12 @@ export default function ExchangePage() {
                                 </p>
                             </div>
                             <div className='bg-white p-2 sm:p-3 rounded-lg shadow-sm border border-green-100'>
-                                <p className='text-xs text-gray-500'>Hoàn tiền thành công</p>
+                                <p className='text-xs text-gray-500'>Đã hoàn thành đổi trả và hoàn tiền</p>
                                 <p className='text-lg font-bold text-green-600'>
-                                    {orders.filter(o => o.status === 'Hoàn tiền thành công').length}
+                                    {orders.filter(o => o.status === 'Đã hoàn thành đổi trả và hoàn tiền').length}
                                 </p>
                             </div>
-                            <div className='bg-white p-2 sm:p-3 rounded-lg shadow-sm border border-red-100'>
-                                <p className='text-xs text-gray-500'>Hoàn tiền thất bại</p>
-                                <p className='text-lg font-bold text-red-600'>
-                                    {orders.filter(o => o.status === 'Hoàn tiền thất bại').length}
-                                </p>
-                            </div>
+
                         </div>
                     </div>
 
@@ -944,7 +939,7 @@ export default function ExchangePage() {
 
                     {/* Status tabs - Cập nhật hiển thị các trạng thái đổi/trả */}
                     <div className='bg-white rounded-lg shadow-sm border border-gray-100 p-3 mb-4'>
-                        <div className='grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2'>
+                        <div className='grid grid-cols-3 gap-2'>
                             <button
                                 onClick={() => setStatusFilter(null)}
                                 className={`px-3 py-2.5 text-center transition-colors text-sm rounded-md ${!statusFilter
@@ -956,7 +951,7 @@ export default function ExchangePage() {
                             </button>
 
                             {/* Hiển thị các trạng thái đổi/trả hàng với tên rút gọn */}
-                            {['Đổi trả hàng', 'Đã chấp nhận đổi trả', 'Đã từ chối đổi trả', 'Đã hoàn thành đổi trả và hoàn tiền', 'Đang chờ hoàn tiền', 'Hoàn tiền thành công', 'Hoàn tiền thất bại'].map(status => (
+                            {['Đổi trả hàng', 'Đã từ chối đổi trả', 'Đã hoàn thành đổi trả và hoàn tiền', 'Hoàn tiền thành công', 'Hoàn tiền thất bại'].map((status) => (
                                 <button
                                     key={status}
                                     onClick={() => setStatusFilter(status)}
@@ -966,12 +961,11 @@ export default function ExchangePage() {
                                         }`}
                                 >
                                     {status === 'Đổi trả hàng' ? 'Đổi trả hàng' :
-                                        status === 'Đã chấp nhận đổi trả' ? 'Chấp nhận đổi trả' :
-                                            status === 'Đã từ chối đổi trả' ? 'Từ chối đổi trả' :
-                                                status === 'Đã hoàn thành đổi trả và hoàn tiền' ? 'Hoàn thành đổi trả' :
-                                                    status === 'Đang chờ hoàn tiền' ? 'Chờ hoàn tiền' :
-                                                        status === 'Hoàn tiền thành công' ? 'Hoàn tiền thành công' :
-                                                            status === 'Hoàn tiền thất bại' ? 'Hoàn tiền thất bại' : status}
+                                        status === 'Đã từ chối đổi trả' ? 'Từ chối đổi trả' :
+                                            status === 'Đã hoàn thành đổi trả và hoàn tiền' ? 'Hoàn thành đổi trả' :
+                                                status === 'Hoàn tiền thành công' ? 'Hoàn tiền thành công' :
+                                                    status === 'Hoàn tiền thất bại' ? 'Hoàn tiền thất bại' :
+                                                        status === 'Đang chờ hoàn tiền' ? 'Chờ hoàn tiền' : status}
                                 </button>
                             ))}
                         </div>
