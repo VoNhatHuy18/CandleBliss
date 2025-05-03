@@ -166,7 +166,7 @@ export default function EditProduct() {
 
             const response = await fetch(`${HOST}/api/products/${productId}`, {
                headers: {
-                  Authorization: `Bearer ${token}`,
+                  Authorization: `Bearer ${localStorage.getItem('token') || sessionStorage.getItem('token')}`,
                },
             });
 
@@ -243,7 +243,7 @@ export default function EditProduct() {
 
          const response = await fetch(`${HOST}/api/categories`, {
             headers: {
-               Authorization: `Bearer ${token}`,
+               Authorization: `Bearer ${localStorage.getItem('token') || sessionStorage.getItem('token')}`,
                'Content-Type': 'application/json',
             },
          });
@@ -1034,44 +1034,14 @@ export default function EditProduct() {
             // Trong handleSubmit, thay thế phần cập nhật chi tiết:
             for (const detail of detailsToUpdate) {
                try {
-                  // Chuẩn bị dữ liệu cập nhật
-                  const detailData = {
-                     size: String(detail.size || ''),
-                     type: String(detail.type || ''),
-                     values: String(detail.values || ''),
-                     quantities: Number(detail.quantities || 0),
-                     isActive: Boolean(detail.isActive),
-                     // Thêm trường này để API backend biết đây là cập nhật không có hình ảnh
-                  };
+                  console.log(`Đang cập nhật chi tiết ID ${detail.id}`);
+                  const success = await updateProductDetail(detail);
 
-                  console.log(`Đang cập nhật chi tiết ID ${detail.id} với:`, detailData);
-
-                  // Gọi API cập nhật chi tiết sản phẩm
-                  const detailRes = await fetch(
-                     `${HOST}/api/product-details/${detail.id}`,
-                     {
-                        method: 'PATCH',
-                        headers: {
-                           Authorization: `Bearer ${token}`,
-                           'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify(detailData),
-                     },
-                  );
-
-                  // Log kết quả
-                  if (!detailRes.ok) {
-                     const errorText = await detailRes.text();
-                     console.error(
-                        `Chi tiết cập nhật thất bại cho ID ${detail.id} (${detailRes.status}):`,
-                        errorText,
-                     );
-                     showToast(
-                        `Chi tiết ID ${detail.id} không cập nhật được: ${detailRes.statusText}`,
-                        'error',
-                     );
-                  } else {
+                  if (success) {
                      console.log(`Chi tiết ${detail.id} cập nhật thành công`);
+                  } else {
+                     console.error(`Chi tiết cập nhật thất bại cho ID ${detail.id}`);
+                     showToast(`Chi tiết ID ${detail.id} không cập nhật được`, 'error');
                   }
 
                   // Thêm độ trễ nhỏ để giảm tải cho server
@@ -1299,61 +1269,6 @@ export default function EditProduct() {
       }
    };
 
-   // Thêm hàm này vào component EditProduct
-   // const fetchDetailImages = async (detailId: number) => {
-   //    console.log('Fetching images for detail ID:', detailId);
-
-   //    try {
-   //       // Bỏ qua nếu đã có trong cache
-   //       if (detailImagesCache[detailId]?.length > 0) {
-   //          console.log('Images already in cache for detail ID:', detailId);
-   //          return detailImagesCache[detailId];
-   //       }
-
-   //       const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-   //       if (!token) {
-   //          console.log('No authentication token found');
-   //          return null;
-   //       }
-
-   //       const response = await fetch(
-   //          ``${HOST}`/api/product-details/${detailId}`,
-   //          {
-   //             headers: {
-   //                Authorization: `Bearer ${token}`,
-   //             },
-   //          }
-   //       );
-
-   //       console.log('API response status:', response.status);
-
-   //       if (!response.ok) {
-   //          console.error(`Failed to fetch detail images: ${response.status}`);
-   //          return null;
-   //       }
-
-   //       const detailData = await response.json();
-   //       console.log('Detail data received:', detailData);
-
-   //       if (detailData && detailData.images && detailData.images.length > 0) {
-   //          console.log(`Found ${detailData.images.length} images for detail ID ${detailId}`);
-
-   //          // Cập nhật cache hình ảnh
-   //          setDetailImagesCache(prev => ({
-   //             ...prev,
-   //             [detailId]: detailData.images
-   //          }));
-
-   //          return detailData.images;
-   //       } else {
-   //          console.log('No images found for detail');
-   //          return [];
-   //       }
-   //    } catch (error) {
-   //       console.error('Error fetching detail images:', error);
-   //       return null;
-   //    }
-   // };
 
    // Thêm hàm này vào component của bạn
    const removeDetailImage = async (detailId: number, imageId: string) => {
@@ -1482,6 +1397,52 @@ export default function EditProduct() {
       } catch (error) {
          console.error('Error fetching detail images:', error);
          return null;
+      }
+   };
+
+   // Thay thế cách cập nhật thông tin product-details
+   const updateProductDetail = async (detail: ProductDetail) => {
+      try {
+         // Lấy token từ localStorage hoặc sessionStorage
+         const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+         if (!token) return false;
+
+         // Sử dụng FormData thay vì JSON
+         const formData = new FormData();
+
+         // Thêm các trường thông tin như form fields
+         formData.append('size', String(detail.size || ''));
+         formData.append('type', String(detail.type || ''));
+         formData.append('values', String(detail.values || ''));
+         formData.append('quantities', String(detail.quantities || 0));
+         formData.append('isActive', detail.isActive ? 'true' : 'false');
+
+         // Đánh dấu đây là cập nhật thông tin không có hình ảnh
+         formData.append('update_info_only', 'true');
+
+         const response = await fetch(
+            `${HOST}/api/product-details/${detail.id}`,
+            {
+               method: 'PATCH',
+               headers: {
+                  Authorization: `Bearer ${token}`,
+                  // Không set Content-Type cho FormData
+               },
+               body: formData,
+            }
+         );
+
+         // Xử lý phản hồi
+         if (!response.ok) {
+            const errorText = await response.text();
+            console.error(`Detail update failed (${response.status}): ${errorText}`);
+            return false;
+         }
+
+         return true;
+      } catch (error) {
+         console.error(`Error updating detail:`, error);
+         return false;
       }
    };
 
