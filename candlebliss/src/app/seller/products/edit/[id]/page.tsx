@@ -110,10 +110,8 @@ export default function EditProduct() {
    const [categoryError, setCategoryError] = useState('');
    const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0, width: 0 });
    const [detailImagesCache, setDetailImagesCache] = useState<Record<number, Image[]>>({});
-
-   // Variant management
+   const [variantImageUploading, setVariantImageUploading] = useState<number | null>(null);
    const [variantsToDelete, setVariantsToDelete] = useState<number[]>([]);
-   // Update the newVariants state type to include promotion dates
    const [newVariants, setNewVariants] = useState<
       {
          size: string;
@@ -774,24 +772,109 @@ export default function EditProduct() {
       }
    };
 
-   // Thêm hàm xử lý việc tải lên hình ảnh cho chi tiết sản phẩm
-   const handleVariantImageUpload = (detailId: number, e: ChangeEvent<HTMLInputElement>) => {
+   // Improved handleVariantImageUpload function with automatic upload
+   const handleVariantImageUpload = async (detailId: number, e: ChangeEvent<HTMLInputElement>) => {
       if (e.target.files && e.target.files.length > 0) {
-         const filesArray = Array.from(e.target.files);
-         setVariantImageUploads((prev) => ({
-            ...prev,
-            [detailId]: [...(prev[detailId] || []), ...filesArray],
-         }));
-      }
-   };
+         try {
+            setVariantImageUploading(detailId);
+            // Store files temporarily and show pending upload state
+            const filesArray = Array.from(e.target.files);
+            setVariantImageUploads((prev) => ({
+               ...prev,
+               [detailId]: [...(prev[detailId] || []), ...filesArray],
+            }));
 
-   // Hàm xóa hình ảnh trước khi tải lên
-   const removeVariantUploadImage = (detailId: number, imageIndex: number) => {
-      setVariantImageUploads((prev) => {
-         const updatedFiles = [...(prev[detailId] || [])];
-         updatedFiles.splice(imageIndex, 1);
-         return { ...prev, [detailId]: updatedFiles };
-      });
+            showToast(`Đang tải lên hình ảnh cho phiên bản...`, 'info');
+
+            // Get authentication token
+            const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+            if (!token) {
+               showToast('Bạn chưa đăng nhập hoặc phiên làm việc đã hết hạn', 'error');
+               return;
+            }
+
+            // Create FormData for the upload
+            const formData = new FormData();
+            filesArray.forEach((file) => {
+               formData.append('images', file);
+            });
+
+            // Upload the images immediately
+            const response = await fetch(
+               `${HOST}/api/product-details/${detailId}`,
+               {
+                  method: 'PATCH',
+                  headers: {
+                     Authorization: `Bearer ${token}`,
+                  },
+                  body: formData,
+               }
+            );
+
+            if (!response.ok) {
+               const errorText = await response.text();
+               console.error(`Image upload failed (${response.status}): ${errorText}`);
+               showToast(`Không thể tải lên hình ảnh: ${response.statusText}`, 'error');
+               return;
+            }
+
+            // Parse the response to get updated images
+            const updatedDetail = await response.json();
+            console.log('Images uploaded successfully:', updatedDetail);
+
+            // Clear the upload queue for this detail
+            setVariantImageUploads(prev => {
+               const updated = { ...prev };
+               delete updated[detailId];
+               return updated;
+            });
+
+            // Update UI with the new images
+            if (updatedDetail && updatedDetail.images) {
+               // Update cache with fresh data
+               setDetailImagesCache(prev => ({
+                  ...prev,
+                  [detailId]: updatedDetail.images
+               }));
+
+               // Update product state
+               setProduct(prevProduct => {
+                  if (!prevProduct) return null;
+
+                  const updatedDetails = prevProduct.details.map(detail => {
+                     if (detail.id === detailId) {
+                        return {
+                           ...detail,
+                           images: updatedDetail.images
+                        };
+                     }
+                     return detail;
+                  });
+
+                  return {
+                     ...prevProduct,
+                     details: updatedDetails
+                  };
+               });
+
+               // Update timestamp and force re-render
+               setLastImageFetchTime(prev => ({
+                  ...prev,
+                  [detailId]: Date.now()
+               }));
+            }
+
+            showToast('Đã tải lên hình ảnh thành công', 'success');
+         } catch (error) {
+            console.error('Error uploading variant images:', error);
+            showToast(
+               `Lỗi tải lên hình ảnh: ${error instanceof Error ? error.message : 'Lỗi không xác định'}`,
+               'error'
+            );
+         } finally {
+            setVariantImageUploading(null);
+         }
+      }
    };
 
    // Add a helper function to format date input
@@ -2038,13 +2121,16 @@ export default function EditProduct() {
                                                          <div className='aspect-square overflow-hidden rounded-md border border-gray-200'>
                                                             <Image
                                                                src={image.path}
-                                                               alt={`Variant image ${imgIndex + 1}`}
-                                                               width={100}
-                                                               height={100}
+                                                               alt={`Product image ${index + 1}`}
+                                                               width={200}
+                                                               height={200}
                                                                className='w-full h-full object-cover'
                                                                onError={(e) => {
-                                                                  console.error(`Error loading image: ${image.path}`);
-                                                                  e.currentTarget.src = '/placeholder-image.jpg';
+                                                                  console.error(
+                                                                     `Error loading image: ${image.path}`,
+                                                                  );
+                                                                  e.currentTarget.src =
+                                                                     '/placeholder-image.jpg';
                                                                }}
                                                             />
                                                          </div>
@@ -2094,100 +2180,35 @@ export default function EditProduct() {
 
                                              {/* Input để tải lên hình ảnh mới */}
                                              {!variantsToDelete.includes(detail.id) && (
-                                                <>
-                                                   <div className='mt-2'>
-                                                      <label className='flex items-center justify-center w-24 h-24 border-2 border-gray-300 border-dashed rounded-md cursor-pointer hover:bg-gray-50'>
+                                                <div className='mt-2'>
+                                                   <label className={`flex items-center justify-center w-24 h-24 border-2 border-gray-300 border-dashed rounded-md cursor-pointer hover:bg-gray-50 ${variantImageUploading === detail.id ? 'opacity-50 pointer-events-none' : ''}`}>
+                                                      {variantImageUploading === detail.id ? (
+                                                         <div className='space-y-1 text-center'>
+                                                            <ArrowPathIcon className='mx-auto h-6 w-6 text-amber-500 animate-spin' />
+                                                            <div className='text-xs text-gray-500'>
+                                                               <span>Đang tải...</span>
+                                                            </div>
+                                                         </div>
+                                                      ) : (
                                                          <div className='space-y-1 text-center'>
                                                             <PhotoIcon className='mx-auto h-6 w-6 text-gray-400' />
                                                             <div className='text-xs text-gray-500'>
-                                                               <span>Thêm ảnh</span>
+                                                               <span>Chọn ảnh</span>
                                                             </div>
                                                          </div>
-                                                         <input
-                                                            type='file'
-                                                            className='hidden'
-                                                            accept='image/*'
-                                                            multiple
-                                                            onChange={(e) =>
-                                                               handleVariantImageUpload(
-                                                                  detail.id,
-                                                                  e,
-                                                               )
-                                                            }
-                                                         />
-                                                      </label>
-                                                   </div>
-
-                                                   {/* Hiển thị hình ảnh đã chọn để tải lên */}
-                                                   {variantImageUploads[detail.id]?.length > 0 && (
-                                                      <div className='mt-3'>
-                                                         <h5 className='text-xs font-medium text-gray-700 mb-2'>
-                                                            Sẽ tải lên:
-                                                         </h5>
-                                                         <div className='grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3'>
-                                                            {variantImageUploads[detail.id].map(
-                                                               (file, imgIndex) => (
-                                                                  <div key={imgIndex} className='relative group'>
-                                                                     <div className='aspect-square overflow-hidden rounded-md border border-gray-200'>
-                                                                        <Image
-                                                                           src={URL.createObjectURL(file)}
-                                                                           alt={`New variant image ${imgIndex + 1}`}
-                                                                           width={100}
-                                                                           height={100}
-                                                                           className='w-full h-full object-cover'
-                                                                        />
-                                                                     </div>
-                                                                     <button
-                                                                        type='button'
-                                                                        onClick={() => removeVariantUploadImage(detail.id, imgIndex)}
-                                                                        className='absolute top-1 right-1 bg-white rounded-full p-1 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity'
-                                                                     >
-                                                                        <XMarkIcon className='h-3 w-3 text-gray-500' />
-                                                                     </button>
-                                                                  </div>
-                                                               ),
-                                                            )}
-                                                         </div>
-                                                      </div>
-                                                   )}
-                                                </>
+                                                      )}
+                                                      <input
+                                                         type='file'
+                                                         className='hidden'
+                                                         accept='image/*'
+                                                         multiple
+                                                         disabled={variantImageUploading === detail.id}
+                                                         onChange={(e) => handleVariantImageUpload(detail.id, e)}
+                                                      />
+                                                   </label>
+                                                </div>
                                              )}
                                           </div>
-
-                                          {/* Nút cập nhật */}
-                                          {!variantsToDelete.includes(detail.id) && (
-                                             <div className='mt-4 border-t pt-4'>
-                                                <div className='flex justify-end space-x-2'>
-                                                   {variantImageUploads[detail.id]?.length > 0 && (
-                                                      <button
-                                                         type='button'
-                                                         onClick={async () => {
-                                                            const success =
-                                                               await uploadDetailImages(
-                                                                  detail.id,
-                                                                  variantImageUploads[detail.id],
-                                                               );
-                                                            if (success) {
-                                                               showToast(
-                                                                  'Đã tải lên hình ảnh cho phiên bản thành công',
-                                                                  'success',
-                                                               );
-                                                               setVariantImageUploads((prev) => {
-                                                                  const updated = { ...prev };
-                                                                  delete updated[detail.id];
-                                                                  return updated;
-                                                               });
-                                                               await refetchProductDetails();
-                                                            }
-                                                         }}
-                                                         className='px-3 py-1 bg-green-600 text-white text-sm rounded-md hover:bg-green-700 focus:outline-none'
-                                                      >
-                                                         Tải ảnh lên
-                                                      </button>
-                                                   )}
-                                                </div>
-                                             </div>
-                                          )}
                                        </div>
                                     ))}
                                  </div>

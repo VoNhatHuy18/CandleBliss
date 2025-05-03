@@ -496,7 +496,7 @@ function NavBarContent() {
                      <hr className='border-[#553C26]' />
                   </div>
                </div>
-               <Link href='/user/products/vouchers'>
+               <Link href='/user/vouchers'>
                   <button className='text-base xl:text-lg hover:text-[#FF9900] focus:font-semibold focus:text-[#FF9900] font-mont hover:font-semibold'>
                      Mã Giảm Giá
                   </button>
@@ -506,7 +506,7 @@ function NavBarContent() {
                      Về Chúng Tôi
                   </button>
                </Link>
-               <Link href='https://www.facebook.com/' target='_blank'>
+               <Link href='https://www.facebook.com/vo.huy.5283' target='_blank'>
                   <button className='text-base xl:text-lg hover:text-[#FF9900] focus:font-semibold focus:text-[#FF9900] font-mont hover:font-semibold'>
                      Liên Hệ
                   </button>

@@ -64,6 +64,7 @@ interface ProductCardProps {
     price: string;
     discountPrice?: string;
     rating: number;
+    reviewCount?: number; // Add this property
     imageUrl: string;
     variants?: Array<{
         detailId: number;
@@ -89,20 +90,25 @@ interface SortOption {
 }
 
 // Star display component for product ratings
-const StarDisplay = ({ rating }: { rating: number }) => {
+const StarDisplay = ({ rating, reviewCount }: { rating: number; reviewCount?: number }) => {
     return (
-        <div className="flex">
-            {[1, 2, 3, 4, 5].map((star) => (
-                <svg
-                    key={star}
-                    xmlns="http://www.w3.org/2000/svg"
-                    className={`h-4 w-4 ${star <= rating ? 'text-yellow-400' : 'text-gray-300'}`}
-                    viewBox="0 0 20 20"
-                    fill="currentColor"
-                >
-                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                </svg>
-            ))}
+        <div className="flex items-center">
+            <div className="flex">
+                {[1, 2, 3, 4, 5].map((star) => (
+                    <svg
+                        key={star}
+                        xmlns="http://www.w3.org/2000/svg"
+                        className={`h-4 w-4 ${star <= rating ? 'text-yellow-400' : 'text-gray-300'}`}
+                        viewBox="0 0 20 20"
+                        fill="currentColor"
+                    >
+                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                    </svg>
+                ))}
+            </div>
+            {reviewCount !== undefined && reviewCount > 0 && (
+                <span className="ml-1 text-xs text-gray-500">({reviewCount})</span>
+            )}
         </div>
     );
 };
@@ -115,6 +121,7 @@ const ProductCard = ({
     price,
     discountPrice,
     rating,
+    reviewCount,
     imageUrl,
     variants,
     onViewDetail,
@@ -197,6 +204,10 @@ const ProductCard = ({
 
     const { basePrice, discountPrice: calculatedDiscountPrice, discountPercent } = getDisplayPrice();
 
+    const renderStars = () => {
+        return <StarDisplay rating={rating} reviewCount={reviewCount} />;
+    };
+
     return (
         <div className='rounded-lg bg-white p-3 shadow-lg hover:shadow-md transition-shadow'>
             <div className='relative aspect-square overflow-hidden rounded-lg group'>
@@ -233,9 +244,7 @@ const ProductCard = ({
                     {title}
                 </h3>
                 <p className='text-xs text-gray-500 line-clamp-2 mb-1'>{description}</p>
-                <div className='flex items-center'>
-                    <StarDisplay rating={rating} />
-                </div>
+                <div className='flex items-center'>{renderStars()}</div>
 
                 {/* Variant options */}
                 {variants && variants.length > 0 && (
@@ -297,16 +306,20 @@ const fetchRatingsForProducts = async (productIds: number[]) => {
         );
 
         const ratingsResults = await Promise.all(ratingPromises);
-        const ratingsMap: Record<number, number> = {};
+        // Map ratings and review counts to product IDs
+        const ratingsMap: Record<number, { rating: number; reviewCount: number }> = {};
 
         productIds.forEach((id, index) => {
             const productRatings = ratingsResults[index];
             if (Array.isArray(productRatings) && productRatings.length > 0) {
                 const totalRating = productRatings.reduce((sum, item) =>
                     sum + (item.rating || item.avg_rating || 0), 0);
-                ratingsMap[id] = productRatings.length > 0 ? totalRating / productRatings.length : 5;
+                ratingsMap[id] = {
+                    rating: productRatings.length > 0 ? totalRating / productRatings.length : 5,
+                    reviewCount: productRatings.length
+                };
             } else {
-                ratingsMap[id] = 0;
+                ratingsMap[id] = { rating: 0, reviewCount: 0 }; // Default rating
             }
         });
 
@@ -330,7 +343,7 @@ export default function CategoryProductsPage() {
     const [error, setError] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedPriceRange, setSelectedPriceRange] = useState<PriceRange | null>(null);
-    const [sortOption, setSortOption] = useState<string>('default');
+    const [sortOption, setSortOption] = useState<string>('rating-desc');
     const [currentPage, setCurrentPage] = useState(1);
     const productsPerPage = 24;
 
@@ -393,9 +406,19 @@ export default function CategoryProductsPage() {
             });
         }
 
-        // Apply sorting (except default)
+        // Apply sorting (except default which is already handled)
         if (sort !== 'default') {
             switch (sort) {
+                case 'rating-desc':
+                    result.sort((a, b) => {
+                        // First sort by rating (highest first)
+                        if (b.rating !== a.rating) {
+                            return b.rating - a.rating;
+                        }
+                        // If ratings are equal, sort by number of reviews (highest first)
+                        return (b.reviewCount || 0) - (a.reviewCount || 0);
+                    });
+                    break;
                 case 'price-asc':
                     result.sort((a, b) => {
                         const priceA = a.discountPrice
@@ -423,6 +446,16 @@ export default function CategoryProductsPage() {
                     break;
                 case 'name-desc':
                     result.sort((a, b) => b.title.localeCompare(a.title));
+                    break;
+                case 'rating-desc':
+                    result.sort((a, b) => {
+                        // First sort by rating (highest first)
+                        if (b.rating !== a.rating) {
+                            return b.rating - a.rating;
+                        }
+                        // If ratings are equal, sort by number of reviews (highest first)
+                        return (b.reviewCount || 0) - (a.reviewCount || 0);
+                    });
                     break;
             }
         }
@@ -598,11 +631,22 @@ export default function CategoryProductsPage() {
                         description: product.description,
                         price: basePrice,
                         discountPrice: discountPrice,
-                        rating: ratingsMap[product.id] || 0,
+                        rating: ratingsMap[product.id]?.rating || 0,
+                        reviewCount: ratingsMap[product.id]?.reviewCount || 0, // Add this line
                         imageUrl: imageUrl || '/images/placeholder.jpg',
                         variants: variants.length > 0 ? variants : undefined,
                     };
                 }));
+
+                // Apply default rating-based sorting to the mapped products
+                mappedProducts.sort((a, b) => {
+                    // First sort by rating (highest first)
+                    if (b.rating !== a.rating) {
+                        return b.rating - a.rating;
+                    }
+                    // If ratings are equal, sort by number of reviews (highest first)
+                    return (b.reviewCount || 0) - (a.reviewCount || 0);
+                });
 
                 setOriginalProducts(mappedProducts);
                 setProducts(mappedProducts);
