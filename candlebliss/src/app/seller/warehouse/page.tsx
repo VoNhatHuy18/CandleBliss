@@ -256,6 +256,7 @@ const StockReceiptModal = ({
             variant_info: string;
             quantity: number;
             cost_per_unit: number;
+            image?: string; // Add image field to store product image URL
         }>;
         totalItems: number;
         totalCost: number;
@@ -282,11 +283,29 @@ const StockReceiptModal = ({
         variant_info: string;
         quantity: number;
         cost_per_unit: number;
+        image?: string; // Add image field to store product image URL
     }>>([]);
 
     // Lọc sản phẩm đã chọn
     const selectedProduct = selectedProductId ? products.find(p => p.id === selectedProductId) : null;
     const selectedVariant = selectedProduct?.details?.find(d => d.id === selectedVariantId);
+
+    // Get product image for the selected product/variant
+    const productImage = useMemo(() => {
+        if (!selectedProduct) return '/placeholder.png';
+
+        // If variant is selected and has images, use variant image
+        if (selectedVariant && selectedVariant.images && selectedVariant.images.length > 0) {
+            return selectedVariant.images[0].path;
+        }
+
+        // Otherwise use product main image
+        if (selectedProduct.images && selectedProduct.images.length > 0) {
+            return selectedProduct.images[0].path;
+        }
+
+        return '/placeholder.png';
+    }, [selectedProduct, selectedVariant]);
 
     // Reset form khi đóng modal
     useEffect(() => {
@@ -370,13 +389,22 @@ const StockReceiptModal = ({
 
         const variantInfo = `${variant.size || ''} ${variant.type || ''} ${variant.values || ''}`.trim();
 
+        // Get image for this item
+        let itemImage = '/placeholder.png';
+        if (variant.images && variant.images.length > 0) {
+            itemImage = variant.images[0].path;
+        } else if (product.images && product.images.length > 0) {
+            itemImage = product.images[0].path;
+        }
+
         setItems(prev => [...prev, {
             product_id: selectedProductId,
             product_detail_id: selectedVariantId,
             product_name: product.name,
             variant_info: variantInfo || `#${selectedVariantId}`,
             quantity,
-            cost_per_unit: costPerUnit
+            cost_per_unit: costPerUnit,
+            image: itemImage // Add image to the item
         }]);
 
         // Reset form for next item
@@ -427,7 +455,7 @@ const StockReceiptModal = ({
                 </div>
 
                 <div className="p-6 overflow-y-auto" style={{ maxHeight: "calc(90vh - 120px)" }}>
-                    <div className=" border-b border-gray-200 py-4 mb-4">
+                    <div className="border-b border-gray-200 py-4 mb-4">
                         <h4 className="text-sm font-medium mb-3">Thêm sản phẩm vào phiếu</h4>
                         <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
                             <div className="md:col-span-2">
@@ -488,7 +516,7 @@ const StockReceiptModal = ({
                                     Số lượng
                                 </label>
                                 <input
-                                    type="number"
+
                                     value={quantity}
                                     onChange={e => setQuantity(Number(e.target.value))}
                                     min={1}
@@ -526,6 +554,33 @@ const StockReceiptModal = ({
                                 </button>
                             </div>
                         </div>
+
+                        {/* Add product image preview here */}
+                        {selectedProductId && (
+                            <div className="mt-4 flex items-center">
+                                <div className="h-24 w-24 bg-gray-100 border rounded-md overflow-hidden flex-shrink-0">
+                                    <Image
+                                        src={productImage}
+                                        alt={selectedProduct?.name || "Sản phẩm"}
+                                        width={96}
+                                        height={96}
+                                        className="h-full w-full object-cover"
+                                        onError={(e) => {
+                                            const target = e.target as HTMLImageElement;
+                                            target.src = '/placeholder.png';
+                                        }}
+                                    />
+                                </div>
+                                <div className="ml-4">
+                                    <h5 className="font-medium">{selectedProduct?.name}</h5>
+                                    {selectedVariant && (
+                                        <p className="text-sm text-gray-600 mt-1">
+                                            Phiên bản: {`${selectedVariant.size || ''} ${selectedVariant.type || ''} ${selectedVariant.values || ''}`.trim() || `#${selectedVariant.id}`}
+                                        </p>
+                                    )}
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     <h4 className="text-sm font-medium mb-3">Danh sách sản phẩm</h4>
@@ -550,7 +605,24 @@ const StockReceiptModal = ({
                                 <tbody className="bg-white divide-y divide-gray-200">
                                     {items.map((item, index) => (
                                         <tr key={index}>
-                                            <td className="px-4 py-3 text-sm">{item.product_name}</td>
+                                            <td className="px-4 py-3 text-sm">
+                                                <div className="flex items-center">
+                                                    <div className="h-10 w-10 bg-gray-200 rounded-md overflow-hidden mr-3 flex-shrink-0 border">
+                                                        <Image
+                                                            src={item.image || '/placeholder.png'}
+                                                            alt={item.product_name}
+                                                            width={40}
+                                                            height={40}
+                                                            className="h-full w-full object-cover"
+                                                            onError={(e) => {
+                                                                const target = e.target as HTMLImageElement;
+                                                                target.src = '/placeholder.png';
+                                                            }}
+                                                        />
+                                                    </div>
+                                                    <span className="truncate max-w-[200px]">{item.product_name}</span>
+                                                </div>
+                                            </td>
                                             <td className="px-4 py-3 text-sm text-gray-500">{item.variant_info}</td>
                                             <td className="px-4 py-3 text-sm text-right">{item.quantity}</td>
                                             <td className="px-4 py-3 text-sm text-right">{item.cost_per_unit.toLocaleString()} VNĐ</td>
@@ -2560,11 +2632,24 @@ export default function Warehouse() {
                         return quantity > 0 && quantity <= 10;
                     }) && !product.details?.every((detail) => Number(detail.quantities) === 0);
                 });
+            // Sửa phần case 'Hết hàng' trong filteredProducts
             case 'Hết hàng':
                 return products.filter((product) => {
-                    // Tất cả các phiên bản đều hết hàng hoặc không có phiên bản nào
-                    return !product.details?.length ||
-                        product.details.every((detail) => Number(detail.quantities) === 0);
+                    // Kiểm tra sản phẩm không có phiên bản nào
+                    if (!product.details || product.details.length === 0) {
+                        return true;
+                    }
+
+                    // Kiểm tra tất cả phiên bản của sản phẩm có hết hàng không
+                    return product.details.every((detail) => {
+                        // Chuyển đổi quantities thành số và xử lý null/undefined
+                        const quantity = detail.quantities !== undefined && detail.quantities !== null
+                            ? Number(detail.quantities)
+                            : 0;
+
+                        // Kiểm tra số lượng bằng 0
+                        return quantity === 0;
+                    });
                 });
             case 'Khuyến mãi':
                 return products.filter((product) => {

@@ -603,14 +603,71 @@ export default function EditProduct() {
    };
 
    // Mark variant for deletion
-   const markVariantForDeletion = (id: number) => {
-      setVariantsToDelete((prev) => [...prev, id]);
+   const markVariantForDeletion = async (detailId: number) => {
+      if (confirm('Bạn có chắc chắn muốn xóa phiên bản này không? Hành động này không thể hoàn tác.')) {
+         try {
+            showToast('Đang xóa phiên bản...', 'info');
+
+            const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+            if (!token) {
+               showToast('Bạn chưa đăng nhập hoặc phiên làm việc đã hết hạn', 'error');
+               return;
+            }
+
+            const response = await fetch(`${HOST}/api/product-details/${detailId}`, {
+               method: 'DELETE',
+               headers: {
+                  Authorization: `Bearer ${token}`
+               }
+            });
+
+            if (!response.ok) {
+               const errorText = await response.text();
+               console.error(`Failed to delete product detail (${response.status}): ${errorText}`);
+               throw new Error(`Không thể xóa phiên bản: ${response.statusText}`);
+            }
+
+            // Remove the deleted detail from the product state
+            setProduct(prevProduct => {
+               if (!prevProduct) return null;
+
+               return {
+                  ...prevProduct,
+                  details: prevProduct.details.filter(detail => detail.id !== detailId)
+               };
+            });
+
+            // Also remove any prices associated with this detail
+            setDetailPrices(prev => {
+               const updated = { ...prev };
+               delete updated[detailId];
+               return updated;
+            });
+
+            // Remove from image cache if exists
+            setDetailImagesCache(prev => {
+               const updated = { ...prev };
+               delete updated[detailId];
+               return updated;
+            });
+
+            showToast('Đã xóa phiên bản thành công', 'success');
+
+         } catch (error) {
+            console.error('Error deleting product detail:', error);
+            showToast(
+               `Lỗi xóa phiên bản: ${error instanceof Error ? error.message : 'Lỗi không xác định'}`,
+               'error'
+            );
+            // Still mark for deletion in UI if API call fails, so it gets deleted during save
+            setVariantsToDelete(prev => [...prev, detailId]);
+         }
+      } else {
+         // If user cancels the confirmation, just mark for deletion in UI
+         setVariantsToDelete(prev => [...prev, detailId]);
+      }
    };
 
-   // Restore variant from deletion
-   const restoreVariant = (id: number) => {
-      setVariantsToDelete((prev) => prev.filter((variantId) => variantId !== id));
-   };
 
    const handleProductImageUpload = async (e: ChangeEvent<HTMLInputElement>) => {
       if (e.target.files && e.target.files.length > 0) {
@@ -1007,7 +1064,6 @@ export default function EditProduct() {
             description: formData.description,
             video: formData.video,
             category_id: formData.category_id,
-            variants_to_delete: variantsToDelete,
             keep_existing_images: true,
          };
 
@@ -1363,7 +1419,7 @@ export default function EditProduct() {
             {
                headers: {
                   Authorization: `Bearer ${token}`,
-               },
+               }
             }
          );
 
@@ -1846,28 +1902,14 @@ export default function EditProduct() {
                                              : ''
                                              }`}
                                        >
-                                          {variantsToDelete.includes(detail.id) ? (
-                                             <div className='mb-4 bg-red-100 text-red-800 p-3 rounded-md flex items-center'>
-                                                <TrashIcon className='h-5 w-5 mr-2' />
-                                                <span>Phiên bản này sẽ bị xóa</span>
-                                                <button
-                                                   type='button'
-                                                   onClick={() => restoreVariant(detail.id)}
-                                                   className='ml-auto text-red-800 hover:text-red-900 flex items-center'
-                                                >
-                                                   <ArrowPathIcon className='h-4 w-4 mr-1' />
-                                                   <span>Khôi phục</span>
-                                                </button>
-                                             </div>
-                                          ) : (
-                                             <button
-                                                type='button'
-                                                onClick={() => markVariantForDeletion(detail.id)}
-                                                className='float-right text-gray-500 hover:text-red-600'
-                                             >
-                                                <TrashIcon className='h-5 w-5' />
-                                             </button>
-                                          )}
+                                          <button
+                                             type="button"
+                                             onClick={() => markVariantForDeletion(detail.id)}
+                                             className="float-right text-gray-500 hover:text-red-600 flex items-center"
+                                          >
+                                             <TrashIcon className="h-5 w-5 mr-1" />
+                                             <span className="text-sm">Xóa</span>
+                                          </button>
 
                                           <div className='grid grid-cols-1 md:grid-cols-3 gap-4 mb-4'>
                                              <div>

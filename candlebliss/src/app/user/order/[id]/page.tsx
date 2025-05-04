@@ -90,7 +90,8 @@ const formatDate = (dateString: string): string => {
    });
 };
 
-// Trạng thái đơn hàng và màu sắc tương ứng
+// Thêm hoặc cập nhật trong đối tượng orderStatusColors
+
 const orderStatusColors: Record<string, { bg: string; text: string; border: string }> = {
    'Đơn hàng vừa được tạo': { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200' },
    'Đang chờ thanh toán': { bg: 'bg-yellow-50', text: 'text-yellow-700', border: 'border-yellow-200' },
@@ -102,11 +103,9 @@ const orderStatusColors: Record<string, { bg: string; text: string; border: stri
    'Hoàn thành': { bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-200' },
    'Đã hủy': { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200' },
    'Đổi trả hàng': { bg: 'bg-orange-50', text: 'text-orange-700', border: 'border-orange-200' },
-   'Xác nhận đổi trả': { bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200' },
-   'Từ chối đổi trả': { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200' },
-   'Đổi trả thành công': { bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-200' },
-   'Đổi trả thất bại': { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200' },
-   'Trả hàng hoàn tiền': { bg: 'bg-orange-50', text: 'text-orange-700', border: 'border-orange-200' },
+   'Đã chấp nhận đổi trả': { bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200' },
+   'Đã từ chối đổi trả': { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200' },
+   'Đã hoàn thành đổi trả và hoàn tiền': { bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-200' },
    'Đang chờ hoàn tiền': { bg: 'bg-indigo-50', text: 'text-indigo-700', border: 'border-indigo-200' },
    'Hoàn tiền thành công': { bg: 'bg-teal-50', text: 'text-teal-700', border: 'border-teal-200' },
    'Hoàn tiền thất bại': { bg: 'bg-pink-50', text: 'text-pink-700', border: 'border-pink-200' },
@@ -220,6 +219,102 @@ export default function OrderDetailPage() {
             status: 'Đang chờ hoàn tiền',
             updatedAt: order.updatedAt
          }];
+
+         // Save the new history to localStorage
+         if (historyKey) {
+            localStorage.setItem(historyKey, JSON.stringify(statusHistory));
+         }
+
+         return statusHistory;
+      }
+
+      // Thêm các case đặc biệt sau trong hàm processOrderStatusHistory
+
+      // Special case: If the current order status is "Hoàn tiền thành công" or "Hoàn tiền thất bại" but timeline doesn't include "Đang chờ hoàn tiền"
+      if ((order.status === 'Hoàn tiền thành công' || order.status === 'Hoàn tiền thất bại') &&
+         !statusHistory.some(item => item.status === 'Đang chờ hoàn tiền')) {
+         // Create new timeline with proper history
+         statusHistory = [
+            {
+               status: 'Đang chờ hoàn tiền',
+               updatedAt: new Date(new Date(order.updatedAt).getTime() - 5 * 60000).toISOString()
+            },
+            {
+               status: order.status,
+               updatedAt: order.updatedAt
+            }
+         ];
+
+         // Save the new history to localStorage
+         if (historyKey) {
+            localStorage.setItem(historyKey, JSON.stringify(statusHistory));
+         }
+
+         return statusHistory;
+      }
+
+      // Special case: If the current order status is "Đã chấp nhận đổi trả" or "Đã từ chối đổi trả" but timeline doesn't include "Đổi trả hàng"
+      if ((order.status === 'Đã chấp nhận đổi trả' || order.status === 'Đã từ chối đổi trả') &&
+         !statusHistory.some(item => item.status === 'Đổi trả hàng')) {
+         // Create new timeline with proper history
+         statusHistory = [
+            {
+               status: 'Đổi trả hàng',
+               updatedAt: new Date(new Date(order.updatedAt).getTime() - 5 * 60000).toISOString()
+            },
+            {
+               status: order.status,
+               updatedAt: order.updatedAt
+            }
+         ];
+
+         // Save the new history to localStorage
+         if (historyKey) {
+            localStorage.setItem(historyKey, JSON.stringify(statusHistory));
+         }
+
+         return statusHistory;
+      }
+
+      // Special case: If the current order status is "Đã hoàn thành đổi trả và hoàn tiền"
+      if (order.status === 'Đã hoàn thành đổi trả và hoàn tiền' && statusHistory.length < 3) {
+         // Try to figure out which flow it came from
+         const isRefundFlow = statusHistory.some(item =>
+            ['Đang chờ hoàn tiền', 'Hoàn tiền thành công', 'Hoàn tiền thất bại'].includes(item.status));
+
+         if (isRefundFlow) {
+            // Create timeline for refund flow
+            statusHistory = [
+               {
+                  status: 'Đang chờ hoàn tiền',
+                  updatedAt: new Date(new Date(order.updatedAt).getTime() - 10 * 60000).toISOString()
+               },
+               {
+                  status: 'Hoàn tiền thành công',
+                  updatedAt: new Date(new Date(order.updatedAt).getTime() - 5 * 60000).toISOString()
+               },
+               {
+                  status: order.status,
+                  updatedAt: order.updatedAt
+               }
+            ];
+         } else {
+            // Create timeline for exchange flow
+            statusHistory = [
+               {
+                  status: 'Đổi trả hàng',
+                  updatedAt: new Date(new Date(order.updatedAt).getTime() - 10 * 60000).toISOString()
+               },
+               {
+                  status: 'Đã chấp nhận đổi trả',
+                  updatedAt: new Date(new Date(order.updatedAt).getTime() - 5 * 60000).toISOString()
+               },
+               {
+                  status: order.status,
+                  updatedAt: order.updatedAt
+               }
+            ];
+         }
 
          // Save the new history to localStorage
          if (historyKey) {
@@ -601,6 +696,19 @@ export default function OrderDetailPage() {
       init();
    }, [orderId, router, showToastMessage, fetchProductDetails]);
 
+
+   // useEffect riêng để kiểm tra và xử lý tự động hủy đơn
+   useEffect(() => {
+      if (order && order.status === 'Thanh toán thất bại') {
+         const failureTime = new Date(order.updatedAt).getTime();
+         const currentTime = new Date().getTime();
+         const dayInMilliseconds = 24 * 60 * 60 * 1000;
+
+         if (currentTime - failureTime >= dayInMilliseconds) {
+            handleUpdateOrderStatus('Đã hủy');
+         }
+      }
+   }, [order?.id, order?.status]); // Chỉ phụ thuộc vào ID và trạng thái, không phụ thuộc vào toàn bộ order
    // Hàm để kiểm tra trạng thái tiếp theo có hợp lệ không
    const getValidNextStatuses = (currentStatus: string): string[] => {
       // Map trạng thái hiện tại đến các trạng thái có thể chuyển tiếp
@@ -907,6 +1015,150 @@ export default function OrderDetailPage() {
                status: newStatus,
                updatedAt: currentTime,
                statusUpdates: updatedStatusHistory
+            });
+
+            showToastMessage(`Đơn hàng đã được chuyển sang trạng thái ${newStatus}`, 'success');
+            setLoading(false);
+            return;
+         }
+
+         // Thêm sau phần xử lý "Đổi trả hàng"
+
+         // Check if the new status is "Đã chấp nhận đổi trả" or "Đã từ chối đổi trả"
+         if (newStatus === 'Đã chấp nhận đổi trả' || newStatus === 'Đã từ chối đổi trả') {
+            // Create a timeline with the previous status and the new one
+            statusHistory = [
+               {
+                  status: 'Đổi trả hàng',
+                  updatedAt: new Date(new Date(currentTime).getTime() - 5 * 60000).toISOString()
+               },
+               {
+                  status: newStatus,
+                  updatedAt: currentTime
+               }
+            ];
+
+            // Save the updated history to localStorage
+            if (historyKey) {
+               localStorage.setItem(historyKey, JSON.stringify(statusHistory));
+            }
+
+            // Update order state with new timeline
+            setOrder({
+               ...order,
+               status: newStatus,
+               updatedAt: currentTime,
+               statusUpdates: statusHistory
+            });
+
+            showToastMessage(`Đơn hàng đã được chuyển sang trạng thái ${newStatus}`, 'success');
+            setLoading(false);
+            return;
+         }
+
+         // Check if the new status is "Đã hoàn thành đổi trả và hoàn tiền" from exchange flow
+         if (newStatus === 'Đã hoàn thành đổi trả và hoàn tiền' &&
+            (order.status === 'Đã chấp nhận đổi trả' || order.status === 'Đã từ chối đổi trả')) {
+            // Create a timeline showing the flow
+            statusHistory = [
+               {
+                  status: 'Đổi trả hàng',
+                  updatedAt: new Date(new Date(currentTime).getTime() - 10 * 60000).toISOString()
+               },
+               {
+                  status: order.status,
+                  updatedAt: new Date(new Date(currentTime).getTime() - 5 * 60000).toISOString()
+               },
+               {
+                  status: newStatus,
+                  updatedAt: currentTime
+               }
+            ];
+
+            // Save the updated history to localStorage
+            if (historyKey) {
+               localStorage.setItem(historyKey, JSON.stringify(statusHistory));
+            }
+
+            // Update order state with new timeline
+            setOrder({
+               ...order,
+               status: newStatus,
+               updatedAt: currentTime,
+               statusUpdates: statusHistory
+            });
+
+            showToastMessage(`Đơn hàng đã được chuyển sang trạng thái ${newStatus}`, 'success');
+            setLoading(false);
+            return;
+         }
+
+         // Check if the new status is "Hoàn tiền thành công" or "Hoàn tiền thất bại"
+         if (newStatus === 'Hoàn tiền thành công' || newStatus === 'Hoàn tiền thất bại') {
+            // Create a timeline with previous status and the new one
+            statusHistory = [
+               {
+                  status: 'Đang chờ hoàn tiền',
+                  // Use an earlier timestamp (5 minutes ago) 
+                  updatedAt: new Date(new Date(currentTime).getTime() - 5 * 60000).toISOString()
+               },
+               {
+                  status: newStatus,
+                  updatedAt: currentTime
+               }
+            ];
+
+            // Save the updated history to localStorage
+            if (historyKey) {
+               localStorage.setItem(historyKey, JSON.stringify(statusHistory));
+            }
+
+            // Update order state with new timeline
+            setOrder({
+               ...order,
+               status: newStatus,
+               updatedAt: currentTime,
+               statusUpdates: statusHistory
+            });
+
+            showToastMessage(`Đơn hàng đã được chuyển sang trạng thái ${newStatus}`, 'success');
+            setLoading(false);
+            return;
+         }
+
+         // Check if the new status is "Đã hoàn thành đổi trả và hoàn tiền" from refund flow
+         if (newStatus === 'Đã hoàn thành đổi trả và hoàn tiền' &&
+            (order.status === 'Hoàn tiền thành công' || order.status === 'Hoàn tiền thất bại')) {
+            // Get current status history
+            const previousStatus = order.status;
+
+            // Create a timeline with previous statuses and the new one
+            statusHistory = [
+               {
+                  status: 'Đang chờ hoàn tiền',
+                  updatedAt: new Date(new Date(currentTime).getTime() - 10 * 60000).toISOString()
+               },
+               {
+                  status: previousStatus,
+                  updatedAt: new Date(new Date(currentTime).getTime() - 5 * 60000).toISOString()
+               },
+               {
+                  status: newStatus,
+                  updatedAt: currentTime
+               }
+            ];
+
+            // Save the updated history to localStorage
+            if (historyKey) {
+               localStorage.setItem(historyKey, JSON.stringify(statusHistory));
+            }
+
+            // Update order state with new timeline
+            setOrder({
+               ...order,
+               status: newStatus,
+               updatedAt: currentTime,
+               statusUpdates: statusHistory
             });
 
             showToastMessage(`Đơn hàng đã được chuyển sang trạng thái ${newStatus}`, 'success');

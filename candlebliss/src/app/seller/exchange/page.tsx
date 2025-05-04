@@ -145,7 +145,7 @@ const orderStatusColors: Record<string, { bg: string; text: string; border: stri
 
 // Danh sách các trạng thái đơn hàng có thể chuyển đến tiếp theo
 const nextPossibleStatuses: Record<string, string[]> = {
-    'Đổi trả hàng': ['Đã chấp nhận đổi trả'],
+    'Đổi trả hàng': ['Đã chấp nhận đổi trả', 'Đã từ chối đổi trả'],
     'Đổi hàng hoàn tiền': ['Đang chờ hoàn tiền', 'Hoàn thành'],
     'Đang chờ hoàn tiền': ['Hoàn tiền thành công', 'Hoàn tiền thất bại'],
     'Hoàn tiền thành công': ['Hoàn thành'],
