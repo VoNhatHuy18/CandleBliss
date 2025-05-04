@@ -134,11 +134,10 @@ const ProductCard = ({
                {variants.map((variant) => (
                   <button
                      key={variant.detailId}
-                     className={`text-xs px-2 py-1 border rounded ${
-                        selectedVariant === variant.detailId
-                           ? 'border-orange-500 bg-orange-50'
-                           : 'border-gray-300'
-                     }`}
+                     className={`text-xs px-2 py-1 border rounded ${selectedVariant === variant.detailId
+                        ? 'border-orange-500 bg-orange-50'
+                        : 'border-gray-300'
+                        }`}
                      onClick={() => handleVariantChange(variant.detailId)}
                   >
                      {variant.size} - {variant.type}
@@ -354,6 +353,360 @@ const fetchRatingsForProducts = async (productIds: number[]) => {
    }
 };
 
+// Thêm vào file page.tsx
+interface ViewHistory {
+   productId: number;
+   viewCount: number;
+   lastViewed: number; // timestamp
+}
+
+interface SearchHistory {
+   term: string;
+   count: number;
+   lastSearched: number; // timestamp
+}
+
+// Hàm lưu lịch sử tìm kiếm
+const saveSearchTerm = (term: string) => {
+   if (!term.trim()) return;
+
+   const searches: SearchHistory[] = JSON.parse(localStorage.getItem('searchHistory') || '[]');
+   const existingSearch = searches.find(s => s.term.toLowerCase() === term.toLowerCase());
+
+   if (existingSearch) {
+      existingSearch.count++;
+      existingSearch.lastSearched = Date.now();
+   } else {
+      searches.push({
+         term: term,
+         count: 1,
+         lastSearched: Date.now()
+      });
+   }
+
+   // Giữ tối đa 20 từ khóa tìm kiếm
+   const updatedSearches = searches
+      .sort((a, b) => b.lastSearched - a.lastSearched)
+      .slice(0, 20);
+
+   localStorage.setItem('searchHistory', JSON.stringify(updatedSearches));
+};
+
+// Hàm lưu lịch sử xem sản phẩm
+const saveProductView = (productId: number) => {
+   const views: ViewHistory[] = JSON.parse(localStorage.getItem('viewHistory') || '[]');
+   const existingView = views.find(v => v.productId === productId);
+
+   if (existingView) {
+      existingView.viewCount++;
+      existingView.lastViewed = Date.now();
+   } else {
+      views.push({
+         productId: productId,
+         viewCount: 1,
+         lastViewed: Date.now()
+      });
+   }
+
+   // Giữ tối đa 50 sản phẩm đã xem
+   const updatedViews = views
+      .sort((a, b) => b.lastViewed - a.lastViewed)
+      .slice(0, 50);
+
+   localStorage.setItem('viewHistory', JSON.stringify(updatedViews));
+};
+
+// Thêm vào file page.tsx
+interface RecommendedProductsProps {
+   allProducts: Array<{
+      id: number;
+      title: string;
+      description: string;
+      price: string;
+      discountPrice?: string;
+      rating: number;
+      imageUrl: string;
+      reviewCount?: number;
+      variants?: Array<{
+         detailId: number;
+         size: string;
+         type: string;
+         basePrice: string;
+         discountPrice?: string;
+         inStock: boolean;
+      }>;
+   }>;
+   currentSearchTerm: string;
+   onViewDetail: (productId: number) => void; // Thêm prop này
+}
+
+const RecommendedProducts = ({ allProducts, currentSearchTerm, onViewDetail }: RecommendedProductsProps) => {
+   const [recommendations, setRecommendations] = useState<typeof allProducts>([]);
+   const [recommendationType, setRecommendationType] = useState<'search' | 'viewed'>('search');
+   const [currentSlide, setCurrentSlide] = useState(0);
+   const itemsPerSlide = 4; // Mỗi trang hiển thị 4 sản phẩm
+
+   useEffect(() => {
+      // Lấy khuyến nghị dựa trên từ khóa tìm kiếm hiện tại
+      const getSearchBasedRecommendations = () => {
+         if (!currentSearchTerm.trim()) {
+            // Nếu không có từ khóa hiện tại, lấy từ lịch sử tìm kiếm
+            const searchHistory: SearchHistory[] = JSON.parse(localStorage.getItem('searchHistory') || '[]');
+
+            if (searchHistory.length === 0) return []; // Thêm return []
+
+            // Sắp xếp lịch sử tìm kiếm theo số lần tìm kiếm
+            const topSearches = searchHistory.sort((a, b) => b.count - a.count).slice(0, 3);
+
+            // Tìm sản phẩm phù hợp với các từ khóa phổ biến
+            let recommendedProducts: typeof allProducts = [];
+
+            topSearches.forEach(search => {
+               const term = search.term.toLowerCase();
+               const matchingProducts = allProducts.filter(product =>
+                  product.title.toLowerCase().includes(term) ||
+                  (product.description && product.description.toLowerCase().includes(term))
+               );
+
+               recommendedProducts = [...recommendedProducts, ...matchingProducts];
+            });
+
+            // Loại bỏ trùng lặp
+            return Array.from(new Set(recommendedProducts.map(p => p.id)))
+               .map(id => recommendedProducts.find(p => p.id === id)!)
+               .slice(0, 8);
+         } else {
+            // Nếu có từ khóa hiện tại, tìm các sản phẩm tương tự (từ khóa là một phần của từ khóa hiện tại)
+            const terms = currentSearchTerm.toLowerCase().split(' ')
+               .filter(term => term.length > 2); // Chỉ xét các từ có độ dài > 2
+
+            if (terms.length === 0) return [];
+
+            // Tìm sản phẩm khớp với từng từ trong từ khóa
+            let recommendedProducts: typeof allProducts = [];
+
+            terms.forEach(term => {
+               const matchingProducts = allProducts.filter(product =>
+                  product.title.toLowerCase().includes(term) ||
+                  (product.description && product.description.toLowerCase().includes(term))
+               );
+
+               recommendedProducts = [...recommendedProducts, ...matchingProducts];
+            });
+
+            // Loại bỏ các sản phẩm đã xuất hiện trong kết quả tìm kiếm chính xác
+            const exactMatches = allProducts.filter(product =>
+               product.title.toLowerCase().includes(currentSearchTerm.toLowerCase()) ||
+               (product.description && product.description.toLowerCase().includes(currentSearchTerm.toLowerCase()))
+            );
+
+            const exactMatchIds = new Set(exactMatches.map(p => p.id));
+            recommendedProducts = recommendedProducts.filter(p => !exactMatchIds.has(p.id));
+
+            // Loại bỏ trùng lặp và giới hạn số lượng
+            return Array.from(new Set(recommendedProducts.map(p => p.id)))
+               .map(id => recommendedProducts.find(p => p.id === id)!)
+               .slice(0, 8);
+         }
+      };
+
+      // Lấy khuyến nghị dựa trên lịch sử xem sản phẩm
+      const getViewBasedRecommendations = () => {
+         const viewHistory: ViewHistory[] = JSON.parse(localStorage.getItem('viewHistory') || '[]');
+
+         if (viewHistory.length === 0) return []; // Thêm return []
+
+         // Lấy top 3 sản phẩm xem nhiều nhất
+         const topViewedProducts = viewHistory
+            .sort((a, b) => b.viewCount - a.viewCount)
+            .slice(0, 3)
+            .map(v => allProducts.find(p => p.id === v.productId))
+            .filter((p): p is typeof allProducts[0] => Boolean(p));
+
+         if (topViewedProducts.length === 0) return [];
+
+         // Tìm các sản phẩm tương tự với sản phẩm đã xem
+         const similarProducts: Record<number, { product: typeof allProducts[0], score: number }> = {};
+
+         allProducts.forEach(product => {
+            // Bỏ qua các sản phẩm đã xem
+            if (topViewedProducts.some((p) => p.id === product.id)) return;
+
+            let totalScore = 0;
+            topViewedProducts.forEach(viewedProduct => {
+               totalScore += getSimilarityScore(viewedProduct, product);
+            });
+
+            if (totalScore > 0) {
+               similarProducts[product.id] = { product, score: totalScore };
+            }
+         });
+
+         // Lấy các sản phẩm có điểm tương đồng cao nhất
+         const recommendedSimilarProducts = Object.values(similarProducts)
+            .sort((a, b) => b.score - a.score)
+            .map(item => item.product)
+            .slice(0, 8);
+
+         return [...topViewedProducts, ...recommendedSimilarProducts].slice(0, 8);
+      };
+
+      // Quyết định loại khuyến nghị sẽ hiển thị
+      if (recommendationType === 'search') {
+         setRecommendations(getSearchBasedRecommendations());
+      } else {
+         setRecommendations(getViewBasedRecommendations());
+      }
+
+      // Reset current slide khi đổi loại gợi ý
+      setCurrentSlide(0);
+   }, [allProducts, currentSearchTerm, recommendationType]);
+
+   if (recommendations.length === 0) return null;
+
+   // Tính tổng số trang của carousel
+   const totalSlides = Math.ceil(recommendations.length / itemsPerSlide);
+
+   // Lấy các sản phẩm cho trang hiện tại
+   const visibleProducts = recommendations.slice(
+      currentSlide * itemsPerSlide,
+      (currentSlide * itemsPerSlide) + itemsPerSlide
+   );
+
+   // Hàm xử lý chuyển slide trước và sau
+   const goToNextSlide = () => {
+      setCurrentSlide((prev) => (prev + 1) % totalSlides);
+   };
+
+   const goToPrevSlide = () => {
+      setCurrentSlide((prev) => (prev - 1 + totalSlides) % totalSlides);
+   };
+
+   // Hàm chuyển đến slide cụ thể
+   const goToSlide = (slideIndex: number) => {
+      setCurrentSlide(slideIndex);
+   };
+
+   return (
+      <div className="mt-10 mb-6">
+         <div className="flex items-center justify-between mb-4">
+            <h3 className="text-xl font-semibold text-gray-800">
+               {recommendationType === 'search'
+                  ? 'Sản phẩm có thể bạn quan tâm'
+                  : 'Sản phẩm bạn đã xem'}
+            </h3>
+
+            <div className="flex gap-2">
+               <button
+                  onClick={() => setRecommendationType('search')}
+                  className={`px-3 py-1 text-sm rounded-md ${recommendationType === 'search'
+                     ? 'bg-amber-100 text-amber-800'
+                     : 'text-gray-700 hover:bg-gray-100'
+                     }`}
+               >
+                  Đề xuất
+               </button>
+               <button
+                  onClick={() => setRecommendationType('viewed')}
+                  className={`px-3 py-1 text-sm rounded-md ${recommendationType === 'viewed'
+                     ? 'bg-amber-100 text-amber-800'
+                     : 'text-gray-700 hover:bg-gray-100'
+                     }`}
+               >
+                  Đã xem
+               </button>
+            </div>
+         </div>
+
+         {/* Carousel Container */}
+         <div className="relative">
+            {/* Carousel Navigation Buttons - luôn hiển thị nếu có nhiều hơn 4 sản phẩm */}
+            {recommendations.length > 4 && (
+               <>
+                  <button
+                     onClick={goToPrevSlide}
+                     className="absolute left-0 top-1/2 -translate-y-1/2 z-10 bg-white/80 hover:bg-white p-2 rounded-full shadow-md"
+                     aria-label="Previous items"
+                  >
+                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M15 18l-6-6 6-6" />
+                     </svg>
+                  </button>
+
+                  <button
+                     onClick={goToNextSlide}
+                     className="absolute right-0 top-1/2 -translate-y-1/2 z-10 bg-white/80 hover:bg-white p-2 rounded-full shadow-md"
+                     aria-label="Next items"
+                  >
+                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M9 18l6-6-6-6" />
+                     </svg>
+                  </button>
+               </>
+            )}
+
+            {/* Hiển thị sản phẩm trong trang hiện tại */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+               {visibleProducts.map((product) => (
+                  <div key={`rec-${product.id}`}>
+                     <ProductCard
+                        id={product.id}
+                        title={product.title}
+                        description={product.description || ''}
+                        price={product.price}
+                        discountPrice={product.discountPrice}
+                        rating={product.rating}
+                        imageUrl={product.imageUrl}
+                        variants={product.variants}
+                        onViewDetail={onViewDetail}
+                     />
+                  </div>
+               ))}
+            </div>
+
+            {/* Carousel Indicators */}
+            {recommendations.length > 4 && (
+               <div className="flex justify-center gap-1 mt-4">
+                  {Array.from({ length: totalSlides }).map((_, index) => (
+                     <button
+                        key={index}
+                        className={`h-2 w-2 rounded-full transition-colors ${index === currentSlide ? 'bg-amber-500' : 'bg-gray-300 hover:bg-gray-400'
+                           }`}
+                        onClick={() => goToSlide(index)}
+                        aria-label={`Go to slide ${index + 1}`}
+                     />
+                  ))}
+               </div>
+            )}
+         </div>
+      </div>
+   );
+};
+
+// Thêm vào RecommendedProducts
+// Logic tính độ tương đồng dựa trên các thuộc tính sản phẩm
+const getSimilarityScore = (product1: RecommendedProductsProps['allProducts'][0], product2: RecommendedProductsProps['allProducts'][0]) => {
+   let score = 0;
+
+   // Điểm cho tên sản phẩm tương tự
+   const title1Words = product1.title.toLowerCase().split(' ');
+   const title2Words = product2.title.toLowerCase().split(' ');
+   const commonTitleWords = title1Words.filter(word => title2Words.includes(word)).length;
+   score += commonTitleWords * 2;
+
+   // Điểm cho đánh giá tương tự
+   const ratingDiff = Math.abs(product1.rating - product2.rating);
+   if (ratingDiff <= 0.5) score += 1
+
+   // Điểm cho khoảng giá tương tự
+   const price1 = parseFloat(product1.price);
+   const price2 = parseFloat(product2.price);
+   const priceDiff = Math.abs(price1 - price2) / Math.max(price1, price2);
+   if (priceDiff <= 0.2) score += 1;
+
+   return score;
+};
+
 export default function ProductPage() {
    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
    const [products, setProducts] = useState<
@@ -545,8 +898,8 @@ export default function ProductPage() {
             // Get actual price considering discounts
             const productPrice = product.discountPrice
                ? parseFloat(
-                    calculateDiscountedPrice(product.price, product.discountPrice).toString(),
-                 )
+                  calculateDiscountedPrice(product.price, product.discountPrice).toString(),
+               )
                : parseFloat(product.price);
 
             return productPrice >= priceRange.min && productPrice <= priceRange.max;
@@ -915,12 +1268,13 @@ export default function ProductPage() {
    const handleSearch = (query: string) => {
       if (loading) return;
 
+      // Lưu từ khóa tìm kiếm
+      saveSearchTerm(query);
+
       setSearchQuery(query);
 
-      // Áp dụng bộ lọc trực tiếp thay vì thông qua useEffect
       if (products.length > 0 && originalProducts.length > 0) {
          const productsToFilter = sortOption === 'default' ? originalProducts : products;
-
          const newFilteredProducts = applyFiltersAndSort(
             productsToFilter,
             originalProducts,
@@ -928,7 +1282,6 @@ export default function ProductPage() {
             selectedPriceRange,
             sortOption,
          );
-
          setFilteredProducts(newFilteredProducts);
          setCurrentPage(1);
       }
@@ -951,6 +1304,7 @@ export default function ProductPage() {
 
    const handleViewDetail = (productId: number) => {
       console.log('View detail clicked for product ID:', productId);
+      saveProductView(productId);
    };
 
    return (
@@ -991,9 +1345,8 @@ export default function ProductPage() {
          <div className='flex flex-col lg:flex-row max-w-7xl mx-auto'>
             {/* Price Filter Sidebar - show/hide on mobile with animation */}
             <div
-               className={`lg:w-64 lg:block fixed lg:relative top-0 left-0 h-full lg:h-auto z-40 bg-white lg:bg-transparent shadow-lg lg:shadow-none overflow-y-auto transition-all duration-300 transform ${
-                  isSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
-               } px-4 pt-16 lg:pt-0 lg:px-8 mb-6`}
+               className={`lg:w-64 lg:block fixed lg:relative top-0 left-0 h-full lg:h-auto z-40 bg-white lg:bg-transparent shadow-lg lg:shadow-none overflow-y-auto transition-all duration-300 transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+                  } px-4 pt-16 lg:pt-0 lg:px-8 mb-6`}
             >
                <div className='bg-white p-4 rounded-lg shadow-sm'>
                   <h3 className='font-medium text-gray-800 mb-3'>Lọc sản phẩm</h3>
@@ -1004,11 +1357,10 @@ export default function ProductPage() {
                         <div className='flex items-center'>
                            <button
                               onClick={() => handlePriceRangeChange(null)}
-                              className={`text-sm w-full py-2 px-3 text-left rounded-md transition-colors ${
-                                 selectedPriceRange === null
-                                    ? 'bg-amber-100 text-amber-800'
-                                    : 'text-gray-700 hover:bg-gray-100'
-                              }`}
+                              className={`text-sm w-full py-2 px-3 text-left rounded-md transition-colors ${selectedPriceRange === null
+                                 ? 'bg-amber-100 text-amber-800'
+                                 : 'text-gray-700 hover:bg-gray-100'
+                                 }`}
                            >
                               Tất cả
                            </button>
@@ -1018,11 +1370,10 @@ export default function ProductPage() {
                            <div key={idx} className='flex items-center'>
                               <button
                                  onClick={() => handlePriceRangeChange(range)}
-                                 className={`text-sm w-full py-2 px-3 text-left rounded-md transition-colors ${
-                                    selectedPriceRange === range
-                                       ? 'bg-amber-100 text-amber-800'
-                                       : 'text-gray-700 hover:bg-gray-100'
-                                 }`}
+                                 className={`text-sm w-full py-2 px-3 text-left rounded-md transition-colors ${selectedPriceRange === range
+                                    ? 'bg-amber-100 text-amber-800'
+                                    : 'text-gray-700 hover:bg-gray-100'
+                                    }`}
                               >
                                  {range.label}
                               </button>
@@ -1044,11 +1395,10 @@ export default function ProductPage() {
                                     hasDiscount: true,
                                  })
                               }
-                              className={`text-sm w-full py-2 px-3 text-left rounded-md transition-colors ${
-                                 selectedPriceRange?.hasDiscount === true
-                                    ? 'bg-amber-100 text-amber-800'
-                                    : 'text-gray-700 hover:bg-gray-100'
-                              }`}
+                              className={`text-sm w-full py-2 px-3 text-left rounded-md transition-colors ${selectedPriceRange?.hasDiscount === true
+                                 ? 'bg-amber-100 text-amber-800'
+                                 : 'text-gray-700 hover:bg-gray-100'
+                                 }`}
                            >
                               Đang giảm giá
                            </button>
@@ -1143,20 +1493,29 @@ export default function ProductPage() {
                   ))}
                </div>
 
+               {/* Phân trang */}
                {!loading && !error && filteredProducts.length > productsPerPage && (
                   <div className='flex justify-center items-center gap-2 mt-8 pb-8'>
                      {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
                         <button
                            key={page}
-                           className={`px-3 py-1 ${
-                              currentPage === page ? 'bg-gray-200 font-medium' : 'hover:bg-gray-100'
-                           } rounded-md text-gray-700`}
+                           className={`px-3 py-1 ${currentPage === page ? 'bg-gray-200 font-medium' : 'hover:bg-gray-100'
+                              } rounded-md text-gray-700`}
                            onClick={() => setCurrentPage(page)}
                         >
                            {page}
                         </button>
                      ))}
                   </div>
+               )}
+
+               {/* Thêm component khuyến nghị sau kết quả tìm kiếm/danh sách sản phẩm */}
+               {filteredProducts.length > 0 && (
+                  <RecommendedProducts
+                     allProducts={originalProducts}
+                     currentSearchTerm={searchQuery}
+                     onViewDetail={handleViewDetail} // Thêm prop này
+                  />
                )}
             </div>
          </div>
@@ -1172,4 +1531,5 @@ export default function ProductPage() {
          <Footer />
       </div>
    );
+
 }

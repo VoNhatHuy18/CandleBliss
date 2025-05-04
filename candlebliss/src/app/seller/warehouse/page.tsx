@@ -1783,7 +1783,12 @@ const InventoryHistoryModal = ({
                 return item;
             });
 
-            setHistory(enhancedData);
+            // Sort the data by created_at in descending order (newest first)
+            const sortedData = enhancedData.sort((a: { created_at: string | number | Date; }, b: { created_at: string | number | Date; }) => {
+                return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+            });
+
+            setHistory(sortedData);
             setError(null);
             console.log('Data loaded successfully');
         } catch (err) {
@@ -1839,7 +1844,13 @@ const InventoryHistoryModal = ({
             groups[date].push(item);
         });
 
-        return groups;
+        // Sort the dates in descending order (newest first)
+        return Object.fromEntries(
+            Object.entries(groups)
+                .sort(([dateA], [dateB]) => {
+                    return new Date(dateB).getTime() - new Date(dateA).getTime();
+                })
+        );
     }, [displayedHistory]);
 
     // Function to convert inventory history to CSV format
@@ -1852,58 +1863,58 @@ const InventoryHistoryModal = ({
         try {
             // Create a new workbook
             const workbook = XLSX.utils.book_new();
-            
+
             // Convert data to array format for XLSX
             const data = filteredHistory.map(item => {
-              const productInfo = item.product_detail?.product ? 
-                {
-                  name: item.product_detail.product.name,
-                  size: item.product_detail.size || '',
-                  type: item.product_detail.type || '',
-                  values: item.product_detail.values || '',
-                } : 
-                getProductInfo(item.product_detail_id);
-              
-              return {
-                'Mã giao dịch': item.id,
-                'Thời gian': format(new Date(item.created_at), 'dd/MM/yyyy HH:mm:ss'),
-                'Sản phẩm': productInfo.name,
-                'Mã sản phẩm': item.product_detail_id,
-                'Phiên bản': [productInfo.size, productInfo.type, productInfo.values].filter(Boolean).join(' '),
-                'Số lượng': item.quantity,
-                'Loại giao dịch': item.status === 'increase' ? 'Nhập kho' : 'Xuất kho',
-                'Người thực hiện': item.update_by || 'Hệ thống'
-              };
+                const productInfo = item.product_detail?.product ?
+                    {
+                        name: item.product_detail.product.name,
+                        size: item.product_detail.size || '',
+                        type: item.product_detail.type || '',
+                        values: item.product_detail.values || '',
+                    } :
+                    getProductInfo(item.product_detail_id);
+
+                return {
+                    'Mã giao dịch': item.id,
+                    'Thời gian': format(new Date(item.created_at), 'dd/MM/yyyy HH:mm:ss'),
+                    'Sản phẩm': productInfo.name,
+                    'Mã sản phẩm': item.product_detail_id,
+                    'Phiên bản': [productInfo.size, productInfo.type, productInfo.values].filter(Boolean).join(' '),
+                    'Số lượng': item.quantity,
+                    'Loại giao dịch': item.status === 'increase' ? 'Nhập kho' : 'Xuất kho',
+                    'Người thực hiện': item.update_by || 'Hệ thống'
+                };
             });
-            
+
             // Create worksheet from data
             const worksheet = XLSX.utils.json_to_sheet(data);
-            
+
             // Set column widths for better readability
             const colWidths = [
-              { wch: 10 }, // Mã giao dịch
-              { wch: 20 }, // Thời gian
-              { wch: 30 }, // Sản phẩm
-              { wch: 12 }, // Mã sản phẩm
-              { wch: 25 }, // Phiên bản
-              { wch: 10 }, // Số lượng
-              { wch: 15 }, // Loại giao dịch
-              { wch: 15 }  // Người thực hiện
+                { wch: 10 }, // Mã giao dịch
+                { wch: 20 }, // Thời gian
+                { wch: 30 }, // Sản phẩm
+                { wch: 12 }, // Mã sản phẩm
+                { wch: 25 }, // Phiên bản
+                { wch: 10 }, // Số lượng
+                { wch: 15 }, // Loại giao dịch
+                { wch: 15 }  // Người thực hiện
             ];
             worksheet['!cols'] = colWidths;
-            
+
             // Add the worksheet to the workbook
             XLSX.utils.book_append_sheet(workbook, worksheet, 'Lịch sử nhập xuất kho');
-            
+
             // Write the workbook and trigger download
             XLSX.writeFile(workbook, `lich-su-kho-${format(new Date(), 'dd-MM-yyyy')}.xlsx`);
-            
+
             showToast('Xuất dữ liệu thành công', 'success');
-          } catch (error) {
+        } catch (error) {
             console.error('Error exporting data:', error);
             showToast('Không thể xuất dữ liệu: ' + (error instanceof Error ? error.message : 'Lỗi không xác định'), 'error');
-          }
-        };
+        }
+    };
 
     if (!isOpen) return null;
 

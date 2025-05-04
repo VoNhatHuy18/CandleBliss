@@ -69,6 +69,20 @@ export default function ChatBotModal() {
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  // Danh sách tìm kiếm nhanh
+  const quickSearches = [
+    { id: 1, text: "Nến thơm bán chạy" },
+    { id: 2, text: "Quà tặng dưới 500k" },
+    { id: 3, text: "Tinh dầu trị liệu" },
+    { id: 4, text: "Bộ phụ kiện nến cao cấp" },
+  ];
+
+  // Hàm xử lý tìm kiếm nhanh
+  const handleQuickSearch = (searchText: string) => {
+    setInput(searchText);
+    sendMessage(searchText);
+  };
+
   // Auto scroll to bottom when new messages arrive
   useEffect(() => {
     scrollToBottom();
@@ -83,10 +97,11 @@ export default function ChatBotModal() {
     return price.toLocaleString('vi-VN');
   };
 
-  const sendMessage = async () => {
-    if (!input.trim()) return;
+  const sendMessage = async (customInput?: string) => {
+    const messageText = customInput || input;
+    if (!messageText.trim()) return;
 
-    const userMessage: Message = { role: 'user', content: input };
+    const userMessage: Message = { role: 'user', content: messageText };
     setMessages((prev) => [...prev, userMessage]);
     setInput('');
     setIsTyping(true);
@@ -95,7 +110,7 @@ export default function ChatBotModal() {
       const response = await fetch('/api/chatbot', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: input }),
+        body: JSON.stringify({ message: messageText }),
       });
 
       const data = await response.json();
@@ -246,6 +261,19 @@ export default function ChatBotModal() {
             <div ref={messagesEndRef} />
           </div>
 
+          {/* Tìm kiếm nhanh */}
+          <div className="px-3 py-2 bg-[#F1EEE9] border-t border-[#E8E2D9] grid grid-cols-2 gap-2">
+            {quickSearches.map((item) => (
+              <button
+                key={item.id}
+                onClick={() => handleQuickSearch(item.text)}
+                className="bg-white text-xs border border-[#DDA15E] text-[#553C26] px-3 py-1.5 rounded-full hover:bg-[#DDA15E] hover:text-white transition-colors duration-200 truncate"
+              >
+                {item.text}
+              </button>
+            ))}
+          </div>
+
           {/* Input */}
           <div className="p-3 border-t border-[#E8E2D9] bg-white flex items-center">
             <input
@@ -258,7 +286,7 @@ export default function ChatBotModal() {
               aria-label="Nhập tin nhắn"
             />
             <button
-              onClick={sendMessage}
+              onClick={() => sendMessage()}
               disabled={!input.trim()}
               className={`ml-2 rounded-lg text-white p-2.5 ${input.trim() ? 'bg-[#553C26] hover:bg-[#442C08]' : 'bg-[#553C26] opacity-50 cursor-not-allowed'
                 } transition-colors`}

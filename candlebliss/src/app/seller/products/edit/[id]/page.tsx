@@ -504,15 +504,25 @@ export default function EditProduct() {
       }));
    };
 
-   // Handle variant changes
    const handleVariantChange = (index: number, field: string, value: string | number | boolean) => {
       if (!product) return;
 
       const updatedDetails = [...product.details];
-      updatedDetails[index] = {
-         ...updatedDetails[index],
-         [field]: value,
-      };
+
+      // Xử lý đặc biệt cho trường hợp quantities
+      if (field === 'quantities') {
+         // Đảm bảo giá trị là số hợp lệ
+         const numericValue = typeof value === 'string' ? parseInt(value) : value;
+         updatedDetails[index] = {
+            ...updatedDetails[index],
+            quantities: isNaN(numericValue as number) ? 0 : numericValue as number,
+         };
+      } else {
+         updatedDetails[index] = {
+            ...updatedDetails[index],
+            [field]: value,
+         };
+      }
 
       setProduct({
          ...product,
@@ -1932,12 +1942,12 @@ export default function EditProduct() {
                                                 </label>
                                                 <input
                                                    type='number'
-                                                   value={detail.quantities}
+                                                   value={isNaN(detail.quantities) ? '' : detail.quantities}
                                                    onChange={(e) =>
                                                       handleVariantChange(
                                                          index,
                                                          'quantities',
-                                                         parseInt(e.target.value),
+                                                         parseInt(e.target.value) || 0,  // Đảm bảo luôn trả về số
                                                       )
                                                    }
                                                    min='0'
@@ -2264,12 +2274,12 @@ export default function EditProduct() {
                                                 </label>
                                                 <input
                                                    type='number'
-                                                   value={variant.quantities}
+                                                   value={isNaN(variant.quantities) ? '' : variant.quantities}
                                                    onChange={(e) =>
                                                       handleNewVariantChange(
                                                          index,
                                                          'quantities',
-                                                         parseInt(e.target.value),
+                                                         parseInt(e.target.value) || 0,
                                                       )
                                                    }
                                                    min='0'

@@ -51,6 +51,14 @@ interface Category {
    description: string;
 }
 
+// Thêm interface cho sản phẩm gợi ý
+interface SuggestedProduct {
+   id: number;
+   name: string;
+   rating: number;
+   imageUrl: string;
+}
+
 // Create a client component that uses searchParams
 function SearchParamsHandler({ onUpdate }: { onUpdate: (productDetailId: number | null) => void }) {
    const searchParams = useSearchParams();
@@ -70,6 +78,10 @@ function SearchParamsHandler({ onUpdate }: { onUpdate: (productDetailId: number 
 
 // Main NavBar component
 function NavBarContent() {
+   // Thêm state cho sản phẩm gợi ý
+   const [suggestedProducts, setSuggestedProducts] = useState<SuggestedProduct[]>([]);
+   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
+
    const { localCartBadge, setLocalCartBadge, updateCartBadge } = useCart();
 
    const [showSearchInput, setShowSearchInput] = useState(false);
@@ -419,6 +431,93 @@ function NavBarContent() {
       };
    }, []);
 
+   // Thêm hàm lấy sản phẩm gợi ý
+   const fetchSuggestedProducts = useCallback(async () => {
+      if (isLoadingSuggestions) return;
+      setIsLoadingSuggestions(true);
+
+      try {
+         // Lấy danh sách sản phẩm
+         const productsResponse = await fetch(`${HOST}/api/products`);
+         if (!productsResponse.ok) {
+            throw new Error('Failed to fetch products');
+         }
+         const productsData = await productsResponse.json();
+
+         // Đảm bảo productsData là một mảng
+         if (!Array.isArray(productsData)) {
+            throw new Error('Products data is not an array');
+         }
+
+         // Lấy IDs của tất cả sản phẩm
+         const productIds = productsData.map(product => product.id);
+
+         // Lấy ratings cho tất cả sản phẩm
+         const ratingsPromises = productIds.map(id =>
+            fetch(`${HOST}/api/rating/get-by-product`, {
+               method: 'POST',
+               headers: {
+                  'Content-Type': 'application/json',
+               },
+               body: JSON.stringify({ product_id: id }),
+            }).then(res => res.ok ? res.json() : [])
+         );
+
+         const ratingsResults = await Promise.all(ratingsPromises);
+
+         // Kết hợp sản phẩm với ratings
+         const productsWithRatings = productIds.map((id, index) => {
+            const product = productsData.find((p: { id: number; name: string; images?: { path: string }[] }) => p.id === id);
+            const ratings = ratingsResults[index];
+
+            if (!product) return null;
+
+            // Tính rating trung bình
+            let avgRating = 0;
+            if (Array.isArray(ratings) && ratings.length > 0) {
+               const totalRating = ratings.reduce(
+                  (sum, item) => sum + (item.rating || item.avg_rating || 0),
+                  0
+               );
+               avgRating = totalRating / ratings.length;
+            }
+
+            return {
+               id,
+               name: product.name,
+               rating: avgRating,
+               imageUrl: Array.isArray(product.images) && product.images.length > 0
+                  ? product.images[0].path
+                  : (product.images?.path || '/images/placeholder.jpg')
+            };
+         }).filter(Boolean) as SuggestedProduct[];
+
+         // Lọc sản phẩm có rating từ 4 đến 5 sao
+         const highRatedProducts = productsWithRatings
+            .filter(product => product.rating >= 4 && product.rating <= 5)
+            .sort((a, b) => b.rating - a.rating) // Sắp xếp theo rating cao nhất
+            .slice(0, 5); // Chỉ lấy 5 sản phẩm
+
+         setSuggestedProducts(highRatedProducts);
+      } catch (error) {
+         console.error('Error fetching suggested products:', error);
+         setSuggestedProducts([]);
+      } finally {
+         setIsLoadingSuggestions(false);
+      }
+   }, [isLoadingSuggestions]);
+
+   // Khi người dùng click vào icon tìm kiếm, load các sản phẩm gợi ý
+   const handleSearchIconClick = () => {
+      const newShowSearchInput = !showSearchInput;
+      setShowSearchInput(newShowSearchInput);
+
+      // Nếu đang mở ô tìm kiếm, lấy gợi ý sản phẩm
+      if (newShowSearchInput) {
+         fetchSuggestedProducts();
+      }
+   };
+
    return (
       <>
          {/* This is where we'll use the Suspense component to handle searchParams */}
@@ -444,7 +543,7 @@ function NavBarContent() {
 
             <div className='flex items-center space-x-4 md:space-x-6 lg:hidden'>
                <button
-                  onClick={() => setShowSearchInput(!showSearchInput)}
+                  onClick={handleSearchIconClick}
                   className='text-[#553C26]'
                >
                   <MagnifyingGlassIcon className='size-5' />
@@ -513,22 +612,91 @@ function NavBarContent() {
                </Link>
                <div className='relative items-center flex'>
                   {showSearchInput && (
-                     <form onSubmit={handleSearch} className='flex items-center'>
-                        <input
-                           type='text'
-                           className='p-2 border border-[#553C26] rounded-lg'
-                           placeholder='Nhấn Enter để tìm kiếm...'
-                           value={searchQuery}
-                           onChange={(e) => setSearchQuery(e.target.value)}
-                        />
-                        <button type='submit' className='ml-2 text-[#553C26]'>
-                           <MagnifyingGlassIcon className='size-5' />
-                        </button>
-                     </form>
+                     <div className='relative'>
+                        <form onSubmit={handleSearch} className='flex items-center'>
+                           <input
+                              type='text'
+                              className='p-2 border border-[#553C26] rounded-lg'
+                              placeholder='Nhấn Enter để tìm kiếm...'
+                              value={searchQuery}
+                              onChange={(e) => setSearchQuery(e.target.value)}
+                           />
+                           <button type='submit' className='ml-2 text-[#553C26]'>
+                              <MagnifyingGlassIcon className='size-5' />
+                           </button>
+                        </form>
+
+                        {/* Hiển thị gợi ý sản phẩm */}
+                        {showSearchInput && suggestedProducts.length > 0 && (
+                           <div className='absolute top-full left-0 mt-1 bg-white rounded-md shadow-lg w-80 z-50'>
+                              <div className='py-2 px-3 bg-amber-50 border-b border-amber-100'>
+                                 <p className='text-sm font-medium text-amber-800'>Sản phẩm nổi bật</p>
+                              </div>
+                              <div className='max-h-80 overflow-y-auto'>
+                                 {isLoadingSuggestions ? (
+                                    <div className='flex justify-center items-center py-4'>
+                                       <div className='animate-spin rounded-full h-5 w-5 border-b-2 border-amber-700'></div>
+                                    </div>
+                                 ) : (
+                                    suggestedProducts.map(product => (
+                                       <Link
+                                          href={`/user/products/${product.id}`}
+                                          key={product.id}
+                                          onClick={() => setShowSearchInput(false)}
+                                       >
+                                          <div className='flex items-center p-2 hover:bg-gray-50'>
+                                             {product.imageUrl && (
+                                                <div className='w-12 h-12 rounded overflow-hidden mr-3'>
+                                                   <Image
+                                                      src={product.imageUrl}
+                                                      alt={product.name}
+                                                      width={48}
+                                                      height={48}
+                                                      className='object-cover w-full h-full'
+                                                   />
+                                                </div>
+                                             )}
+                                             <div>
+                                                <p className='text-sm font-medium text-gray-800'>{product.name}</p>
+                                                <div className='flex items-center'>
+                                                   {/* Hiển thị rating */}
+                                                   {[1, 2, 3, 4, 5].map((star) => (
+                                                      <svg
+                                                         key={star}
+                                                         xmlns='http://www.w3.org/2000/svg'
+                                                         className={`h-3 w-3 ${star <= Math.round(product.rating) ? 'text-yellow-400' : 'text-gray-300'}`}
+                                                         viewBox='0 0 20 20'
+                                                         fill='currentColor'
+                                                      >
+                                                         <path d='M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z' />
+                                                      </svg>
+                                                   ))}
+                                                   <span className='text-xs text-gray-500 ml-1'>
+                                                      ({product.rating.toFixed(1)})
+                                                   </span>
+                                                </div>
+                                             </div>
+                                          </div>
+                                       </Link>
+                                    ))
+                                 )}
+                              </div>
+                              <div className='border-t border-gray-100 py-2 px-3'>
+                                 <Link
+                                    href='/user/products'
+                                    className='text-xs text-amber-600 hover:text-amber-700 font-medium'
+                                    onClick={() => setShowSearchInput(false)}
+                                 >
+                                    Xem tất cả sản phẩm
+                                 </Link>
+                              </div>
+                           </div>
+                        )}
+                     </div>
                   )}
                   {!showSearchInput && (
                      <button
-                        onClick={() => setShowSearchInput(true)}
+                        onClick={handleSearchIconClick}
                         className='ml-2 text-[#553C26]'
                      >
                         <MagnifyingGlassIcon className='size-5' />
@@ -587,22 +755,86 @@ function NavBarContent() {
          {mobileMenuOpen && (
             <div className='lg:hidden bg-[#F1EEE9] py-4 px-4 sm:px-6 md:px-12 shadow-md'>
                {showSearchInput && (
-                  <form onSubmit={handleSearch} className='mb-4 flex items-center'>
-                     <input
-                        type='text'
-                        className='w-full p-2 border border-[#553C26] rounded-lg'
-                        placeholder='Tìm kiếm...'
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                     />
-                     <button
-                        type='submit'
-                        className='ml-2 p-2 bg-amber-100 rounded-lg text-[#553C26]'
-                     >
-                        <MagnifyingGlassIcon className='size-5' />
-                     </button>
-                  </form>
+                  <div className='mb-4'>
+                     <form onSubmit={handleSearch} className='flex items-center'>
+                        <input
+                           type='text'
+                           className='w-full p-2 border border-[#553C26] rounded-lg'
+                           placeholder='Tìm kiếm...'
+                           value={searchQuery}
+                           onChange={(e) => setSearchQuery(e.target.value)}
+                        />
+                        <button
+                           type='submit'
+                           className='ml-2 p-2 bg-amber-100 rounded-lg text-[#553C26]'
+                        >
+                           <MagnifyingGlassIcon className='size-5' />
+                        </button>
+                     </form>
+
+                     {/* Hiển thị gợi ý sản phẩm trên mobile */}
+                     {showSearchInput && suggestedProducts.length > 0 && (
+                        <div className='mt-2 bg-white rounded-md shadow-sm'>
+                           <div className='py-2 px-3 bg-amber-50 border-b border-amber-100'>
+                              <p className='text-sm font-medium text-amber-800'>Sản phẩm nổi bật</p>
+                           </div>
+                           <div className='max-h-60 overflow-y-auto'>
+                              {isLoadingSuggestions ? (
+                                 <div className='flex justify-center items-center py-4'>
+                                    <div className='animate-spin rounded-full h-5 w-5 border-b-2 border-amber-700'></div>
+                                 </div>
+                              ) : (
+                                 suggestedProducts.map(product => (
+                                    <Link
+                                       href={`/user/products/${product.id}`}
+                                       key={product.id}
+                                       onClick={() => {
+                                          setShowSearchInput(false);
+                                          setMobileMenuOpen(false);
+                                       }}
+                                    >
+                                       <div className='flex items-center p-2 hover:bg-gray-50'>
+                                          {product.imageUrl && (
+                                             <div className='w-12 h-12 rounded overflow-hidden mr-3'>
+                                                <Image
+                                                   src={product.imageUrl}
+                                                   alt={product.name}
+                                                   width={48}
+                                                   height={48}
+                                                   className='object-cover w-full h-full'
+                                                />
+                                             </div>
+                                          )}
+                                          <div>
+                                             <p className='text-sm font-medium text-gray-800'>{product.name}</p>
+                                             <div className='flex items-center'>
+                                                {/* Rating */}
+                                                {[1, 2, 3, 4, 5].map((star) => (
+                                                   <svg
+                                                      key={star}
+                                                      xmlns='http://www.w3.org/2000/svg'
+                                                      className={`h-3 w-3 ${star <= Math.round(product.rating) ? 'text-yellow-400' : 'text-gray-300'}`}
+                                                      viewBox='0 0 20 20'
+                                                      fill='currentColor'
+                                                   >
+                                                      <path d='M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z' />
+                                                   </svg>
+                                                ))}
+                                                <span className='text-xs text-gray-500 ml-1'>
+                                                   ({product.rating.toFixed(1)})
+                                                </span>
+                                             </div>
+                                          </div>
+                                       </div>
+                                    </Link>
+                                 ))
+                              )}
+                           </div>
+                        </div>
+                     )}
+                  </div>
                )}
+
                <nav className='flex flex-col space-y-4'>
                   <Link href='/user/home' onClick={toggleMobileMenu}>
                      <span className='block text-[#553C26] text-lg font-mont hover:text-[#FF9900]'>
