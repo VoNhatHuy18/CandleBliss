@@ -148,7 +148,7 @@ const VoucherTag: React.FC<VoucherTagProps> = ({
                                     <span className='font-medium'>{startDate} - {endDate}</span>
                                 </div>
                                 <div className='flex justify-between'>
-                                    <span>Số lượt sử dụng tối đa:</span>
+                                    <span>Số lượt sử dụng còn lại:</span>
                                     <span className='font-medium'>{usageLimit}</span>
                                 </div>
                                 <div className='flex justify-between'>
@@ -164,7 +164,7 @@ const VoucherTag: React.FC<VoucherTagProps> = ({
             {/* Toast notification */}
             <Toast
                 show={showToast}
-                message={`Mã "${code}" đã được sao chép vào clipboard`}
+                message={`Mã "${code}" đã được sao chép `}
                 type="success"
                 duration={2000}
                 onClose={() => setShowToast(false)}

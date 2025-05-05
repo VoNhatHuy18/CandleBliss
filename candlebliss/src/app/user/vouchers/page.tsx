@@ -29,9 +29,9 @@ export default function VouchersPage() {
     const [vouchers, setVouchers] = useState<Voucher[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
-    const [showAdvancedSearch, setShowAdvancedSearch] = useState(false);
+    const [showAdvancedSearch] = useState(false);
     const [filterOptions, setFilterOptions] = useState({
-        status: 'all', // 'all', 'active', 'expired'
+        status: 'active', // Mặc định chỉ hiển thị voucher còn hiệu lực
     });
 
     // Fetch vouchers when component mounts
@@ -91,17 +91,16 @@ export default function VouchersPage() {
                 voucher.code.toLowerCase().includes(searchTerm.toLowerCase().trim()) ||
                 voucher.description.toLowerCase().includes(searchTerm.toLowerCase().trim());
 
-            // Then filter by status if needed
+            // Then filter by status
             let statusMatch = true;
-            if (filterOptions.status !== 'all') {
-                const status = getVoucherStatus(voucher).toLowerCase();
+            const status = getVoucherStatus(voucher).toLowerCase();
 
-                if (filterOptions.status === 'active' && status !== 'còn hiệu lực') {
-                    statusMatch = false;
-                } else if (filterOptions.status === 'expired' && (status === 'hết hạn' || status === 'hết hiệu lực')) {
-                    statusMatch = false;
-                }
+            if (filterOptions.status === 'active') {
+                statusMatch = status === 'còn hiệu lực';
+            } else if (filterOptions.status === 'expired') {
+                statusMatch = status !== 'còn hiệu lực';
             }
+            // Nếu filterOptions.status === 'all' thì statusMatch vẫn là true
 
             return searchMatch && statusMatch;
         });
@@ -181,29 +180,7 @@ export default function VouchersPage() {
                                 )}
                             </div>
 
-                            {/* Filter toggle */}
-                            <div>
-                                <button
-                                    onClick={() => setShowAdvancedSearch(!showAdvancedSearch)}
-                                    className="flex items-center text-amber-600 hover:text-amber-700 transition-all text-sm"
-                                >
-                                    <svg
-                                        xmlns="http://www.w3.org/2000/svg"
-                                        className="h-4 w-4 mr-1"
-                                        fill="none"
-                                        viewBox="0 0 24 24"
-                                        stroke="currentColor"
-                                    >
-                                        <path
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                            strokeWidth={2}
-                                            d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"
-                                        />
-                                    </svg>
-                                    {showAdvancedSearch ? 'Ẩn bộ lọc' : 'Lọc mã giảm giá'}
-                                </button>
-                            </div>
+
                         </div>
 
                         {/* Filter options */}

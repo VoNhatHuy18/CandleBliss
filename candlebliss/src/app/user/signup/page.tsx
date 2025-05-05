@@ -310,13 +310,13 @@ export default function SignUpPage() {
             }, 1500);
          } else {
             // Trường hợp cần xác thực OTP
-            showToastMessage('Đăng ký thành công! Vui lòng xác thực OTP để tiếp tục.', 'success');
+            showToastMessage('Đăng ký thành công! Vui lòng vào gmail để xác thực tài khoản để tiếp tục.', 'success');
             // Lưu thông tin đăng ký cho quá trình xác thực OTP
             sessionStorage.setItem('registerEmail', email);
             sessionStorage.setItem('registerPhone', phone);
             // Chờ 1.5 giây để hiển thị thông báo thành công trước khi chuyển hướng
             setTimeout(() => {
-               router.push('/user/otp');
+               router.push('/user/signup/notice');
             }, 1500);
          }
 
@@ -382,9 +382,8 @@ export default function SignUpPage() {
                            <input
                               type='text'
                               id='lastName'
-                              className={`w-full px-3 py-2 border rounded-lg text-sm md:text-base ${
-                                 lastNameError ? 'border-red-500' : 'border-[#553C26]'
-                              }`}
+                              className={`w-full px-3 py-2 border rounded-lg text-sm md:text-base ${lastNameError ? 'border-red-500' : 'border-[#553C26]'
+                                 }`}
                               placeholder='Nhập họ'
                               value={lastName}
                               onChange={(e) => validateLastName(e.target.value)}
@@ -406,9 +405,8 @@ export default function SignUpPage() {
                            <input
                               type='text'
                               id='firstName'
-                              className={`w-full px-3 py-2 border rounded-lg text-sm md:text-base ${
-                                 firstNameError ? 'border-red-500' : 'border-[#553C26]'
-                              }`}
+                              className={`w-full px-3 py-2 border rounded-lg text-sm md:text-base ${firstNameError ? 'border-red-500' : 'border-[#553C26]'
+                                 }`}
                               placeholder='Nhập tên'
                               value={firstName}
                               onChange={(e) => validateFirstName(e.target.value)}
@@ -432,9 +430,8 @@ export default function SignUpPage() {
                         <input
                            type='text'
                            id='phone'
-                           className={`w-full px-3 py-2 border rounded-lg text-sm md:text-base ${
-                              phoneError ? 'border-red-500' : 'border-[#553C26]'
-                           }`}
+                           className={`w-full px-3 py-2 border rounded-lg text-sm md:text-base ${phoneError ? 'border-red-500' : 'border-[#553C26]'
+                              }`}
                            placeholder='Nhập số điện thoại của bạn'
                            value={phone}
                            onChange={(e) => validatePhone(e.target.value)}
@@ -455,9 +452,8 @@ export default function SignUpPage() {
                         <input
                            type='email'
                            id='email'
-                           className={`w-full px-3 py-2 border rounded-lg text-sm md:text-base ${
-                              emailError ? 'border-red-500' : 'border-[#553C26]'
-                           }`}
+                           className={`w-full px-3 py-2 border rounded-lg text-sm md:text-base ${emailError ? 'border-red-500' : 'border-[#553C26]'
+                              }`}
                            placeholder='Nhập Email'
                            value={email}
                            onChange={(e) => validateEmail(e.target.value)}
@@ -479,9 +475,8 @@ export default function SignUpPage() {
                            <input
                               type={showPassword ? 'text' : 'password'}
                               id='password'
-                              className={`w-full px-3 py-2 border rounded-lg text-sm md:text-base ${
-                                 passwordError ? 'border-red-500' : 'border-[#553C26]'
-                              }`}
+                              className={`w-full px-3 py-2 border rounded-lg text-sm md:text-base ${passwordError ? 'border-red-500' : 'border-[#553C26]'
+                                 }`}
                               placeholder='Nhập mật khẩu'
                               value={password}
                               onChange={(e) => validatePassword(e.target.value)}
@@ -515,9 +510,8 @@ export default function SignUpPage() {
                            <input
                               type={showRePassword ? 'text' : 'password'}
                               id='repassword'
-                              className={`w-full px-3 py-2 border rounded-lg text-sm md:text-base ${
-                                 rePasswordError ? 'border-red-500' : 'border-[#553C26]'
-                              }`}
+                              className={`w-full px-3 py-2 border rounded-lg text-sm md:text-base ${rePasswordError ? 'border-red-500' : 'border-[#553C26]'
+                                 }`}
                               placeholder='Xác nhận mật khẩu'
                               value={rePassword}
                               onChange={(e) => validateRePassword(e.target.value)}

@@ -148,9 +148,10 @@ const nextPossibleStatuses: Record<string, string[]> = {
     'Đổi trả hàng': ['Đã chấp nhận đổi trả', 'Đã từ chối đổi trả'],
     'Đổi hàng hoàn tiền': ['Đang chờ hoàn tiền', 'Hoàn thành'],
     'Đang chờ hoàn tiền': ['Hoàn tiền thành công', 'Hoàn tiền thất bại'],
-    'Hoàn tiền thành công': ['Hoàn thành'],
+    'Hoàn tiền thành công': ['Đã hoàn thành đổi trả và hoàn tiền'],
     'Hoàn tiền thất bại': ['Đang chờ hoàn tiền', 'Đã hủy'],
     'Đã chấp nhận đổi trả': ['Đã hoàn thành đổi trả và hoàn tiền'],
+    'Đã từ chối đổi trả': [], // Không thể chuyển tiếp
     'Hoàn thành': [], // Không thể chuyển tiếp
     'Đã hủy': [], // Không thể chuyển tiếp
 };
