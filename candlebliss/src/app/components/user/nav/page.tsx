@@ -290,10 +290,7 @@ function NavBarContent() {
 
       if (searchQuery.trim()) {
          router.push(`/user/products?search=${encodeURIComponent(searchQuery.trim())}`);
-
-         if (window.innerWidth < 1024) {
-            setShowSearchInput(false);
-         }
+         closeSearchInput();
 
          if (mobileMenuOpen) {
             setMobileMenuOpen(false);
@@ -507,7 +504,7 @@ function NavBarContent() {
       }
    }, [isLoadingSuggestions]);
 
-   // Khi người dùng click vào icon tìm kiếm, load các sản phẩm gợi ý
+   // Khi người dùng click vào icon tìm kiếm
    const handleSearchIconClick = () => {
       const newShowSearchInput = !showSearchInput;
       setShowSearchInput(newShowSearchInput);
@@ -517,6 +514,38 @@ function NavBarContent() {
          fetchSuggestedProducts();
       }
    };
+
+   // Thêm hàm mới để đóng thanh tìm kiếm
+   const closeSearchInput = () => {
+      setShowSearchInput(false);
+   };
+
+   // Thêm hàm xử lý click ra ngoài thanh tìm kiếm
+   useEffect(() => {
+      // Chỉ thêm event listener khi thanh tìm kiếm đang mở
+      if (!showSearchInput) return;
+
+      const handleClickOutside = (event: MouseEvent) => {
+         // Kiểm tra xem click có phải là bên ngoài vùng tìm kiếm không
+         const searchContainer = document.getElementById('search-container');
+         const searchButton = document.getElementById('search-button');
+
+         if (searchContainer &&
+            !searchContainer.contains(event.target as Node) &&
+            searchButton &&
+            !searchButton.contains(event.target as Node)) {
+            closeSearchInput();
+         }
+      };
+
+      // Thêm event listener
+      document.addEventListener('mousedown', handleClickOutside);
+
+      // Dọn dẹp event listener khi component unmount hoặc thanh tìm kiếm đóng
+      return () => {
+         document.removeEventListener('mousedown', handleClickOutside);
+      };
+   }, [showSearchInput]);
 
    return (
       <>
@@ -620,9 +649,16 @@ function NavBarContent() {
                               placeholder='Nhấn Enter để tìm kiếm...'
                               value={searchQuery}
                               onChange={(e) => setSearchQuery(e.target.value)}
+                              autoFocus
                            />
                            <button type='submit' className='ml-2 text-[#553C26]'>
                               <MagnifyingGlassIcon className='size-5' />
+                           </button>
+                           <button
+                              onClick={closeSearchInput}
+                              className='ml-2 p-2   rounded-lg text-red-600'
+                           >
+                              <XMarkIcon className='size-5' />
                            </button>
                         </form>
 
@@ -642,7 +678,12 @@ function NavBarContent() {
                                        <Link
                                           href={`/user/products/${product.id}`}
                                           key={product.id}
-                                          onClick={() => setShowSearchInput(false)}
+                                          onClick={() => {
+                                             closeSearchInput();
+                                             if (mobileMenuOpen) {
+                                                setMobileMenuOpen(false);
+                                             }
+                                          }}
                                        >
                                           <div className='flex items-center p-2 hover:bg-gray-50'>
                                              {product.imageUrl && (
@@ -685,7 +726,12 @@ function NavBarContent() {
                                  <Link
                                     href='/user/products'
                                     className='text-xs text-amber-600 hover:text-amber-700 font-medium'
-                                    onClick={() => setShowSearchInput(false)}
+                                    onClick={() => {
+                                       closeSearchInput();
+                                       if (mobileMenuOpen) {
+                                          setMobileMenuOpen(false);
+                                       }
+                                    }}
                                  >
                                     Xem tất cả sản phẩm
                                  </Link>
@@ -694,14 +740,18 @@ function NavBarContent() {
                         )}
                      </div>
                   )}
+                  {/* Icon tìm kiếm desktop */}
                   {!showSearchInput && (
                      <button
+                        id="search-button"
                         onClick={handleSearchIconClick}
                         className='ml-2 text-[#553C26]'
                      >
                         <MagnifyingGlassIcon className='size-5' />
                      </button>
                   )}
+
+
                </div>
                <button onClick={handleCartClick} className='text-[#553C26] relative'>
                   <ShoppingBagIcon className='size-5' />
@@ -829,6 +879,20 @@ function NavBarContent() {
                                     </Link>
                                  ))
                               )}
+                           </div>
+                           <div className='border-t border-gray-100 py-2 px-3'>
+                              <Link
+                                 href='/user/products'
+                                 className='text-xs text-amber-600 hover:text-amber-700 font-medium'
+                                 onClick={() => {
+                                    closeSearchInput();
+                                    if (mobileMenuOpen) {
+                                       setMobileMenuOpen(false);
+                                    }
+                                 }}
+                              >
+                                 Xem tất cả sản phẩm
+                              </Link>
                            </div>
                         </div>
                      )}

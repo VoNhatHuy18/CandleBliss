@@ -174,10 +174,10 @@ const PaymentCountdown = ({
          const timePassed = now - createdTime;
 
          // Đang chờ thanh toán: 15 phút
-         // Thanh toán thất bại: 1 ngày (24 giờ)
+         // Thanh toán thất bại: 24 giờ
          const timeoutMs = status === 'Đang chờ thanh toán'
             ? 15 * 60 * 1000  // 15 minutes 
-            : 24 * 60 * 1000; // 24 hours
+            : 24 * 60 * 60 * 1000; // 24 hours
 
          const remaining = timeoutMs - timePassed;
          return Math.max(0, Math.floor(remaining / 1000)); // Return seconds left
@@ -212,7 +212,9 @@ const PaymentCountdown = ({
 
    // Time expired
    if (timeLeft <= 0) {
-      return <span className='text-red-600 text-sm font-medium'>Hết thời gian thanh toán</span>;
+      return <span className='text-red-600 text-sm font-medium'>
+         {status === 'Đang chờ thanh toán' ? 'Hết thời gian thanh toán' : 'Đơn hàng sẽ bị hủy'}
+      </span>;
    }
 
    // Format the time differently based on status
@@ -231,7 +233,7 @@ const PaymentCountdown = ({
       const minutes = Math.floor((timeLeft % 3600) / 60);
       return (
          <span className={`text-sm font-medium ${timeLeft < 3600 ? 'text-red-600' : 'text-orange-600'}`}>
-            Thanh toán còn: {hours}h:{minutes < 10 ? `0${minutes}` : minutes}m
+            Tự động hủy còn: {hours}h:{minutes < 10 ? `0${minutes}` : minutes}m
          </span>
       );
    }
@@ -607,7 +609,7 @@ export default function OrderPage() {
                   `Đơn hàng #${orderId} đã hết thời gian thanh toán và chuyển sang trạng thái Thanh toán thất bại. Bạn còn 24h để thanh toán lại.`,
                   'error'
                );
-            } else {
+            } else if (nextStatus === 'Đã hủy') {
                showToastMessage(
                   `Đơn hàng #${orderId} đã quá hạn thanh toán và tự động hủy`,
                   'error'
@@ -682,6 +684,18 @@ export default function OrderPage() {
    useEffect(() => {
       if (orders.length > 0) {
          checkPendingPayments();
+      }
+   }, [orders, checkPendingPayments]);
+
+   // Kiểm tra đơn hàng chưa thanh toán khi component mount và định kỳ
+   useEffect(() => {
+      if (orders.length > 0) {
+         checkPendingPayments();
+
+         // Thiết lập kiểm tra định kỳ mỗi phút
+         const intervalId = setInterval(checkPendingPayments, 60000);
+
+         return () => clearInterval(intervalId);
       }
    }, [orders, checkPendingPayments]);
 

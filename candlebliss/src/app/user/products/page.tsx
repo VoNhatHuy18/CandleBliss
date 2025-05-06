@@ -718,7 +718,7 @@ export default function ProductPage() {
          discountPrice?: string;
          rating: number;
          imageUrl: string;
-         reviewCount?: number; // Added reviewCount property
+         reviewCount?: number;
          variants?: Array<{
             detailId: number;
             size: string;
@@ -751,6 +751,7 @@ export default function ProductPage() {
    >([]);
    const [loading, setLoading] = useState(true);
    const [error, setError] = useState<string | null>(null);
+   const [networkError, setNetworkError] = useState<boolean>(false); // Add network error state
    const [searchQuery, setSearchQuery] = useState('');
 
    // Add these new states for filtering and sorting
@@ -985,6 +986,8 @@ export default function ProductPage() {
    useEffect(() => {
       const fetchProducts = async () => {
          try {
+            setNetworkError(false); // Reset network error state
+
             // 1. Lấy danh sách sản phẩm cơ bản
             const productsResponse = await fetch(`${HOST}/api/products`);
             if (!productsResponse.ok) {
@@ -1208,9 +1211,17 @@ export default function ProductPage() {
                setFilteredProducts(mappedProducts);
             } catch (priceErr) {
                console.error('Error fetching prices:', priceErr);
+               if (priceErr instanceof TypeError && priceErr.message.includes('Failed to fetch')) {
+                  setNetworkError(true);
+               }
+               setError(priceErr instanceof Error ? priceErr.message : 'Failed to fetch prices');
             }
          } catch (err) {
             console.error('Error fetching products:', err);
+            // Detect network errors specifically
+            if (err instanceof TypeError && err.message.includes('Failed to fetch')) {
+               setNetworkError(true);
+            }
             setError(err instanceof Error ? err.message : 'Failed to fetch products');
          } finally {
             setLoading(false);
@@ -1335,6 +1346,30 @@ export default function ProductPage() {
             )}
          </div>
 
+         {/* Add network error alert message */}
+         {networkError && (
+            <div className='max-w-7xl mx-auto px-4 mb-6'>
+               <div className='bg-orange-50 border-l-4 border-orange-400 p-4 rounded-md'>
+                  <div className='flex items-center'>
+                     <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-orange-400 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                     </svg>
+                     <div>
+                        <p className='text-sm font-medium text-orange-800'>
+                           Không thể kết nối đến máy chủ. Vui lòng kiểm tra kết nối internet của bạn và thử lại.
+                        </p>
+                        <button
+                           onClick={() => window.location.reload()}
+                           className='mt-2 text-xs font-medium text-orange-800 bg-orange-100 hover:bg-orange-200 px-3 py-1 rounded-md transition-colors'
+                        >
+                           Tải lại trang
+                        </button>
+                     </div>
+                  </div>
+               </div>
+            </div>
+         )}
+
          <button
             className='lg:hidden fixed top-20 left-4 z-50 bg-white p-2 rounded-full shadow-md'
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
@@ -1446,8 +1481,8 @@ export default function ProductPage() {
                   </div>
                )}
 
-               {error && (
-                  <div className='bg-red-50 text-red-700 p-4 rounded-md my-4 text-center'>
+               {error && !networkError && (
+                  <div className='bg-red-50 text-red-700 p-4 rounded-md my-4 text-center max-w-7xl mx-auto'>
                      {error}
                   </div>
                )}
