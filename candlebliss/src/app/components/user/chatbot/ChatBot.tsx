@@ -72,8 +72,8 @@ export default function ChatBotModal() {
   // Danh sách tìm kiếm nhanh
   const quickSearches = [
     { id: 1, text: "Nến thơm bán chạy" },
-    { id: 2, text: "Quà tặng dưới 500k" },
-    { id: 3, text: "Tinh dầu trị liệu" },
+    { id: 2, text: "Nến thơm dưới 500k" },
+    { id: 3, text: "Tinh dầu" },  
     { id: 4, text: "Bộ phụ kiện nến cao cấp" },
   ];
 

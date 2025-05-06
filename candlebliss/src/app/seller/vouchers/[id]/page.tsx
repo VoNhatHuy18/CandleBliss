@@ -15,6 +15,7 @@ import {
 import { HOST } from '@/app/constants/api';
 import Header from '@/app/components/seller/header/page';
 import MenuSideBar from '@/app/components/seller/menusidebar/page';
+import Toast from '@/app/components/ui/toast/Toast';
 
 // Define voucher interface to match your API
 interface Voucher {
@@ -39,6 +40,63 @@ export default function VoucherDetail() {
    const [voucher, setVoucher] = useState<Voucher | null>(null);
    const [loading, setLoading] = useState(true);
    const [error, setError] = useState('');
+
+   // State quản lý toast
+   const [toast, setToast] = useState({
+      show: false,
+      message: '',
+      type: 'success' as 'success' | 'error' | 'info',
+   });
+
+   // Thêm state để quản lý modal xác nhận
+   const [confirmModal, setConfirmModal] = useState({
+      show: false,
+      action: '' as 'delete' | 'toggle' | '',
+      message: '',
+      confirmText: '',
+      cancelText: 'Hủy'
+   });
+
+   // Hàm hiển thị toast
+   const showToast = (message: string, type: 'success' | 'error' | 'info') => {
+      setToast({
+         show: true,
+         message,
+         type,
+      });
+   };
+
+   // Hàm ẩn toast
+   const hideToast = () => {
+      setToast(prev => ({ ...prev, show: false }));
+   };
+
+   // Hàm mở modal xác nhận
+   const showConfirmModal = (action: 'delete' | 'toggle', message: string, confirmText: string) => {
+      setConfirmModal({
+         show: true,
+         action,
+         message,
+         confirmText,
+         cancelText: 'Hủy'
+      });
+   };
+
+   // Hàm đóng modal xác nhận
+   const closeConfirmModal = () => {
+      setConfirmModal(prev => ({ ...prev, show: false }));
+   };
+
+   // Hàm xử lý hành động xác nhận
+   const handleConfirm = () => {
+      if (confirmModal.action === 'delete') {
+         performDeleteVoucher();
+      } else if (confirmModal.action === 'toggle') {
+         performToggleStatus();
+      }
+
+      closeConfirmModal();
+   };
 
    // Format currency
    const formatCurrency = (amount: number) => {
@@ -139,10 +197,17 @@ export default function VoucherDetail() {
       return 'Còn hiệu lực';
    };
 
-   // Handle voucher deletion
-   const handleDeleteVoucher = async () => {
-      if (!confirm('Bạn có chắc chắn muốn xóa mã giảm giá này?')) return;
+   // Handle voucher deletion - Chỉ hiển thị modal xác nhận
+   const handleDeleteVoucher = () => {
+      showConfirmModal(
+         'delete',
+         'Bạn có chắc chắn muốn xóa mã giảm giá này?',
+         'Xóa mã'
+      );
+   };
 
+   // Hàm thực hiện xóa voucher khi đã xác nhận
+   const performDeleteVoucher = async () => {
       try {
          const token = localStorage.getItem('token') || sessionStorage.getItem('token');
          const response = await fetch(`${HOST}/api/v1/vouchers/${params.id}/remove`, {
@@ -157,45 +222,96 @@ export default function VoucherDetail() {
             throw new Error('Không thể xóa mã giảm giá');
          }
 
-         alert('Xóa mã giảm giá thành công');
-         router.push('/seller/vouchers');
+         // Hiển thị toast với action thành công
+         setToast({
+            show: true,
+            message: 'Xóa mã giảm giá thành công',
+            type: 'success',
+         });
+
+         // Tự động chuyển trang sau 1.5 giây
+         setTimeout(() => {
+            router.push('/seller/vouchers');
+         }, 1500);
       } catch (err) {
          console.error('Failed to delete voucher:', err);
-         alert('Xóa mã giảm giá thất bại. Vui lòng thử lại sau.');
+         showToast('Xóa mã giảm giá thất bại. Vui lòng thử lại sau.', 'error');
       }
    };
 
-   // Handle toggle voucher active status
-   const handleToggleStatus = async () => {
+   // Handle toggle voucher active status - Chỉ hiển thị modal xác nhận
+   const handleToggleStatus = () => {
+      const newStatus = !voucher?.isActive;
+      showConfirmModal(
+         'toggle',
+         newStatus
+            ? 'Bạn có chắc chắn muốn kích hoạt mã giảm giá này?'
+            : 'Bạn có chắc chắn muốn tạm dừng mã giảm giá này?',
+         newStatus ? 'Kích hoạt' : 'Tạm dừng'
+      );
+   };
+
+   // Hàm thực hiện thay đổi trạng thái khi đã xác nhận
+   const performToggleStatus = async () => {
       try {
          const token = localStorage.getItem('token') || sessionStorage.getItem('token');
          const newStatus = !voucher?.isActive;
 
+         // Lưu lại voucher trước khi cập nhật
+         const originalVoucher = { ...voucher };
+
+         // Phần còn lại giống như hàm handleToggleStatus cũ của bạn
+         console.log('Thay đổi trạng thái từ', originalVoucher.isActive, 'thành', newStatus);
+
+         const endpoint = newStatus
+            ? `${HOST}/api/v1/vouchers/${params.id}/active`
+            : `${HOST}/api/v1/vouchers/${params.id}/inactive`;
+
+         // ... (phần code xử lý API không thay đổi)
          const response = await fetch(
-            `${HOST}/api/v1/vouchers/${params.id}/status`,
+            endpoint,
             {
                method: 'PATCH',
                headers: {
                   'Content-Type': 'application/json',
                   Authorization: `Bearer ${token}`,
                },
-               body: JSON.stringify({ isActive: newStatus }),
             },
          );
 
          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            console.error('API error:', errorData);
             throw new Error('Không thể cập nhật trạng thái mã giảm giá');
          }
 
-         // Update local state
-         if (voucher) {
-            setVoucher({ ...voucher, isActive: newStatus });
+         // Xử lý response và cập nhật state (không thay đổi)
+         const contentType = response.headers.get('content-type');
+         let updatedVoucher;
+
+         if (contentType && contentType.includes('application/json')) {
+            try {
+               updatedVoucher = await response.json();
+            } catch {
+               updatedVoucher = { ...originalVoucher, isActive: newStatus };
+            }
+         } else {
+            updatedVoucher = { ...originalVoucher, isActive: newStatus };
          }
 
-         alert(newStatus ? 'Kích hoạt mã giảm giá thành công' : 'Tạm dừng mã giảm giá thành công');
+         if (originalVoucher.code !== updatedVoucher.code) {
+            updatedVoucher.code = originalVoucher.code;
+         }
+
+         setVoucher(updatedVoucher);
+
+         showToast(
+            newStatus ? 'Kích hoạt mã giảm giá thành công' : 'Tạm dừng mã giảm giá thành công',
+            'success'
+         );
       } catch (err) {
          console.error('Failed to update voucher status:', err);
-         alert('Cập nhật trạng thái thất bại. Vui lòng thử lại sau.');
+         showToast('Cập nhật trạng thái thất bại. Vui lòng thử lại sau.', 'error');
       }
    };
 
@@ -288,6 +404,40 @@ export default function VoucherDetail() {
             : status === 'Đã hủy'
                ? 'text-red-600 bg-red-50'
                : 'text-gray-600 bg-gray-100';
+
+   // Component Modal xác nhận (đặt bên trong VoucherDetail)
+   const ConfirmModal = () => {
+      if (!confirmModal.show) return null;
+
+      return (
+         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50">
+            <div className="bg-white rounded-lg shadow-xl w-full max-w-md overflow-hidden animate-fade-in">
+               <div className="p-6">
+                  <h3 className="text-lg font-medium text-gray-900 mb-4">Xác nhận</h3>
+                  <p className="text-gray-600 mb-6">{confirmModal.message}</p>
+
+                  <div className="flex justify-end space-x-3">
+                     <button
+                        onClick={closeConfirmModal}
+                        className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 focus:outline-none"
+                     >
+                        {confirmModal.cancelText}
+                     </button>
+                     <button
+                        onClick={handleConfirm}
+                        className={`px-4 py-2 text-white rounded-md focus:outline-none ${confirmModal.action === 'delete'
+                           ? 'bg-red-500 hover:bg-red-600'
+                           : 'bg-amber-500 hover:bg-amber-600'
+                           }`}
+                     >
+                        {confirmModal.confirmText}
+                     </button>
+                  </div>
+               </div>
+            </div>
+         </div>
+      );
+   };
 
    return (
       <div className='flex min-h-screen bg-[#f8f5f0]'>
@@ -414,15 +564,7 @@ export default function VoucherDetail() {
                               Số lượt sử dụng:
                            </label>
                            <div className='flex gap-4'>
-                              <div className='flex-1'>
-                                 <label className='text-xs text-gray-500'>Đã sử dụng</label>
-                                 <input
-                                    type='text'
-                                    value={voucher.usage_count}
-                                    className='block w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm'
-                                    readOnly
-                                 />
-                              </div>
+
                               <div className='flex-1'>
                                  <label className='text-xs text-gray-500'>Giới hạn</label>
                                  <input
@@ -552,7 +694,7 @@ export default function VoucherDetail() {
                                     <FiUsers className='mr-1 text-amber-500' />
                                     <span className='font-medium'>Lượt sử dụng:</span>{' '}
                                     <span className='ml-1'>
-                                       {voucher.usage_count}/
+
                                        {voucher.usage_limit === null ? '∞' : voucher.usage_limit}
                                     </span>
                                  </div>
@@ -575,8 +717,8 @@ export default function VoucherDetail() {
                               <button
                                  onClick={handleToggleStatus}
                                  className={`px-4 py-2 ${voucher.isActive
-                                       ? 'bg-blue-500 hover:bg-blue-600'
-                                       : 'bg-green-500 hover:bg-green-600'
+                                    ? 'bg-blue-500 hover:bg-blue-600'
+                                    : 'bg-green-500 hover:bg-green-600'
                                     } text-white rounded-md focus:outline-none focus:ring-2 focus:ring-opacity-50 w-full mb-2`}
                               >
                                  {voucher.isActive ? 'Tạm dừng' : 'Kích hoạt'}
@@ -594,6 +736,28 @@ export default function VoucherDetail() {
                </div>
             </div>
          </div>
+         <Toast
+            show={toast.show}
+            message={toast.message}
+            type={toast.type}
+            onClose={hideToast}
+            position="top-right"
+            duration={3000}
+         />
+         <ConfirmModal />
+         {/* Style cho animation */}
+         <style jsx global>{`
+            @keyframes fadeIn {
+               from { opacity: 0; transform: translateY(-10px); }
+               to { opacity: 1; transform: translateY(0); }
+            }
+            .animate-fade-in {
+               animation: fadeIn 0.2s ease-out forwards;
+            }
+         `}</style>
       </div>
+
    );
 }
+
+

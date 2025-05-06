@@ -259,6 +259,25 @@ export default function CheckoutPage() {
       email: '',
    });
 
+   // Thêm vào phần khai báo state
+   const [showConfirmOrderModal, setShowConfirmOrderModal] = useState(false);
+   const [confirmOrder, setConfirmOrder] = useState<boolean>(false);
+   const [orderSummary, setOrderSummary] = useState<{
+      address: string;
+      paymentMethod: string;
+      subtotal: number;
+      shipping: number;
+      discount: number;
+      total: number;
+   }>({
+      address: '',
+      paymentMethod: 'COD',
+      subtotal: 0,
+      shipping: 0,
+      discount: 0,
+      total: 0
+   });
+
    // Thêm hàm hiện toast message
    const showToastMessage = (message: string, type: 'success' | 'error' | 'info') => {
       setToast({
@@ -984,8 +1003,8 @@ export default function CheckoutPage() {
                (addressData.user
                   ? `${addressData.user.firstName || ''} ${addressData.user.lastName || ''}`.trim()
                   : userInfo
-                  ? `${userInfo.firstName || ''} ${userInfo.lastName || ''}`.trim()
-                  : '');
+                     ? `${userInfo.firstName || ''} ${userInfo.lastName || ''}`.trim()
+                     : '');
 
             // Lấy số điện thoại từ địa chỉ hoặc từ thông tin người dùng
             const receiverPhone =
@@ -1407,6 +1426,16 @@ export default function CheckoutPage() {
    // Update the handlePlaceOrder function to set the appropriate status for COD orders
 
    const handlePlaceOrder = async () => {
+      // Nếu chưa xác nhận, hiện modal xác nhận
+      if (!confirmOrder) {
+         showOrderConfirmation();
+         return;
+      }
+
+      // Reset trạng thái xác nhận
+      setConfirmOrder(false);
+
+      // Tiếp tục code đặt hàng hiện tại của bạn...
       if (!selectedAddressId && !showAddAddressForm) {
          showToastMessage('Vui lòng chọn địa chỉ giao hàng', 'error');
          return;
@@ -1458,14 +1487,14 @@ export default function CheckoutPage() {
             // Thêm thông tin hóa đơn nếu cần
             invoice: needInvoice
                ? {
-                    type: invoiceInfo.type,
-                    name: invoiceInfo.name,
-                    address: invoiceInfo.address,
-                    email: invoiceInfo.email,
-                    companyName:
-                       invoiceInfo.type === 'company' ? invoiceInfo.companyName : undefined,
-                    taxCode: invoiceInfo.type === 'company' ? invoiceInfo.taxCode : undefined,
-                 }
+                  type: invoiceInfo.type,
+                  name: invoiceInfo.name,
+                  address: invoiceInfo.address,
+                  email: invoiceInfo.email,
+                  companyName:
+                     invoiceInfo.type === 'company' ? invoiceInfo.companyName : undefined,
+                  taxCode: invoiceInfo.type === 'company' ? invoiceInfo.taxCode : undefined,
+               }
                : undefined,
          };
 
@@ -1544,6 +1573,42 @@ export default function CheckoutPage() {
             setLoading(false);
          }
       }
+   };
+
+   // Thêm hàm này trước hàm handlePlaceOrder
+   const showOrderConfirmation = () => {
+      if (!selectedAddressId && !showAddAddressForm) {
+         showToastMessage('Vui lòng chọn địa chỉ giao hàng', 'error');
+         return;
+      }
+
+      if (showAddAddressForm) {
+         showToastMessage('Vui lòng lưu địa chỉ giao hàng trước khi đặt hàng', 'error');
+         return;
+      }
+
+      // Lấy thông tin địa chỉ đã chọn
+      const selectedAddress = addresses.find((addr) => addr.id === selectedAddressId);
+      if (!selectedAddress) {
+         showToastMessage('Không tìm thấy địa chỉ giao hàng', 'error');
+         return;
+      }
+
+      // Format địa chỉ thành chuỗi
+      const formattedAddress = `${selectedAddress.fullName}, ${selectedAddress.phone}, ${selectedAddress.streetAddress}, ${selectedAddress.ward}, ${selectedAddress.district}, ${selectedAddress.province}`;
+
+      // Chuẩn bị thông tin tóm tắt đơn hàng
+      setOrderSummary({
+         address: formattedAddress,
+         paymentMethod: paymentMethod,
+         subtotal: subTotal,
+         shipping: shippingFee,
+         discount: discount,
+         total: totalPrice
+      });
+
+      // Hiện modal xác nhận
+      setShowConfirmOrderModal(true);
    };
 
    // Cập nhật hàm xử lý khi nhấn nút "Thêm địa chỉ mới"
@@ -1730,15 +1795,15 @@ export default function CheckoutPage() {
                                                    {/* Chỉ hiển thị nút xóa khi có nhiều hơn 1 địa chỉ hoặc địa chỉ hiện tại không phải mặc định */}
                                                    {(addresses.length > 1 ||
                                                       !selectedAddress.isDefault) && (
-                                                      <button
-                                                         className='text-red-600 text-sm hover:underline'
-                                                         onClick={() =>
-                                                            handleDeleteAddress(selectedAddress.id!)
-                                                         }
-                                                      >
-                                                         Xóa
-                                                      </button>
-                                                   )}
+                                                         <button
+                                                            className='text-red-600 text-sm hover:underline'
+                                                            onClick={() =>
+                                                               handleDeleteAddress(selectedAddress.id!)
+                                                            }
+                                                         >
+                                                            Xóa
+                                                         </button>
+                                                      )}
                                                 </div>
                                              </div>
                                           ) : null;
@@ -1904,11 +1969,10 @@ export default function CheckoutPage() {
                                           }}
                                           disabled={addresses.length === 0 && !newAddress.id} // Disable nút hủy khi không có địa chỉ và đang thêm mới
                                           className={`flex-1 py-2 border border-gray-300 rounded-md text-gray-700 
-                              ${
-                                 addresses.length === 0 && !newAddress.id
-                                    ? 'opacity-50 cursor-not-allowed bg-gray-100'
-                                    : 'hover:bg-gray-50'
-                              }`}
+                              ${addresses.length === 0 && !newAddress.id
+                                                ? 'opacity-50 cursor-not-allowed bg-gray-100'
+                                                : 'hover:bg-gray-50'
+                                             }`}
                                        >
                                           Hủy
                                        </button>
@@ -1932,20 +1996,18 @@ export default function CheckoutPage() {
 
                      <div className='space-y-3'>
                         <div
-                           className={`border rounded-lg p-4 cursor-pointer ${
-                              paymentMethod === 'COD'
-                                 ? 'border-orange-500 bg-orange-50'
-                                 : 'border-gray-200'
-                           }`}
+                           className={`border rounded-lg p-4 cursor-pointer ${paymentMethod === 'COD'
+                              ? 'border-orange-500 bg-orange-50'
+                              : 'border-gray-200'
+                              }`}
                            onClick={() => setPaymentMethod('COD')}
                         >
                            <div className='flex items-center'>
                               <div
-                                 className={`w-5 h-5 rounded-full border flex items-center justify-center mr-3 ${
-                                    paymentMethod === 'COD'
-                                       ? 'border-orange-500'
-                                       : 'border-gray-400'
-                                 }`}
+                                 className={`w-5 h-5 rounded-full border flex items-center justify-center mr-3 ${paymentMethod === 'COD'
+                                    ? 'border-orange-500'
+                                    : 'border-gray-400'
+                                    }`}
                               >
                                  {paymentMethod === 'COD' && (
                                     <div className='w-3 h-3 bg-orange-500 rounded-full'></div>
@@ -1961,20 +2023,18 @@ export default function CheckoutPage() {
                         </div>
 
                         <div
-                           className={`border rounded-lg p-4 cursor-pointer ${
-                              paymentMethod === 'BANKING'
-                                 ? 'border-orange-500 bg-orange-50'
-                                 : 'border-gray-200'
-                           }`}
+                           className={`border rounded-lg p-4 cursor-pointer ${paymentMethod === 'BANKING'
+                              ? 'border-orange-500 bg-orange-50'
+                              : 'border-gray-200'
+                              }`}
                            onClick={() => setPaymentMethod('BANKING')}
                         >
                            <div className='flex items-center'>
                               <div
-                                 className={`w-5 h-5 rounded-full border flex items-center justify-center mr-3 ${
-                                    paymentMethod === 'BANKING'
-                                       ? 'border-orange-500'
-                                       : 'border-gray-400'
-                                 }`}
+                                 className={`w-5 h-5 rounded-full border flex items-center justify-center mr-3 ${paymentMethod === 'BANKING'
+                                    ? 'border-orange-500'
+                                    : 'border-gray-400'
+                                    }`}
                               >
                                  {paymentMethod === 'BANKING' && (
                                     <div className='w-3 h-3 bg-orange-500 rounded-full'></div>
@@ -2013,20 +2073,18 @@ export default function CheckoutPage() {
 
                         {/* Add MOMO payment option */}
                         <div
-                           className={`border rounded-lg p-4 cursor-pointer ${
-                              paymentMethod === 'MOMO'
-                                 ? 'border-orange-500 bg-orange-50'
-                                 : 'border-gray-200'
-                           }`}
+                           className={`border rounded-lg p-4 cursor-pointer ${paymentMethod === 'MOMO'
+                              ? 'border-orange-500 bg-orange-50'
+                              : 'border-gray-200'
+                              }`}
                            onClick={() => setPaymentMethod('MOMO')}
                         >
                            <div className='flex items-center'>
                               <div
-                                 className={`w-5 h-5 rounded-full border flex items-center justify-center mr-3 ${
-                                    paymentMethod === 'MOMO'
-                                       ? 'border-orange-500'
-                                       : 'border-gray-400'
-                                 }`}
+                                 className={`w-5 h-5 rounded-full border flex items-center justify-center mr-3 ${paymentMethod === 'MOMO'
+                                    ? 'border-orange-500'
+                                    : 'border-gray-400'
+                                    }`}
                               >
                                  {paymentMethod === 'MOMO' && (
                                     <div className='w-3 h-3 bg-orange-500 rounded-full'></div>
@@ -2157,11 +2215,11 @@ export default function CheckoutPage() {
                                           </span>
                                           <span className='text-green-700 font-medium text-sm ml-2'>
                                              {appliedVoucher.percent_off &&
-                                             Number(appliedVoucher.percent_off) > 0
+                                                Number(appliedVoucher.percent_off) > 0
                                                 ? `Giảm ${appliedVoucher.percent_off}%`
                                                 : `Giảm ${formatPrice(
-                                                     Number(appliedVoucher.amount_off),
-                                                  )}`}
+                                                   Number(appliedVoucher.amount_off),
+                                                )}`}
                                           </span>
                                        </div>
                                        <span className='text-green-700 font-medium'>
@@ -2252,9 +2310,9 @@ export default function CheckoutPage() {
                                  : 'Đang xử lý...'}
                            </>
                         ) : paymentMethod === 'MOMO' ? (
-                           'Thanh toán với MoMo'
+                           'Đặt hàng và thanh toán với MoMo'
                         ) : (
-                           'Đặt hàng'
+                           'Đặt hàng ngay'
                         )}
                      </button>
 
@@ -2567,6 +2625,106 @@ export default function CheckoutPage() {
                            type='button'
                            className='mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm'
                            onClick={() => setShowInvoiceModal(false)}
+                        >
+                           Hủy
+                        </button>
+                     </div>
+                  </div>
+               </div>
+            </div>
+         )}
+
+         {/* Modal xác nhận đặt hàng */}
+         {showConfirmOrderModal && (
+            <div
+               className="fixed inset-0 z-50 overflow-y-auto"
+               aria-labelledby="confirm-order-modal"
+               role="dialog"
+               aria-modal="true"
+            >
+               <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+                  {/* Overlay */}
+                  <div
+                     className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"
+                     onClick={() => setShowConfirmOrderModal(false)}
+                  ></div>
+
+                  {/* Modal */}
+                  <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+                     <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                        <div className="sm:flex sm:items-start">
+                           <div className="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-orange-100 sm:mx-0 sm:h-10 sm:w-10">
+                              <svg className="h-6 w-6 text-orange-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                              </svg>
+                           </div>
+                           <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
+                              <h3 className="text-lg leading-6 font-medium text-gray-900" id="confirm-order-modal">
+                                 Xác nhận đặt hàng
+                              </h3>
+                              <div className="mt-4 space-y-4">
+                                 <div className="border-t border-b border-gray-200 py-4 space-y-3">
+                                    <p className="text-sm text-gray-700"><span className="font-medium">Địa chỉ:</span> {orderSummary.address}</p>
+
+                                    <p className="text-sm text-gray-700">
+                                       <span className="font-medium">Phương thức thanh toán:</span> {
+                                          orderSummary.paymentMethod === 'COD' ? 'Thanh toán khi nhận hàng' :
+                                             orderSummary.paymentMethod === 'BANKING' ? 'Chuyển khoản ngân hàng' : 'MoMo'
+                                       }
+                                    </p>
+
+                                    {needInvoice && (
+                                       <div className="bg-orange-50 p-2 rounded">
+                                          <p className="text-sm text-orange-700 font-medium">Yêu cầu xuất hóa đơn cho đơn hàng này</p>
+                                       </div>
+                                    )}
+
+                                    <div className="pt-2 space-y-1">
+                                       <div className="flex justify-between text-sm">
+                                          <span className="text-gray-600">Tạm tính ({cartItems.length} sản phẩm):</span>
+                                          <span>{formatPrice(orderSummary.subtotal)}</span>
+                                       </div>
+                                       <div className="flex justify-between text-sm">
+                                          <span className="text-gray-600">Phí vận chuyển:</span>
+                                          <span>{formatPrice(orderSummary.shipping)}</span>
+                                       </div>
+                                       {orderSummary.discount > 0 && (
+                                          <div className="flex justify-between text-sm">
+                                             <span className="text-green-600">Giảm giá:</span>
+                                             <span className="text-green-600">-{formatPrice(orderSummary.discount)}</span>
+                                          </div>
+                                       )}
+                                       <div className="flex justify-between pt-2 border-t border-gray-200 text-base font-medium">
+                                          <span>Tổng tiền:</span>
+                                          <span className="text-orange-600">{formatPrice(orderSummary.total)}</span>
+                                       </div>
+                                    </div>
+                                 </div>
+
+                                 <div className="text-sm text-gray-500">
+                                    <p>Khi nhấn Xác nhận đặt hàng, bạn đồng ý tuân theo <Link href="/user/terms" className="text-orange-600 hover:underline">Điều khoản dịch vụ</Link> và <Link href="/user/return-policy" className="text-orange-600 hover:underline">Chính sách đổi trả</Link> của chúng tôi.</p>
+                                 </div>
+                              </div>
+                           </div>
+                        </div>
+                     </div>
+                     <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                        <button
+                           type="button"
+                           className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-orange-600 text-base font-medium text-white hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 sm:ml-3 sm:w-auto sm:text-sm"
+                           onClick={() => {
+                              setShowConfirmOrderModal(false);
+                              setConfirmOrder(true);
+                              // Gọi hàm đặt hàng sau khi đã xác nhận
+                              setTimeout(() => handlePlaceOrder(), 0);
+                           }}
+                        >
+                           Xác nhận đặt hàng
+                        </button>
+                        <button
+                           type="button"
+                           className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
+                           onClick={() => setShowConfirmOrderModal(false)}
                         >
                            Hủy
                         </button>

@@ -7,7 +7,6 @@ import { useRouter, useSearchParams } from 'next/navigation'; // Add useSearchPa
 import Header from '@/app/components/user/nav/page';
 import Footer from '@/app/components/user/footer/page';
 import Toast from '@/app/components/ui/toast/Toast';
-import { retryOrderPayment } from '@/app/utils/orderUtils';
 import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
 import OrderActionModal from '@/app/components/user/orderactionmodals/OrderActionModals';
 import { HOST } from '@/app/constants/api';
@@ -736,20 +735,19 @@ export default function OrderPage() {
          handleCODOrderStatus();
       }
    }, [orders, handleCODOrderStatus]);
-
-   // Add this function inside your OrderPage component
+   // Cập nhật hàm handleRetryPayment để xử lý thanh toán lại qua MOMO
    const handleRetryPayment = async (orderId: number) => {
       try {
-         setProcessingPaymentOrderId(orderId); // Set the processing order ID
+         setProcessingPaymentOrderId(orderId); // Đánh dấu đơn hàng đang xử lý
 
-         // Get the order to check its payment method
+         // Tìm thông tin đơn hàng cần thanh toán lại
          const orderToRetry = orders.find((order) => order.id === orderId);
          if (!orderToRetry) {
             showToastMessage('Không tìm thấy đơn hàng', 'error');
             return;
          }
 
-         // First update the order status to "Đang chờ thanh toán"
+         // Lấy token từ localStorage
          const token = localStorage.getItem('token');
          if (!token) {
             showToastMessage('Phiên đăng nhập hết hạn, vui lòng đăng nhập lại', 'error');
@@ -757,7 +755,7 @@ export default function OrderPage() {
             return;
          }
 
-         // Update order status to "Đang chờ thanh toán"
+         // Đầu tiên, cập nhật trạng thái đơn hàng thành "Đang chờ thanh toán"
          const encodedStatus = encodeURIComponent('Đang chờ thanh toán');
          const statusResponse = await fetch(
             `${HOST}/api/orders/${orderId}/status?status=${encodedStatus}`,
@@ -774,45 +772,56 @@ export default function OrderPage() {
             throw new Error('Không thể cập nhật trạng thái đơn hàng');
          }
 
-         // Update local state
+         // Cập nhật state cục bộ
          setOrders((prevOrders) =>
             prevOrders.map((order) =>
                order.id === orderId ? { ...order, status: 'Đang chờ thanh toán', createdAt: new Date().toISOString() } : order
             )
          );
 
-         // Save the pending order ID in localStorage for verification after payment
+         // Lưu ID đơn hàng đang thanh toán vào localStorage để kiểm tra khi quay lại
          localStorage.setItem('pendingOrderId', orderId.toString());
 
-         // Check if it's MOMO payment or other method
+         // Xử lý theo phương thức thanh toán
          if (orderToRetry.method_payment === 'MOMO') {
-            try {
-               const paymentLink = await retryOrderPayment(orderId);
+            // Tương tự như hàm handleMomoPayment trong trang checkout
+            const momoResponse = await fetch(`${HOST}/api/payments/create?orderId=${orderId}`, {
+               method: 'GET',
+               headers: {
+                  Authorization: `Bearer ${token}`,
+               },
+            });
 
-               // Show toast message
+            if (!momoResponse.ok) {
+               throw new Error('Không thể tạo thanh toán MoMo');
+            }
+
+            const momoData = await momoResponse.json();
+
+            if (momoData.resultCode === 0 && momoData.payUrl) {
+               // Hiển thị thông báo
                showToastMessage('Đang chuyển đến trang thanh toán MOMO...', 'info');
 
-               // Redirect to MOMO payment page
-               window.location.href = paymentLink;
-            } catch (error) {
-               console.error('Error creating MOMO payment:', error);
-               showToastMessage('Không thể tạo liên kết thanh toán MOMO', 'error');
+               // Chuyển hướng đến trang thanh toán MOMO
+               window.location.href = momoData.payUrl;
+            } else {
+               throw new Error(momoData.message || 'Không thể tạo liên kết thanh toán MoMo');
             }
          } else if (orderToRetry.method_payment === 'BANKING') {
-            // For BANKING, show banking information
+            // Đối với thanh toán ngân hàng, hiển thị thông tin chuyển khoản
             showToastMessage('Vui lòng chuyển khoản theo thông tin đã cung cấp', 'info');
 
-            // Redirect to order detail page
+            // Chuyển đến trang chi tiết đơn hàng
             router.push(`/user/order/${orderId}`);
          } else {
-            // For other payment methods, redirect to payment page
+            // Đối với các phương thức khác, chuyển đến trang thanh toán
             router.push(`/user/checkout/payment?order_id=${orderId}`);
          }
       } catch (error) {
          console.error('Error processing retry payment:', error);
          showToastMessage('Có lỗi xảy ra khi xử lý thanh toán lại', 'error');
       } finally {
-         setProcessingPaymentOrderId(null); // Clear the processing state
+         setProcessingPaymentOrderId(null); // Đánh dấu đã hoàn thành xử lý
       }
    };
 
