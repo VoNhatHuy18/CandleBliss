@@ -19,7 +19,6 @@ import {
 } from '@heroicons/react/24/outline';
 import { HOST } from '@/app/constants/api';
 
-
 // Cập nhật interface Image để khớp với cấu trúc dữ liệu trả về
 interface Image {
    id: string;
@@ -67,6 +66,18 @@ interface Product {
    category_id: number;
    details: ProductDetail[];
 }
+
+const StatusBadge = ({ isActive }: { isActive: boolean }) => {
+   return (
+      <span
+         className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+            isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+         }`}
+      >
+         {isActive ? 'Đang bán' : 'Ngưng bán'}
+      </span>
+   );
+};
 
 export default function EditProduct() {
    const [product, setProduct] = useState<Product | null>(null);
@@ -166,7 +177,9 @@ export default function EditProduct() {
 
             const response = await fetch(`${HOST}/api/products/${productId}`, {
                headers: {
-                  Authorization: `Bearer ${localStorage.getItem('token') || sessionStorage.getItem('token')}`,
+                  Authorization: `Bearer ${
+                     localStorage.getItem('token') || sessionStorage.getItem('token')
+                  }`,
                },
             });
 
@@ -243,7 +256,9 @@ export default function EditProduct() {
 
          const response = await fetch(`${HOST}/api/categories`, {
             headers: {
-               Authorization: `Bearer ${localStorage.getItem('token') || sessionStorage.getItem('token')}`,
+               Authorization: `Bearer ${
+                  localStorage.getItem('token') || sessionStorage.getItem('token')
+               }`,
                'Content-Type': 'application/json',
             },
          });
@@ -426,14 +441,11 @@ export default function EditProduct() {
          // Fetch prices for each product detail
          const pricePromises = details.map(async (detail) => {
             try {
-               const response = await fetch(
-                  `${HOST}/api/v1/prices/product-detail/${detail.id}`,
-                  {
-                     headers: {
-                        Authorization: `Bearer ${token}`,
-                     },
+               const response = await fetch(`${HOST}/api/v1/prices/product-detail/${detail.id}`, {
+                  headers: {
+                     Authorization: `Bearer ${token}`,
                   },
-               );
+               });
 
                if (response.ok) {
                   const priceData = await response.json();
@@ -504,24 +516,80 @@ export default function EditProduct() {
       }));
    };
 
-   const handleVariantChange = (index: number, field: string, value: string | number | boolean) => {
+   // Cập nhật hàm handleVariantChange để xử lý trạng thái isActive
+   const handleVariantChange = async (
+      index: number,
+      field: string,
+      value: string | number | boolean,
+   ) => {
       if (!product) return;
 
       const updatedDetails = [...product.details];
+      const detail = updatedDetails[index];
 
-      // Xử lý đặc biệt cho trường hợp quantities
-      if (field === 'quantities') {
-         // Đảm bảo giá trị là số hợp lệ
-         const numericValue = typeof value === 'string' ? parseInt(value) : value;
+      // Đặc biệt xử lý cho trường isActive
+      if (field === 'isActive') {
+         // Cập nhật UI ngay lập tức
          updatedDetails[index] = {
-            ...updatedDetails[index],
-            quantities: isNaN(numericValue as number) ? 0 : numericValue as number,
+            ...detail,
+            isActive: value as boolean,
          };
+
+         // Cập nhật trên server
+         try {
+            const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+            if (!token) {
+               showToast('Bạn chưa đăng nhập hoặc phiên làm việc đã hết hạn', 'error');
+               return;
+            }
+
+            const formData = new FormData();
+            formData.append('size', String(detail.size || ''));
+            formData.append('type', String(detail.type || ''));
+            formData.append('values', String(detail.values || ''));
+            formData.append('quantities', String(detail.quantities || 0));
+            formData.append('isActive', String(value));
+
+            const response = await fetch(`${HOST}/api/product-details/${detail.id}`, {
+               method: 'PATCH',
+               headers: {
+                  Authorization: `Bearer ${token}`,
+               },
+               body: formData,
+            });
+
+            if (!response.ok) {
+               throw new Error('Không thể cập nhật trạng thái hiển thị');
+            }
+
+            showToast(
+               value ? 'Đã bật hiển thị phiên bản sản phẩm' : 'Đã tắt hiển thị phiên bản sản phẩm',
+               'success',
+            );
+         } catch (error) {
+            console.error('Error updating variant status:', error);
+            showToast('Không thể cập nhật trạng thái hiển thị', 'error');
+
+            // Hoàn tác thay đổi UI nếu API gọi thất bại
+            updatedDetails[index] = {
+               ...detail,
+               isActive: !value as boolean,
+            };
+         }
       } else {
-         updatedDetails[index] = {
-            ...updatedDetails[index],
-            [field]: value,
-         };
+         // Xử lý các trường khác như bình thường
+         if (field === 'quantities') {
+            const numericValue = typeof value === 'string' ? parseInt(value) : value;
+            updatedDetails[index] = {
+               ...detail,
+               quantities: isNaN(numericValue as number) ? 0 : (numericValue as number),
+            };
+         } else {
+            updatedDetails[index] = {
+               ...detail,
+               [field]: value,
+            };
+         }
       }
 
       setProduct({
@@ -604,7 +672,9 @@ export default function EditProduct() {
 
    // Mark variant for deletion
    const markVariantForDeletion = async (detailId: number) => {
-      if (confirm('Bạn có chắc chắn muốn xóa phiên bản này không? Hành động này không thể hoàn tác.')) {
+      if (
+         confirm('Bạn có chắc chắn muốn xóa phiên bản này không? Hành động này không thể hoàn tác.')
+      ) {
          try {
             showToast('Đang xóa phiên bản...', 'info');
 
@@ -617,8 +687,8 @@ export default function EditProduct() {
             const response = await fetch(`${HOST}/api/product-details/${detailId}`, {
                method: 'DELETE',
                headers: {
-                  Authorization: `Bearer ${token}`
-               }
+                  Authorization: `Bearer ${token}`,
+               },
             });
 
             if (!response.ok) {
@@ -628,46 +698,46 @@ export default function EditProduct() {
             }
 
             // Remove the deleted detail from the product state
-            setProduct(prevProduct => {
+            setProduct((prevProduct) => {
                if (!prevProduct) return null;
 
                return {
                   ...prevProduct,
-                  details: prevProduct.details.filter(detail => detail.id !== detailId)
+                  details: prevProduct.details.filter((detail) => detail.id !== detailId),
                };
             });
 
             // Also remove any prices associated with this detail
-            setDetailPrices(prev => {
+            setDetailPrices((prev) => {
                const updated = { ...prev };
                delete updated[detailId];
                return updated;
             });
 
             // Remove from image cache if exists
-            setDetailImagesCache(prev => {
+            setDetailImagesCache((prev) => {
                const updated = { ...prev };
                delete updated[detailId];
                return updated;
             });
 
             showToast('Đã xóa phiên bản thành công', 'success');
-
          } catch (error) {
             console.error('Error deleting product detail:', error);
             showToast(
-               `Lỗi xóa phiên bản: ${error instanceof Error ? error.message : 'Lỗi không xác định'}`,
-               'error'
+               `Lỗi xóa phiên bản: ${
+                  error instanceof Error ? error.message : 'Lỗi không xác định'
+               }`,
+               'error',
             );
             // Still mark for deletion in UI if API call fails, so it gets deleted during save
-            setVariantsToDelete(prev => [...prev, detailId]);
+            setVariantsToDelete((prev) => [...prev, detailId]);
          }
       } else {
          // If user cancels the confirmation, just mark for deletion in UI
-         setVariantsToDelete(prev => [...prev, detailId]);
+         setVariantsToDelete((prev) => [...prev, detailId]);
       }
    };
-
 
    const handleProductImageUpload = async (e: ChangeEvent<HTMLInputElement>) => {
       if (e.target.files && e.target.files.length > 0) {
@@ -726,7 +796,8 @@ export default function EditProduct() {
          } catch (error) {
             console.error('Error uploading images:', error);
             showToast(
-               `Lỗi tải lên hình ảnh: ${error instanceof Error ? error.message : 'Lỗi không xác định'
+               `Lỗi tải lên hình ảnh: ${
+                  error instanceof Error ? error.message : 'Lỗi không xác định'
                }`,
                'error',
             );
@@ -789,7 +860,8 @@ export default function EditProduct() {
       } catch (error) {
          console.error('Error refetching product details:', error);
          showToast(
-            `Không thể tải lại thông tin sản phẩm: ${error instanceof Error ? error.message : 'Lỗi không xác định'
+            `Không thể tải lại thông tin sản phẩm: ${
+               error instanceof Error ? error.message : 'Lỗi không xác định'
             }`,
             'error',
          );
@@ -867,16 +939,13 @@ export default function EditProduct() {
             });
 
             // Upload the images immediately
-            const response = await fetch(
-               `${HOST}/api/product-details/${detailId}`,
-               {
-                  method: 'PATCH',
-                  headers: {
-                     Authorization: `Bearer ${token}`,
-                  },
-                  body: formData,
-               }
-            );
+            const response = await fetch(`${HOST}/api/product-details/${detailId}`, {
+               method: 'PATCH',
+               headers: {
+                  Authorization: `Bearer ${token}`,
+               },
+               body: formData,
+            });
 
             if (!response.ok) {
                const errorText = await response.text();
@@ -890,7 +959,7 @@ export default function EditProduct() {
             console.log('Images uploaded successfully:', updatedDetail);
 
             // Clear the upload queue for this detail
-            setVariantImageUploads(prev => {
+            setVariantImageUploads((prev) => {
                const updated = { ...prev };
                delete updated[detailId];
                return updated;
@@ -899,20 +968,20 @@ export default function EditProduct() {
             // Update UI with the new images
             if (updatedDetail && updatedDetail.images) {
                // Update cache with fresh data
-               setDetailImagesCache(prev => ({
+               setDetailImagesCache((prev) => ({
                   ...prev,
-                  [detailId]: updatedDetail.images
+                  [detailId]: updatedDetail.images,
                }));
 
                // Update product state
-               setProduct(prevProduct => {
+               setProduct((prevProduct) => {
                   if (!prevProduct) return null;
 
-                  const updatedDetails = prevProduct.details.map(detail => {
+                  const updatedDetails = prevProduct.details.map((detail) => {
                      if (detail.id === detailId) {
                         return {
                            ...detail,
-                           images: updatedDetail.images
+                           images: updatedDetail.images,
                         };
                      }
                      return detail;
@@ -920,14 +989,14 @@ export default function EditProduct() {
 
                   return {
                      ...prevProduct,
-                     details: updatedDetails
+                     details: updatedDetails,
                   };
                });
 
                // Update timestamp and force re-render
-               setLastImageFetchTime(prev => ({
+               setLastImageFetchTime((prev) => ({
                   ...prev,
-                  [detailId]: Date.now()
+                  [detailId]: Date.now(),
                }));
             }
 
@@ -935,8 +1004,10 @@ export default function EditProduct() {
          } catch (error) {
             console.error('Error uploading variant images:', error);
             showToast(
-               `Lỗi tải lên hình ảnh: ${error instanceof Error ? error.message : 'Lỗi không xác định'}`,
-               'error'
+               `Lỗi tải lên hình ảnh: ${
+                  error instanceof Error ? error.message : 'Lỗi không xác định'
+               }`,
+               'error',
             );
          } finally {
             setVariantImageUploading(null);
@@ -997,17 +1068,14 @@ export default function EditProduct() {
          });
 
          // Sử dụng API PATCH /api/product-details/{id}
-         const response = await fetch(
-            `${HOST}/api/product-details/${detailId}`,
-            {
-               method: 'PATCH',
-               headers: {
-                  Authorization: `Bearer ${token}`,
-                  // Không cần set Content-Type khi dùng FormData
-               },
-               body: formData,
-            }
-         );
+         const response = await fetch(`${HOST}/api/product-details/${detailId}`, {
+            method: 'PATCH',
+            headers: {
+               Authorization: `Bearer ${token}`,
+               // Không cần set Content-Type khi dùng FormData
+            },
+            body: formData,
+         });
 
          if (!response.ok) {
             const errorText = await response.text();
@@ -1026,7 +1094,8 @@ export default function EditProduct() {
       } catch (error) {
          console.error('Error uploading images:', error);
          showToast(
-            `Lỗi tải lên hình ảnh: ${error instanceof Error ? error.message : 'Lỗi không xác định'
+            `Lỗi tải lên hình ảnh: ${
+               error instanceof Error ? error.message : 'Lỗi không xác định'
             }`,
             'error',
          );
@@ -1134,18 +1203,15 @@ export default function EditProduct() {
 
                // Call API with better error handling
                try {
-                  const detailRes = await fetch(
-                     `${HOST}/api/product-details/${detail.id}`,
-                     {
-                        method: 'PATCH',
-                        headers: {
-                           Authorization: `Bearer ${token}`,
-                           'Content-Type': 'application/json',
-                           Accept: 'application/json',
-                        },
-                        body: JSON.stringify(detailData),
+                  const detailRes = await fetch(`${HOST}/api/product-details/${detail.id}`, {
+                     method: 'PATCH',
+                     headers: {
+                        Authorization: `Bearer ${token}`,
+                        'Content-Type': 'application/json',
+                        Accept: 'application/json',
                      },
-                  );
+                     body: JSON.stringify(detailData),
+                  });
 
                   // Log the full response for debugging
                   const responseText = await detailRes.text();
@@ -1211,7 +1277,8 @@ export default function EditProduct() {
             } catch (err) {
                console.error(`Error updating detail ${detail.id}:`, err);
                showToast(
-                  `Lỗi khi cập nhật chi tiết ID ${detail.id}: ${err instanceof Error ? err.message : 'Lỗi không xác định'
+                  `Lỗi khi cập nhật chi tiết ID ${detail.id}: ${
+                     err instanceof Error ? err.message : 'Lỗi không xác định'
                   }`,
                   'error',
                );
@@ -1238,17 +1305,14 @@ export default function EditProduct() {
 
                console.log(`Updating price for detail ${detailId} with:`, priceData);
 
-               const priceRes = await fetch(
-                  `${HOST}/api/v1/prices/${detailId}`,
-                  {
-                     method: 'PATCH',
-                     headers: {
-                        Authorization: `Bearer ${token}`,
-                        'Content-Type': 'application/json',
-                     },
-                     body: JSON.stringify(priceData),
+               const priceRes = await fetch(`${HOST}/api/v1/prices/${detailId}`, {
+                  method: 'PATCH',
+                  headers: {
+                     Authorization: `Bearer ${token}`,
+                     'Content-Type': 'application/json',
                   },
-               );
+                  body: JSON.stringify(priceData),
+               });
 
                if (!priceRes.ok) {
                   console.error(
@@ -1327,14 +1391,14 @@ export default function EditProduct() {
       } catch (error) {
          console.error('Error uploading product images:', error);
          showToast(
-            `Lỗi tải lên hình ảnh sản phẩm: ${error instanceof Error ? error.message : 'Lỗi không xác định'
+            `Lỗi tải lên hình ảnh sản phẩm: ${
+               error instanceof Error ? error.message : 'Lỗi không xác định'
             }`,
             'error',
          );
          return false;
       }
    };
-
 
    // Thêm hàm này vào component của bạn
    const removeDetailImage = async (detailId: number, imageId: string) => {
@@ -1350,16 +1414,13 @@ export default function EditProduct() {
          formData.append('image_id', imageId);
          formData.append('action', 'remove_image');
 
-         const response = await fetch(
-            `${HOST}/api/product-details/${detailId}`,
-            {
-               method: 'PATCH',
-               headers: {
-                  Authorization: `Bearer ${token}`,
-               },
-               body: formData,
-            }
-         );
+         const response = await fetch(`${HOST}/api/product-details/${detailId}`, {
+            method: 'PATCH',
+            headers: {
+               Authorization: `Bearer ${token}`,
+            },
+            body: formData,
+         });
 
          if (!response.ok) {
             const errorText = await response.text();
@@ -1369,7 +1430,7 @@ export default function EditProduct() {
          }
 
          // Xóa cache hình ảnh hiện tại để tải lại
-         setDetailImagesCache(prev => {
+         setDetailImagesCache((prev) => {
             const updated = { ...prev };
             delete updated[detailId];
             return updated;
@@ -1384,7 +1445,7 @@ export default function EditProduct() {
          console.error('Error removing detail image:', error);
          showToast(
             `Lỗi xóa hình ảnh: ${error instanceof Error ? error.message : 'Lỗi không xác định'}`,
-            'error'
+            'error',
          );
          return false;
       }
@@ -1403,7 +1464,11 @@ export default function EditProduct() {
          const lastFetchTime = lastImageFetchTime[detailId] || 0;
 
          // Bỏ qua nếu đã có trong cache và đã tải gần đây (trừ khi forceRefresh = true)
-         if (!forceRefresh && detailImagesCache[detailId]?.length > 0 && now - lastFetchTime < 30000) {
+         if (
+            !forceRefresh &&
+            detailImagesCache[detailId]?.length > 0 &&
+            now - lastFetchTime < 30000
+         ) {
             console.log('Images already in cache and recently fetched for detail ID:', detailId);
             return detailImagesCache[detailId];
          }
@@ -1414,14 +1479,11 @@ export default function EditProduct() {
             return null;
          }
 
-         const response = await fetch(
-            `${HOST}/api/product-details/${detailId}`,
-            {
-               headers: {
-                  Authorization: `Bearer ${token}`,
-               }
-            }
-         );
+         const response = await fetch(`${HOST}/api/product-details/${detailId}`, {
+            headers: {
+               Authorization: `Bearer ${token}`,
+            },
+         });
 
          if (!response.ok) {
             console.error(`Failed to fetch detail images: ${response.status}`);
@@ -1434,14 +1496,14 @@ export default function EditProduct() {
             console.log(`Found ${detailData.images.length} images for detail ID ${detailId}`);
 
             // Cập nhật cache hình ảnh và thời gian tải
-            setDetailImagesCache(prev => ({
+            setDetailImagesCache((prev) => ({
                ...prev,
-               [detailId]: detailData.images
+               [detailId]: detailData.images,
             }));
 
             setLastImageFetchTime({
                ...lastImageFetchTime,
-               [detailId]: now
+               [detailId]: now,
             });
 
             return detailData.images;
@@ -1449,13 +1511,13 @@ export default function EditProduct() {
             console.log('No images found for detail');
 
             // Cập nhật cache với mảng rỗng và thời gian
-            setDetailImagesCache(prev => ({
+            setDetailImagesCache((prev) => ({
                ...prev,
-               [detailId]: []
+               [detailId]: [],
             }));
 
             setLastImageFetchTime({
-               [detailId]: now
+               [detailId]: now,
             });
 
             return [];
@@ -1486,17 +1548,14 @@ export default function EditProduct() {
          // Đánh dấu đây là cập nhật thông tin không có hình ảnh
          formData.append('update_info_only', 'true');
 
-         const response = await fetch(
-            `${HOST}/api/product-details/${detail.id}`,
-            {
-               method: 'PATCH',
-               headers: {
-                  Authorization: `Bearer ${token}`,
-                  // Không set Content-Type cho FormData
-               },
-               body: formData,
-            }
-         );
+         const response = await fetch(`${HOST}/api/product-details/${detail.id}`, {
+            method: 'PATCH',
+            headers: {
+               Authorization: `Bearer ${token}`,
+               // Không set Content-Type cho FormData
+            },
+            body: formData,
+         });
 
          // Xử lý phản hồi
          if (!response.ok) {
@@ -1735,10 +1794,11 @@ export default function EditProduct() {
                                                             handleCategorySelect(category);
                                                             setIsCategoryDropdownOpen(false);
                                                          }}
-                                                         className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-100 ${formData.category_id === category.id
-                                                            ? 'bg-amber-50 text-amber-700'
-                                                            : 'text-gray-700'
-                                                            }`}
+                                                         className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-100 ${
+                                                            formData.category_id === category.id
+                                                               ? 'bg-amber-50 text-amber-700'
+                                                               : 'text-gray-700'
+                                                         }`}
                                                       >
                                                          {category.name}
                                                       </button>
@@ -1897,18 +1957,19 @@ export default function EditProduct() {
                                     {product.details.map((detail, index) => (
                                        <div
                                           key={detail.id}
-                                          className={`border rounded-md p-4 ${variantsToDelete.includes(detail.id)
-                                             ? 'bg-red-50 border-red-200'
-                                             : ''
-                                             }`}
+                                          className={`border rounded-md p-4 ${
+                                             variantsToDelete.includes(detail.id)
+                                                ? 'bg-red-50 border-red-200'
+                                                : ''
+                                          }`}
                                        >
                                           <button
-                                             type="button"
+                                             type='button'
                                              onClick={() => markVariantForDeletion(detail.id)}
-                                             className="float-right text-gray-500 hover:text-red-600 flex items-center"
+                                             className='float-right text-gray-500 hover:text-red-600 flex items-center'
                                           >
-                                             <TrashIcon className="h-5 w-5 mr-1" />
-                                             <span className="text-sm">Xóa</span>
+                                             <TrashIcon className='h-5 w-5 mr-1' />
+                                             <span className='text-sm'>Xóa</span>
                                           </button>
 
                                           <div className='grid grid-cols-1 md:grid-cols-3 gap-4 mb-4'>
@@ -1926,10 +1987,11 @@ export default function EditProduct() {
                                                          e.target.value,
                                                       )
                                                    }
-                                                   className={`w-full p-2 border rounded-md ${variantsToDelete.includes(detail.id)
-                                                      ? 'bg-red-50'
-                                                      : ''
-                                                      }`}
+                                                   className={`w-full p-2 border rounded-md ${
+                                                      variantsToDelete.includes(detail.id)
+                                                         ? 'bg-red-50'
+                                                         : ''
+                                                   }`}
                                                    disabled={variantsToDelete.includes(detail.id)}
                                                 />
                                              </div>
@@ -1947,10 +2009,11 @@ export default function EditProduct() {
                                                          e.target.value,
                                                       )
                                                    }
-                                                   className={`w-full p-2 border rounded-md ${variantsToDelete.includes(detail.id)
-                                                      ? 'bg-red-50'
-                                                      : ''
-                                                      }`}
+                                                   className={`w-full p-2 border rounded-md ${
+                                                      variantsToDelete.includes(detail.id)
+                                                         ? 'bg-red-50'
+                                                         : ''
+                                                   }`}
                                                    disabled={variantsToDelete.includes(detail.id)}
                                                 />
                                              </div>
@@ -1968,10 +2031,11 @@ export default function EditProduct() {
                                                          e.target.value,
                                                       )
                                                    }
-                                                   className={`w-full p-2 border rounded-md ${variantsToDelete.includes(detail.id)
-                                                      ? 'bg-red-50'
-                                                      : ''
-                                                      }`}
+                                                   className={`w-full p-2 border rounded-md ${
+                                                      variantsToDelete.includes(detail.id)
+                                                         ? 'bg-red-50'
+                                                         : ''
+                                                   }`}
                                                    disabled={variantsToDelete.includes(detail.id)}
                                                 />
                                              </div>
@@ -1984,19 +2048,24 @@ export default function EditProduct() {
                                                 </label>
                                                 <input
                                                    type='number'
-                                                   value={isNaN(detail.quantities) ? '' : detail.quantities}
+                                                   value={
+                                                      isNaN(detail.quantities)
+                                                         ? ''
+                                                         : detail.quantities
+                                                   }
                                                    onChange={(e) =>
                                                       handleVariantChange(
                                                          index,
                                                          'quantities',
-                                                         parseInt(e.target.value) || 0,  // Đảm bảo luôn trả về số
+                                                         parseInt(e.target.value) || 0, // Đảm bảo luôn trả về số
                                                       )
                                                    }
                                                    min='0'
-                                                   className={`w-full p-2 border rounded-md ${variantsToDelete.includes(detail.id)
-                                                      ? 'bg-red-50'
-                                                      : ''
-                                                      }`}
+                                                   className={`w-full p-2 border rounded-md ${
+                                                      variantsToDelete.includes(detail.id)
+                                                         ? 'bg-red-50'
+                                                         : ''
+                                                   }`}
                                                    disabled={variantsToDelete.includes(detail.id)}
                                                 />
                                              </div>
@@ -2015,10 +2084,11 @@ export default function EditProduct() {
                                                       )
                                                    }
                                                    min='0'
-                                                   className={`w-full p-2 border rounded-md ${variantsToDelete.includes(detail.id)
-                                                      ? 'bg-red-50'
-                                                      : ''
-                                                      }`}
+                                                   className={`w-full p-2 border rounded-md ${
+                                                      variantsToDelete.includes(detail.id)
+                                                         ? 'bg-red-50'
+                                                         : ''
+                                                   }`}
                                                    disabled={variantsToDelete.includes(detail.id)}
                                                 />
                                              </div>
@@ -2039,10 +2109,11 @@ export default function EditProduct() {
                                                       )
                                                    }
                                                    min='0'
-                                                   className={`w-full p-2 border rounded-md ${variantsToDelete.includes(detail.id)
-                                                      ? 'bg-red-50'
-                                                      : ''
-                                                      }`}
+                                                   className={`w-full p-2 border rounded-md ${
+                                                      variantsToDelete.includes(detail.id)
+                                                         ? 'bg-red-50'
+                                                         : ''
+                                                   }`}
                                                    disabled={variantsToDelete.includes(detail.id)}
                                                 />
                                              </div>
@@ -2065,10 +2136,11 @@ export default function EditProduct() {
                                                          e.target.value,
                                                       )
                                                    }
-                                                   className={`w-full p-2 border rounded-md ${variantsToDelete.includes(detail.id)
-                                                      ? 'bg-red-50'
-                                                      : ''
-                                                      }`}
+                                                   className={`w-full p-2 border rounded-md ${
+                                                      variantsToDelete.includes(detail.id)
+                                                         ? 'bg-red-50'
+                                                         : ''
+                                                   }`}
                                                    disabled={variantsToDelete.includes(detail.id)}
                                                 />
                                              </div>
@@ -2088,34 +2160,46 @@ export default function EditProduct() {
                                                          e.target.value,
                                                       )
                                                    }
-                                                   className={`w-full p-2 border rounded-md ${variantsToDelete.includes(detail.id)
-                                                      ? 'bg-red-50'
-                                                      : ''
-                                                      }`}
+                                                   className={`w-full p-2 border rounded-md ${
+                                                      variantsToDelete.includes(detail.id)
+                                                         ? 'bg-red-50'
+                                                         : ''
+                                                   }`}
                                                    disabled={variantsToDelete.includes(detail.id)}
                                                 />
                                              </div>
                                           </div>
 
-                                          <div className='mb-4'>
-                                             <label className='inline-flex items-center'>
-                                                <input
-                                                   type='checkbox'
-                                                   checked={detail.isActive}
-                                                   onChange={(e) =>
-                                                      handleVariantChange(
-                                                         index,
-                                                         'isActive',
-                                                         e.target.checked,
-                                                      )
-                                                   }
-                                                   className='rounded text-amber-600 focus:ring-amber-500 h-4 w-4'
-                                                   disabled={variantsToDelete.includes(detail.id)}
-                                                />
-                                                <span className='ml-2 text-sm text-gray-700'>
-                                                   Hiển thị
-                                                </span>
-                                             </label>
+                                          <div className='mb-4 space-y-2'>
+                                             <div className='flex items-center justify-between'>
+                                                <label className='inline-flex items-center'>
+                                                   <input
+                                                      type='checkbox'
+                                                      checked={detail.isActive}
+                                                      onChange={(e) =>
+                                                         handleVariantChange(
+                                                            index,
+                                                            'isActive',
+                                                            e.target.checked,
+                                                         )
+                                                      }
+                                                      className='rounded text-amber-600 focus:ring-amber-500 h-4 w-4'
+                                                      disabled={variantsToDelete.includes(
+                                                         detail.id,
+                                                      )}
+                                                   />
+                                                   <span className='ml-2 text-sm text-gray-700'>
+                                                      Hiển thị
+                                                   </span>
+                                                </label>
+                                                <StatusBadge isActive={detail.isActive} />
+                                             </div>
+                                             {!detail.isActive && (
+                                                <p className='text-xs text-red-600'>
+                                                   Phiên bản này hiện đang ngưng bán và sẽ không
+                                                   hiển thị cho khách hàng
+                                                </p>
+                                             )}
                                           </div>
 
                                           <div className='mt-4'>
@@ -2126,41 +2210,50 @@ export default function EditProduct() {
                                              {/* Hiển thị hình ảnh từ cache hoặc từ chi tiết sản phẩm */}
                                              {detailImagesCache[detail.id]?.length > 0 ? (
                                                 <div className='grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 mb-3'>
-                                                   {detailImagesCache[detail.id].map((image, imgIndex) => (
-                                                      <div
-                                                         key={`cached-${image.id || imgIndex}`}
-                                                         className='relative group'
-                                                      >
-                                                         <div className='aspect-square overflow-hidden rounded-md border border-gray-200'>
-                                                            <Image
-                                                               src={image.path}
-                                                               alt={`Product image ${index + 1}`}
-                                                               width={200}
-                                                               height={200}
-                                                               className='w-full h-full object-cover'
-                                                               onError={(e) => {
-                                                                  console.error(
-                                                                     `Error loading image: ${image.path}`,
-                                                                  );
-                                                                  e.currentTarget.src =
-                                                                     '/placeholder-image.jpg';
-                                                               }}
-                                                            />
-                                                         </div>
-                                                         <button
-                                                            type='button'
-                                                            onClick={async () => {
-                                                               // Thêm chức năng xóa hình ảnh chi tiết ở đây nếu cần
-                                                               if (confirm('Bạn có chắc chắn muốn xóa hình ảnh này không?')) {
-                                                                  removeDetailImage(detail.id, image.id);
-                                                               }
-                                                            }}
-                                                            className='absolute top-1 right-1 bg-white rounded-full p-1 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity'
+                                                   {detailImagesCache[detail.id].map(
+                                                      (image, imgIndex) => (
+                                                         <div
+                                                            key={`cached-${image.id || imgIndex}`}
+                                                            className='relative group'
                                                          >
-                                                            <XMarkIcon className='h-3 w-3 text-gray-500' />
-                                                         </button>
-                                                      </div>
-                                                   ))}
+                                                            <div className='aspect-square overflow-hidden rounded-md border border-gray-200'>
+                                                               <Image
+                                                                  src={image.path}
+                                                                  alt={`Product image ${index + 1}`}
+                                                                  width={200}
+                                                                  height={200}
+                                                                  className='w-full h-full object-cover'
+                                                                  onError={(e) => {
+                                                                     console.error(
+                                                                        `Error loading image: ${image.path}`,
+                                                                     );
+                                                                     e.currentTarget.src =
+                                                                        '/placeholder-image.jpg';
+                                                                  }}
+                                                               />
+                                                            </div>
+                                                            <button
+                                                               type='button'
+                                                               onClick={async () => {
+                                                                  // Thêm chức năng xóa hình ảnh chi tiết ở đây nếu cần
+                                                                  if (
+                                                                     confirm(
+                                                                        'Bạn có chắc chắn muốn xóa hình ảnh này không?',
+                                                                     )
+                                                                  ) {
+                                                                     removeDetailImage(
+                                                                        detail.id,
+                                                                        image.id,
+                                                                     );
+                                                                  }
+                                                               }}
+                                                               className='absolute top-1 right-1 bg-white rounded-full p-1 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity'
+                                                            >
+                                                               <XMarkIcon className='h-3 w-3 text-gray-500' />
+                                                            </button>
+                                                         </div>
+                                                      ),
+                                                   )}
                                                 </div>
                                              ) : detail.images && detail.images.length > 0 ? (
                                                 <div className='grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 mb-3'>
@@ -2177,8 +2270,11 @@ export default function EditProduct() {
                                                                height={100}
                                                                className='w-full h-full object-cover'
                                                                onError={(e) => {
-                                                                  console.error(`Error loading image: ${image.path}`);
-                                                                  e.currentTarget.src = '/placeholder-image.jpg';
+                                                                  console.error(
+                                                                     `Error loading image: ${image.path}`,
+                                                                  );
+                                                                  e.currentTarget.src =
+                                                                     '/placeholder-image.jpg';
                                                                }}
                                                             />
                                                          </div>
@@ -2194,7 +2290,13 @@ export default function EditProduct() {
                                              {/* Input để tải lên hình ảnh mới */}
                                              {!variantsToDelete.includes(detail.id) && (
                                                 <div className='mt-2'>
-                                                   <label className={`flex items-center justify-center w-24 h-24 border-2 border-gray-300 border-dashed rounded-md cursor-pointer hover:bg-gray-50 ${variantImageUploading === detail.id ? 'opacity-50 pointer-events-none' : ''}`}>
+                                                   <label
+                                                      className={`flex items-center justify-center w-24 h-24 border-2 border-gray-300 border-dashed rounded-md cursor-pointer hover:bg-gray-50 ${
+                                                         variantImageUploading === detail.id
+                                                            ? 'opacity-50 pointer-events-none'
+                                                            : ''
+                                                      }`}
+                                                   >
                                                       {variantImageUploading === detail.id ? (
                                                          <div className='space-y-1 text-center'>
                                                             <ArrowPathIcon className='mx-auto h-6 w-6 text-amber-500 animate-spin' />
@@ -2215,8 +2317,12 @@ export default function EditProduct() {
                                                          className='hidden'
                                                          accept='image/*'
                                                          multiple
-                                                         disabled={variantImageUploading === detail.id}
-                                                         onChange={(e) => handleVariantImageUpload(detail.id, e)}
+                                                         disabled={
+                                                            variantImageUploading === detail.id
+                                                         }
+                                                         onChange={(e) =>
+                                                            handleVariantImageUpload(detail.id, e)
+                                                         }
                                                       />
                                                    </label>
                                                 </div>
@@ -2316,7 +2422,11 @@ export default function EditProduct() {
                                                 </label>
                                                 <input
                                                    type='number'
-                                                   value={isNaN(variant.quantities) ? '' : variant.quantities}
+                                                   value={
+                                                      isNaN(variant.quantities)
+                                                         ? ''
+                                                         : variant.quantities
+                                                   }
                                                    onChange={(e) =>
                                                       handleNewVariantChange(
                                                          index,
@@ -2495,8 +2605,9 @@ export default function EditProduct() {
                                                             <div className='aspect-square overflow-hidden rounded-md border border-gray-200'>
                                                                <Image
                                                                   src={URL.createObjectURL(file)}
-                                                                  alt={`New variant image ${imgIndex + 1
-                                                                     }`}
+                                                                  alt={`New variant image ${
+                                                                     imgIndex + 1
+                                                                  }`}
                                                                   width={100}
                                                                   height={100}
                                                                   className='w-full h-full object-cover'

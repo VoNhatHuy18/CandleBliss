@@ -67,11 +67,11 @@ export default function Footer() {
                   <hr className='w-full border-[#542700] mb-4' />
                   <ul className='space-y-2 text-[#542700] text-sm md:text-base font-medium'>
                      {[
-                        { href: '/', text: 'Điều khoản sử dụng' },
-                        { href: '/', text: 'Chính sách bảo mật' },
-                        { href: '/', text: 'Hình thức thanh toán' },
-                        { href: '/', text: 'Hình thức đổi trả' },
-                        { href: '/', text: 'Chính sách vận chuyển' }
+                        { href: '/user/termsofuse', text: 'Điều khoản sử dụng' },
+                        { href: '/user/privacypolicy', text: 'Chính sách bảo mật' },
+                        { href: '/user/paymentmethod', text: 'Hình thức thanh toán' },
+                        { href: '/exchangepolicy', text: 'Hình thức đổi trả' },
+                        { href: '/shipping', text: 'Chính sách vận chuyển' }
                      ].map((item, index) => (
                         <li key={index}>
                            <Link href={item.href} className='hover:text-[#FF9900] transition-colors'>
