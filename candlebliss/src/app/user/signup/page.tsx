@@ -271,7 +271,7 @@ export default function SignUpPage() {
                setApiError(data?.message || 'Dữ liệu không hợp lệ');
                showToastMessage(data?.message || 'Dữ liệu không hợp lệ', 'error');
             } else {
-               throw new Error(data?.message || 'Đăng ký không thành công');
+               throw new Error(data?.message || 'Email đã tồn tại, hãy sử dụng email khác');
             }
             return;
          }

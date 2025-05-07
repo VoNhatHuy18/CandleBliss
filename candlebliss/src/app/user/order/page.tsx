@@ -173,15 +173,20 @@ const PaymentCountdown = ({
          const now = new Date().getTime();
          const timePassed = now - createdTime;
 
-         // Đang chờ thanh toán: 15 phút
-         // Thanh toán thất bại: 24 giờ
+         // Only add timeout for "Đang chờ thanh toán" (15 minutes)
+         // Remove the timeout for "Thanh toán thất bại"
          const timeoutMs = status === 'Đang chờ thanh toán'
             ? 15 * 60 * 1000  // 15 minutes 
-            : 24 * 60 * 60 * 1000; // 24 hours
+            : 0; // No timeout for failed payments
 
          const remaining = timeoutMs - timePassed;
          return Math.max(0, Math.floor(remaining / 1000)); // Return seconds left
       };
+
+      // Only set up countdown for "Đang chờ thanh toán"
+      if (status !== 'Đang chờ thanh toán') {
+         return;
+      }
 
       // Calculate initial time left
       const initialTimeLeft = calculateTimeLeft();
@@ -210,33 +215,20 @@ const PaymentCountdown = ({
       return () => clearInterval(timer);
    }, [createdAt, orderId, onTimeout, timedOut, status]);
 
-   // Time expired
-   if (timeLeft <= 0) {
+   // Time expired for "Đang chờ thanh toán"
+   if (timeLeft <= 0 && status === 'Đang chờ thanh toán') {
       return <span className='text-red-600 text-sm font-medium'>
-         {status === 'Đang chờ thanh toán' ? 'Hết thời gian thanh toán' : 'Đơn hàng sẽ bị hủy'}
+         Hết thời gian thanh toán
       </span>;
    }
-
-   // Format the time differently based on status
-   if (status === 'Đang chờ thanh toán') {
-      // For waiting payment, show minutes and seconds
-      const minutes = Math.floor(timeLeft / 60);
-      const seconds = timeLeft % 60;
-      return (
-         <span className={`text-sm font-medium ${timeLeft < 180 ? 'text-red-600' : 'text-orange-600'}`}>
-            Thanh toán còn: {minutes}:{seconds < 10 ? `0${seconds}` : seconds}
-         </span>
-      );
-   } else {
-      // For failed payment, show hours and minutes
-      const hours = Math.floor(timeLeft / 3600);
-      const minutes = Math.floor((timeLeft % 3600) / 60);
-      return (
-         <span className={`text-sm font-medium ${timeLeft < 3600 ? 'text-red-600' : 'text-orange-600'}`}>
-            Tự động hủy còn: {hours}h:{minutes < 10 ? `0${minutes}` : minutes}m
-         </span>
-      );
-   }
+   // For waiting payment, show minutes and seconds
+   const minutes = Math.floor(timeLeft / 60);
+   const seconds = timeLeft % 60;
+   return (
+      <span className={`text-sm font-medium ${timeLeft < 180 ? 'text-red-600' : 'text-orange-600'}`}>
+         Thanh toán còn: {minutes}:{seconds < 10 ? `0${seconds}` : seconds}
+      </span>
+   );
 };
 
 export default function OrderPage() {
@@ -574,49 +566,38 @@ export default function OrderPage() {
          const token = localStorage.getItem('token');
          if (!token) return;
 
-         // Determine the next status based on current status
-         let nextStatus;
+         // Only update status for "Đang chờ thanh toán" -> "Thanh toán thất bại"
+         // Remove the transition from "Thanh toán thất bại" to "Đã hủy"
          if (currentStatus === 'Đang chờ thanh toán') {
-            nextStatus = 'Thanh toán thất bại';
-         } else if (currentStatus === 'Thanh toán thất bại') {
-            nextStatus = 'Đã hủy';
-         } else {
-            return; // Exit if not a relevant status
-         }
+            const nextStatus = 'Thanh toán thất bại';
 
-         const encodedStatus = encodeURIComponent(nextStatus);
-         const response = await fetch(
-            `${HOST}/api/orders/${orderId}/status?status=${encodedStatus}`,
-            {
-               method: 'PATCH',
-               headers: {
-                  Authorization: `Bearer ${token}`,
-                  'Content-Type': 'application/json',
-               },
-            }
-         );
-
-         if (response.ok) {
-            // Update local state
-            setOrders((prevOrders) =>
-               prevOrders.map((order) =>
-                  order.id === orderId ? { ...order, status: nextStatus } : order
-               )
+            const encodedStatus = encodeURIComponent(nextStatus);
+            const response = await fetch(
+               `${HOST}/api/orders/${orderId}/status?status=${encodedStatus}`,
+               {
+                  method: 'PATCH',
+                  headers: {
+                     Authorization: `Bearer ${token}`,
+                     'Content-Type': 'application/json',
+                  },
+               }
             );
 
-            if (nextStatus === 'Thanh toán thất bại') {
+            if (response.ok) {
+               // Update local state
+               setOrders((prevOrders) =>
+                  prevOrders.map((order) =>
+                     order.id === orderId ? { ...order, status: nextStatus } : order
+                  )
+               );
+
                showToastMessage(
-                  `Đơn hàng #${orderId} đã hết thời gian thanh toán và chuyển sang trạng thái Thanh toán thất bại. Bạn còn 24h để thanh toán lại.`,
+                  `Đơn hàng #${orderId} đã hết thời gian thanh toán và chuyển sang trạng thái Thanh toán thất bại. Bạn có thể thanh toán lại bất cứ lúc nào.`,
                   'error'
                );
-            } else if (nextStatus === 'Đã hủy') {
-               showToastMessage(
-                  `Đơn hàng #${orderId} đã quá hạn thanh toán và tự động hủy`,
-                  'error'
-               );
+            } else {
+               console.error('Failed to update order status:', await response.text());
             }
-         } else {
-            console.error('Failed to update order status:', await response.text());
          }
       } catch (error) {
          console.error('Error handling payment timeout:', error);
@@ -625,14 +606,12 @@ export default function OrderPage() {
 
    // Thêm hàm kiểm tra các đơn hàng chưa thanh toán khi component mount
    const checkPendingPayments = useCallback(() => {
-      // Filter orders with "Đang chờ thanh toán" and "Thanh toán thất bại" statuses
+      // Filter orders with "Đang chờ thanh toán" status
       const pendingOrders = orders.filter(
          (order) => order.status === 'Đang chờ thanh toán' && order.method_payment !== 'COD'
       );
 
-      const failedOrders = orders.filter(
-         (order) => order.status === 'Thanh toán thất bại' && order.method_payment !== 'COD'
-      );
+      // No longer need to check failed orders for automatic cancellation
 
       if (pendingOrders.length > 0) {
          // Show warning toast for pending orders
@@ -641,19 +620,8 @@ export default function OrderPage() {
             'info'
          );
       }
-
-      if (failedOrders.length > 0) {
-         // Show warning toast for failed orders
-         showToastMessage(
-            'Lưu ý: Đơn hàng thanh toán thất bại sẽ tự động hủy sau 1 ngày nếu không thanh toán lại',
-            'info'
-         );
-      }
-
-      // Check orders that have passed the deadline
-      const now = new Date().getTime();
-
       // Check pending orders (15 minutes timeout)
+      const now = new Date().getTime();
       pendingOrders.forEach((order) => {
          const createdTime = new Date(order.createdAt).getTime();
          const timePassed = now - createdTime;
@@ -665,29 +633,17 @@ export default function OrderPage() {
          }
       });
 
-      // Check failed payment orders (24 hours timeout)
-      failedOrders.forEach((order) => {
-         const createdTime = new Date(order.createdAt).getTime();
-         const timePassed = now - createdTime;
-         const timeoutMs = 24 * 60 * 60 * 1000; // 24 hours
+      // Remove check for failed payment orders (24 hours timeout)
 
-         if (timePassed >= timeoutMs) {
-            console.log(`Order ${order.id} extended payment time (24h) has expired, updating status...`);
-            handlePaymentTimeout(order.id, 'Thanh toán thất bại');
-         }
-      });
    }, [orders, handlePaymentTimeout, showToastMessage]);
 
-   // Thêm useEffect này sau các useEffect hiện có
-
-   // Kiểm tra đơn hàng chưa thanh toán khi component mount
+  
    useEffect(() => {
       if (orders.length > 0) {
          checkPendingPayments();
       }
    }, [orders, checkPendingPayments]);
 
-   // Kiểm tra đơn hàng chưa thanh toán khi component mount và định kỳ
    useEffect(() => {
       if (orders.length > 0) {
          checkPendingPayments();
@@ -1364,54 +1320,41 @@ export default function OrderPage() {
                                  >
                                     Chi tiết
                                  </Link>
-
-                                 {/* Retry Payment button - hiển thị cho cả trạng thái Đang chờ thanh toán và Thanh toán thất bại */}
-                                 {(order.status === 'Đang chờ thanh toán' || order.status === 'Thanh toán thất bại') &&
-                                    (() => {
-                                       const createdTime = new Date(order.createdAt).getTime();
-                                       const now = new Date().getTime();
-                                       const timePassed = now - createdTime;
-                                       const timeoutMs = 24 * 60 * 60 * 1000; // 1 ngày (24 giờ)
-
-                                       if (timePassed < timeoutMs) {
-                                          return (
-                                             <button
-                                                onClick={() => handleRetryPayment(order.id)}
-                                                disabled={processingPaymentOrderId === order.id}
-                                                className='text-sm text-blue-600 border border-blue-300 bg-white hover:bg-blue-50 px-3 py-1 rounded flex items-center'
+                                 {order.status === 'Đang chờ thanh toán' && (
+                                    <button
+                                       onClick={() => handleRetryPayment(order.id)}
+                                       disabled={processingPaymentOrderId === order.id}
+                                       className='text-sm text-blue-600 border border-blue-300 bg-white hover:bg-blue-50 px-3 py-1 rounded flex items-center'
+                                    >
+                                       {processingPaymentOrderId === order.id ? (
+                                          <>
+                                             <svg
+                                                className='animate-spin -ml-1 mr-2 h-4 w-4 text-blue-600'
+                                                xmlns='http://www.w3.org/2000/svg'
+                                                fill='none'
+                                                viewBox='0 0 24 24'
                                              >
-                                                {processingPaymentOrderId === order.id ? (
-                                                   <>
-                                                      <svg
-                                                         className='animate-spin -ml-1 mr-2 h-4 w-4 text-blue-600'
-                                                         xmlns='http://www.w3.org/2000/svg'
-                                                         fill='none'
-                                                         viewBox='0 0 24 24'
-                                                      >
-                                                         <circle
-                                                            className='opacity-25'
-                                                            cx='12'
-                                                            cy='12'
-                                                            r='10'
-                                                            stroke='currentColor'
-                                                            strokeWidth='4'
-                                                         ></circle>
-                                                         <path
-                                                            className='opacity-75'
-                                                            fill='currentColor'
-                                                            d='M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z'
-                                                         ></path>
-                                                      </svg>
-                                                      Đang xử lý...
-                                                   </>
-                                                ) : (
-                                                   'Thanh toán lại'
-                                                )}
-                                             </button>
-                                          );
-                                       }
-                                       return null;
-                                    })()}
+                                                <circle
+                                                   className='opacity-25'
+                                                   cx='12'
+                                                   cy='12'
+                                                   r='10'
+                                                   stroke='currentColor'
+                                                   strokeWidth='4'
+                                                ></circle>
+                                                <path
+                                                   className='opacity-75'
+                                                   fill='currentColor'
+                                                   d='M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z'
+                                                ></path>
+                                             </svg>
+                                             Đang xử lý...
+                                          </>
+                                       ) : (
+                                          'Thanh toán lại'
+                                       )}
+                                    </button>
+                                 )}
 
                                  {/* Nút hủy đơn - chỉ hiển thị ở các trạng thái phù hợp */}
                                  {(order.status === 'Đơn hàng vừa được tạo' ||

@@ -733,8 +733,6 @@ export default function ProductPage() {
    const [error, setError] = useState<string | null>(null);
    const [networkError, setNetworkError] = useState<boolean>(false); // Add network error state
    const [searchQuery, setSearchQuery] = useState('');
-
-   // Add these new states for filtering and sorting
    const [selectedPriceRange, setSelectedPriceRange] = useState<PriceRange | null>(null);
    const [sortOption, setSortOption] = useState<string>('default');
 

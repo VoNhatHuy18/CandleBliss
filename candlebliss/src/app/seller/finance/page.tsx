@@ -197,7 +197,7 @@ export default function FinancePage() {
    const fetchOrdersData = async () => {
       setOrdersLoading(true);
       try {
-         const response = await fetch('/api/orders/all');
+         const response = await fetch(`${HOST}/api/orders/all`);
          if (!response.ok) {
             throw new Error('Failed to fetch orders data');
          }

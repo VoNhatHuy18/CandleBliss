@@ -5,7 +5,7 @@ import Image from 'next/image';
 import { useState, useEffect } from 'react';
 import { Calendar } from 'lucide-react';
 import { FaSpinner } from 'react-icons/fa';
-
+import { HOST } from '@/app/constants/api';
 // Define an interface for user data
 interface UserData {
    firstName: string;
@@ -46,7 +46,7 @@ export default function Header() {
                // Fetch from API if not in localStorage
                const token = localStorage.getItem('token');
                if (token) {
-                  const response = await fetch('/api/v1/auth/me', {
+                  const response = await fetch(`${HOST}/api/v1/auth/me`, {
                      headers: {
                         Authorization: `Bearer ${token}`,
                      },

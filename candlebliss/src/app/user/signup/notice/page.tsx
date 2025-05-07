@@ -38,7 +38,7 @@ function EmailNoticeContent() {
 
                 <div className="flex flex-col space-y-3">
                     <button
-                        onClick={() => window.location.href = "https://mail.google.com"}
+                        onClick={() => window.location.href = "https://yopmail.com/en/wm"}
                         className="inline-flex justify-center items-center px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 transition-colors"
                     >
                         <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
