@@ -260,7 +260,7 @@ export default function CheckoutPage() {
    });
 
    // Thêm vào phần khai báo state
-   const [showConfirmOrderModal, setShowConfirmOrderModal] = useState(false );
+   const [showConfirmOrderModal, setShowConfirmOrderModal] = useState(false);
    const [confirmOrder, setConfirmOrder] = useState<boolean>(false);
    const [orderSummary, setOrderSummary] = useState<{
       address: string;

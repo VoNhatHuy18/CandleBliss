@@ -4,7 +4,14 @@ import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { useParams, useRouter } from 'next/navigation';
 import { CheckCircleIcon } from '@heroicons/react/24/solid';
-import { CheckCircleIcon as ExclamationCircleIcon, ArrowLeftIcon, PrinterIcon } from '@heroicons/react/24/outline';
+import {
+    CheckCircleIcon as ExclamationCircleIcon,
+    ArrowLeftIcon,
+    PrinterIcon,
+    ArrowPathIcon,
+    CheckIcon,
+    XMarkIcon as X
+} from '@heroicons/react/24/outline';
 import Toast from '@/app/components/ui/toast/Toast';
 import Header from '@/app/components/seller/header/page';
 import MenuSideBar from '@/app/components/seller/menusidebar/page';
@@ -263,6 +270,25 @@ const generateDefaultStatusTimeline = (order: Order) => {
     return timeline;
 };
 
+// Add this right below the existing nextPossibleStatuses object (outside of the component)
+const nextPossibleStatuses: Record<string, string[]> = {
+    'Đơn hàng vừa được tạo': ['Đang chờ thanh toán', 'Đã huỷ'],
+    'Đang chờ thanh toán': ['Thanh toán thành công', 'Thanh toán thất bại', 'Đang xử lý', 'Đã huỷ'],
+    'Thanh toán thành công': ['Đang xử lý', 'Đã huỷ'],
+    'Thanh toán thất bại': ['Đơn hàng vừa được tạo', 'Đã huỷ'],
+    'Đang xử lý': ['Đang giao hàng', 'Đã huỷ'],
+    'Đang giao hàng': ['Hoàn thành', 'Đổi trả hàng'],
+    'Đã đặt hàng': ['Đang xử lý', 'Đã huỷ'],
+    'Đổi trả hàng': ['Đã chấp nhận đổi trả', 'Đã từ chối đổi trả'],
+    'Đã chấp nhận đổi trả': ['Đã hoàn thành đổi trả và hoàn tiền'],
+    'Đang chờ hoàn tiền': ['Hoàn tiền thành công', 'Hoàn tiền thất bại'],
+    'Hoàn tiền thành công': ['Đã hoàn thành đổi trả và hoàn tiền'],
+    'Hoàn tiền thất bại': ['Đổi trả hàng'],
+    'Đã huỷ': [], // Không thể chuyển tiếp
+    'Hoàn thành': [], // Không thể chuyển tiếp
+    'Đã từ chối đổi trả': [], // Không thể chuyển tiếp
+};
+
 // Main component
 export default function OrderDetailPage() {
     const params = useParams();
@@ -276,6 +302,94 @@ export default function OrderDetailPage() {
         type: 'info' as 'success' | 'error' | 'info',
     });
     const [customerInfoFetched, setCustomerInfoFetched] = useState(false);
+
+    // Add near the beginning of your OrderDetailPage component
+    const [showUpdateStatusModal, setShowUpdateStatusModal] = useState(false);
+    const [newStatus, setNewStatus] = useState('');
+    const [updating, setUpdating] = useState(false);
+
+    // Add this inside your OrderDetailPage component
+
+    // Update the list of valid statuses to match exactly what the API expects
+    const validOrderStatuses = [
+        'Đơn hàng vừa được tạo',
+        'Đang chờ thanh toán',
+        'Thanh toán thất bại',
+        'Thanh toán thành công',
+        'Đang chờ hoàn tiền',
+        'Hoàn tiền thành công',
+        'Hoàn tiền thất bại',
+        'Đang xử lý',
+        'Đang giao hàng',
+        'Đã đặt hàng',
+        'Hoàn thành',
+        'Đã huỷ',
+        'Đổi trả hàng'
+    ];
+
+    // Handle status update
+    const handleUpdateOrderStatus = async () => {
+        if (!order || !newStatus) return;
+
+        // Validate the status to ensure it's in the allowed list
+        if (!validOrderStatuses.includes(newStatus)) {
+            showToastMessage(`Trạng thái "${newStatus}" không hợp lệ`, 'error');
+            return;
+        }
+
+        try {
+            setUpdating(true);
+            const token = localStorage.getItem('token');
+
+            if (!token) {
+                showToastMessage('Phiên đăng nhập hết hạn, vui lòng đăng nhập lại', 'error');
+                return;
+            }
+
+            // Use query parameter for status instead of JSON body
+            const encodedStatus = encodeURIComponent(newStatus);
+            const response = await fetch(
+                `${HOST}/api/orders/${order.id}/status?status=${encodedStatus}`,
+                {
+                    method: 'PATCH',
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                        'Content-Type': 'application/json',
+                    },
+                },
+            );
+
+            // Handle specific error codes
+            if (response.status === 422) {
+                const errorData = await response.json();
+                showToastMessage(errorData.errors?.status || 'Trạng thái không hợp lệ', 'error');
+                return;
+            }
+
+            if (!response.ok) {
+                throw new Error('Không thể cập nhật trạng thái đơn hàng');
+            }
+
+            // Update order state with new status
+            setOrder(prevOrder => {
+                if (!prevOrder) return null;
+                return {
+                    ...prevOrder,
+                    status: newStatus,
+                    updatedAt: new Date().toISOString() // Update the timestamp
+                };
+            });
+
+            showToastMessage('Cập nhật trạng thái đơn hàng thành công', 'success');
+            setShowUpdateStatusModal(false);
+            setNewStatus('');
+        } catch (error) {
+            console.error('Error updating order status:', error);
+            showToastMessage('Không thể cập nhật trạng thái đơn hàng', 'error');
+        } finally {
+            setUpdating(false);
+        }
+    };
 
     // Toast message helper
     const showToastMessage = (message: string, type: 'success' | 'error' | 'info') => {
@@ -733,9 +847,13 @@ export default function OrderDetailPage() {
 
                                     <div className="flex justify-between mt-4 pt-3 border-t border-gray-200">
                                         <span className="text-lg font-medium">Tổng thanh toán:</span>
-                                        <span className="text-lg font-bold text-orange-600">
-                                            {formatPrice(order.total_price)}
-                                        </span>
+                                        <div className="flex items-center gap-3">
+                                            <span className="text-lg font-bold text-orange-600">
+                                                {formatPrice(order.total_price)}
+                                            </span>
+
+
+                                        </div>
                                     </div>
 
                                     {/* Thêm phần chữ ký khi in */}
@@ -762,17 +880,144 @@ export default function OrderDetailPage() {
                                 >
                                     <ArrowLeftIcon className="h-4 w-4 mr-1" /> Quay lại
                                 </button>
-                                <button
-                                    onClick={() => window.print()}
-                                    className="px-4 py-2 bg-blue-50 text-blue-700 rounded-md hover:bg-blue-100 transition-colors flex items-center"
-                                >
-                                    <PrinterIcon className="h-4 w-4 mr-1" /> In đơn hàng
-                                </button>
+                                {/* Update status button - only show if order is not in final state */}
+                                {order.status !== 'Hoàn thành' && order.status !== 'Đã huỷ' && (
+                                    <button
+                                        onClick={() => setShowUpdateStatusModal(true)}
+                                        className="flex items-center bg-[#442C08] text-white px-3 py-1.5 rounded-md hover:bg-opacity-90 print:hidden"
+                                    >
+                                        <ArrowPathIcon className="h-4 w-4 mr-1.5" />
+                                        Cập nhật trạng thái
+                                    </button>
+                                )}
+                                {/* Print order button - only show if status is "Đang xử lý" */}
+                                {order.status === 'Đang xử lý' && (
+                                    <button
+                                        onClick={() => window.print()}
+                                        className="px-4 py-2 bg-blue-50 text-blue-700 rounded-md hover:bg-blue-100 transition-colors flex items-center"
+                                    >
+                                        <PrinterIcon className="h-4 w-4 mr-1" /> In đơn hàng
+                                    </button>
+                                )}
                             </div>
                         </div>
                     )}
                 </div>
             </div>
+            {/* Status update modal */}
+            {showUpdateStatusModal && order && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 print:hidden">
+                    <div className="bg-white rounded-lg p-5 w-full max-w-md">
+                        <div className="flex justify-between items-center mb-4">
+                            <h2 className="text-base font-medium">Cập nhật trạng thái đơn hàng</h2>
+                            <button
+                                onClick={() => setShowUpdateStatusModal(false)}
+                                className="text-gray-400 hover:text-gray-600 p-1.5"
+                            >
+                                <X className="h-5 w-5" />
+                            </button>
+                        </div>
+
+                        <div className="space-y-4">
+                            <div className="bg-gray-50 p-3 rounded-md">
+                                <div className="flex justify-between items-center">
+                                    <p className="text-sm text-gray-600">Mã đơn hàng:</p>
+                                    <p className="text-sm font-medium">{order.order_code}</p>
+                                </div>
+                                <div className="flex justify-between items-center mt-2">
+                                    <p className="text-sm text-gray-600">Ngày đặt:</p>
+                                    <p className="text-sm">{formatDate(order.createdAt)}</p>
+                                </div>
+                                <div className="flex justify-between items-center mt-2">
+                                    <p className="text-sm text-gray-600">Trạng thái hiện tại:</p>
+                                    <p
+                                        className={`text-sm ${orderStatusColors[order.status]?.text || 'text-gray-700'
+                                            }`}
+                                    >
+                                        {order.status}
+                                    </p>
+                                </div>
+
+                                {/* Display cancellation reason if available */}
+                                {order.status === 'Đã huỷ' && order.cancelReason && (
+                                    <div className="mt-2">
+                                        <p className="text-sm text-gray-600">Lý do huỷ đơn:</p>
+                                        <p className="text-sm text-red-600 mt-1">{order.cancelReason}</p>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Rest of the modal content */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Chọn trạng thái mới:
+                                </label>
+                                <select
+                                    value={newStatus}
+                                    onChange={(e) => setNewStatus(e.target.value)}
+                                    className="w-full px-3 py-2.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#442C08] text-sm"
+                                >
+                                    <option value="">-- Chọn trạng thái --</option>
+                                    {nextPossibleStatuses[order.status]?.map((status) => (
+                                        <option key={status} value={status}>
+                                            {status}
+                                        </option>
+                                    ))}
+                                </select>
+
+                                {/* Trạng thái tiếp theo gợi ý */}
+                                <div className="mt-3">
+                                    <p className="text-sm text-gray-500">Các trạng thái tiếp theo:</p>
+                                    <div className="flex flex-wrap gap-2 mt-2">
+                                        {nextPossibleStatuses[order.status]?.map((status) => (
+                                            <button
+                                                key={status}
+                                                className={`px-3 py-1.5 text-sm rounded-full border
+                                      ${newStatus === status
+                                                        ? 'bg-[#442C08] text-white border-[#442C08]'
+                                                        : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'
+                                                    }`}
+                                                onClick={() => setNewStatus(status)}
+                                            >
+                                                {status}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="flex justify-end gap-3 mt-5">
+                            <button
+                                onClick={() => setShowUpdateStatusModal(false)}
+                                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 text-sm"
+                            >
+                                Hủy
+                            </button>
+                            <button
+                                onClick={handleUpdateOrderStatus}
+                                disabled={!newStatus || updating}
+                                className={`px-4 py-2 rounded-md text-white flex items-center text-sm ${newStatus && !updating
+                                    ? 'bg-[#442C08] hover:bg-opacity-90'
+                                    : 'bg-gray-400 cursor-not-allowed'
+                                    }`}
+                            >
+                                {updating ? (
+                                    <>
+                                        <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2"></div>
+                                        Đang xử lý
+                                    </>
+                                ) : (
+                                    <>
+                                        <CheckIcon className="h-4 w-4 mr-2" />
+                                        Xác nhận
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
 
 

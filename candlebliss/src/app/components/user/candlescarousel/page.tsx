@@ -5,6 +5,8 @@ import { Eye, ChevronLeft, ChevronRight } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { HOST } from '@/app/constants/api';
+import StarRating from '@/app/components/StarRating';
+
 interface ProductImage {
    id: string;
    path: string;
@@ -47,6 +49,7 @@ interface ProductCardProps {
    price: string;
    discountPrice?: string;
    rating: number;
+   reviewCount?: number; // Thêm reviewCount
    imageUrl: string;
    variants?: Array<{
       detailId: number;
@@ -82,6 +85,7 @@ const ProductCard = ({
    price,
    discountPrice,
    rating,
+   reviewCount = 0, // Thêm reviewCount với giá trị mặc định là 0
    imageUrl,
    variants,
    onViewDetail,
@@ -103,11 +107,10 @@ const ProductCard = ({
                {variants.map((variant) => (
                   <button
                      key={variant.detailId}
-                     className={`text-xs px-2 py-1 border rounded ${
-                        selectedVariant === variant.detailId
-                           ? 'border-orange-500 bg-orange-50'
-                           : 'border-gray-300'
-                     }`}
+                     className={`text-xs px-2 py-1 border rounded ${selectedVariant === variant.detailId
+                        ? 'border-orange-500 bg-orange-50'
+                        : 'border-gray-300'
+                        }`}
                      onClick={() => handleVariantChange(variant.detailId)}
                   >
                      {variant.size} - {variant.type}
@@ -119,27 +122,11 @@ const ProductCard = ({
       return null;
    };
 
-   const StarDisplay = ({ rating }: { rating: number }) => {
-      return (
-         <div className='flex'>
-            {[1, 2, 3, 4, 5].map((star) => (
-               <svg
-                  key={star}
-                  xmlns='http://www.w3.org/2000/svg'
-                  className={`h-4 w-4 ${star <= rating ? 'text-yellow-400' : 'text-gray-300'}`}
-                  viewBox='0 0 20 20'
-                  fill='currentColor'
-               >
-                  <path d='M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z' />
-               </svg>
-            ))}
-         </div>
-      );
-   };
+
 
    // Tìm hàm renderStars và thay thế với hàm sau:
    const renderStars = () => {
-      return <StarDisplay rating={rating} />;
+      return <StarRating rating={rating} reviewCount={reviewCount} size="sm" showCount={true} />;
    };
 
    const formatPrice = (value: string | number) => {
@@ -286,8 +273,8 @@ const fetchRatingsForProducts = async (productIds: number[]) => {
 
       const ratingsResults = await Promise.all(ratingPromises);
 
-      // Map ratings to product IDs
-      const ratingsMap: Record<number, number> = {};
+      // Map ratings to product IDs with both average rating and count
+      const ratingsMap: Record<number, { rating: number, count: number }> = {};
 
       productIds.forEach((id, index) => {
          const productRatings = ratingsResults[index];
@@ -296,9 +283,12 @@ const fetchRatingsForProducts = async (productIds: number[]) => {
                (sum, item) => sum + (item.rating || item.avg_rating || 0),
                0,
             );
-            ratingsMap[id] = productRatings.length > 0 ? totalRating / productRatings.length : 5;
+            ratingsMap[id] = {
+               rating: totalRating / productRatings.length,
+               count: productRatings.length
+            };
          } else {
-            ratingsMap[id] = 0; // Default rating
+            ratingsMap[id] = { rating: 0, count: 0 }; // Default for products with no ratings
          }
       });
 
@@ -318,6 +308,7 @@ export default function CandlesCarousel() {
          price: string;
          discountPrice?: string;
          rating: number;
+         reviewCount: number; // Thêm reviewCount
          imageUrl: string;
          variants?: Array<{
             detailId: number;
@@ -568,8 +559,8 @@ export default function CandlesCarousel() {
                      discountPrice = variants[0].discountPrice;
                   }
 
-                  // Get the rating from ratingsMap or use default
-                  const rating = ratingsMap[product.id] || 0;
+                  // Get the rating and count from ratingsMap
+                  const ratingData = ratingsMap[product.id] || { rating: 0, count: 0 };
 
                   return {
                      id: product.id,
@@ -577,7 +568,8 @@ export default function CandlesCarousel() {
                      description: product.description,
                      price: basePrice,
                      discountPrice: discountPrice,
-                     rating: rating, // Use actual rating from API
+                     rating: ratingData.rating,
+                     reviewCount: ratingData.count, // Thêm reviewCount
                      imageUrl: imageUrl || '/images/placeholder.jpg',
                      variants: variants.length > 0 ? variants : undefined,
                   };
@@ -684,6 +676,7 @@ export default function CandlesCarousel() {
                                           price={product.price}
                                           discountPrice={product.discountPrice}
                                           rating={product.rating}
+                                          reviewCount={product.reviewCount}
                                           imageUrl={product.imageUrl}
                                           variants={product.variants}
                                           onViewDetail={handleViewDetail}
@@ -702,9 +695,8 @@ export default function CandlesCarousel() {
                         <button
                            key={index}
                            onClick={() => setCurrentSlide(index)}
-                           className={`w-3 h-3 rounded-full ${
-                              index === currentSlide ? 'bg-[#553C26]' : 'bg-gray-300'
-                           } transition-colors`}
+                           className={`w-3 h-3 rounded-full ${index === currentSlide ? 'bg-[#553C26]' : 'bg-gray-300'
+                              } transition-colors`}
                            aria-label={`Go to slide ${index + 1}`}
                         />
                      ))}

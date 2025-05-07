@@ -6,6 +6,8 @@ import { HOST } from '@/app/constants/api';
 import Header from '@/app/components/seller/header/page';
 import MenuSideBar from '@/app/components/seller/menusidebar/page';
 import Link from 'next/link';
+import Image from 'next/image';
+import StarRating from '@/app/components/StarRating';
 
 // Interfaces
 interface User {
@@ -97,6 +99,16 @@ export default function Dashboard() {
       totalCustomers: 0,
    });
 
+   // Thêm state cho top-rated products
+   const [topRatedProducts, setTopRatedProducts] = useState<Array<{
+      id: number;
+      name: string;
+      imageUrl: string;
+      rating: number;
+      reviewCount: number;
+      soldCount: number;
+   }>>([]);
+
    // Fetch user data
    const fetchUserData = useCallback(async (orders: Order[]) => {
       const token = localStorage.getItem('token');
@@ -186,6 +198,87 @@ export default function Dashboard() {
       };
 
       fetchOrders();
+   }, []);
+
+   // Thêm useEffect để fetch sản phẩm có rating cao
+   useEffect(() => {
+      const fetchTopRatedProducts = async () => {
+         try {
+            const token = localStorage.getItem('token');
+            if (!token) return;
+
+            // Fetch tất cả sản phẩm
+            const productsResponse = await fetch(`${HOST}/api/products`);
+            if (!productsResponse.ok) {
+               throw new Error('Failed to fetch products');
+            }
+            const productsData = await productsResponse.json();
+
+            // Chuẩn hóa danh sách sản phẩm
+            const normalizedProducts = productsData.map((product: { id: number; name: string; images: Array<{ path: string }> }) => ({
+               ...product,
+               images: Array.isArray(product.images) ? product.images : [product.images],
+            }));
+
+            // Lấy rating cho tất cả sản phẩm
+            const productIds = normalizedProducts.map((p: { id: number; name: string; images: Array<{ path: string }> }) => p.id);
+            const ratingsPromises = productIds.map((id: number) =>
+               fetch(`${HOST}/api/rating/get-by-product`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ product_id: id }),
+               }).then(res => res.ok ? res.json() : [])
+            );
+
+            const ratingsResults = await Promise.all(ratingsPromises);
+
+            // Xử lý kết quả ratings và kết hợp với products
+            const productsWithRatings = normalizedProducts.map((product: { id: number; name: string; images: Array<{ path: string }> }, index: number) => {
+               const productRatings = ratingsResults[index];
+               let avgRating = 0;
+               let reviewCount = 0;
+
+               if (Array.isArray(productRatings) && productRatings.length > 0) {
+                  const totalRating = productRatings.reduce(
+                     (sum, item) => sum + (item.rating || item.avg_rating || 0),
+                     0
+                  );
+                  avgRating = totalRating / productRatings.length;
+                  reviewCount = productRatings.length;
+               }
+
+               return {
+                  id: product.id,
+                  name: product.name,
+                  imageUrl: product.images && product.images.length > 0
+                     ? product.images[0].path
+                     : '/images/placeholder.jpg',
+                  rating: avgRating,
+                  reviewCount: reviewCount,
+                  soldCount: Math.floor(Math.random() * 150) + 20 // Placeholder cho số lượng đã bán
+               };
+            });
+
+            // Lọc sản phẩm có rating từ 4-5 sao và sắp xếp theo rating giảm dần
+            const topRated = productsWithRatings
+               .filter((p: { rating: number }) => p.rating >= 4 && p.rating <= 5)
+               .sort((a: { rating: number; reviewCount: number }, b: { rating: number; reviewCount: number }) => {
+                  // Sắp xếp theo rating trước
+                  if (b.rating !== a.rating) {
+                     return b.rating - a.rating;
+                  }
+                  // Nếu rating bằng nhau, sắp xếp theo số lượng đánh giá
+                  return b.reviewCount - a.reviewCount;
+               })
+               .slice(0, 4); // Lấy 4 sản phẩm đầu tiên
+
+            setTopRatedProducts(topRated);
+         } catch (error) {
+            console.error('Error fetching top rated products:', error);
+         }
+      };
+
+      fetchTopRatedProducts();
    }, []);
 
    // Fetch user data when orders change
@@ -444,38 +537,63 @@ export default function Dashboard() {
                {/* Recent Products Section */}
                <div className='mt-8'>
                   <div className='flex justify-between items-center mb-4'>
-                     <h3 className='text-lg font-medium text-gray-700'>Sản phẩm bán chạy</h3>
+                     <h3 className='text-lg font-medium text-gray-700'>Sản phẩm đánh giá tốt</h3>
                      <Link
-                        href='/seller/products'
+                        href='/seller/reviews'
                         className='text-sm text-indigo-600 hover:text-indigo-800'
                      >
                         Xem tất cả
                      </Link>
                   </div>
 
-                  {/* This would be populated from a different API call */}
                   <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4'>
-                     {/* Placeholder for top products */}
-                     <div className='bg-white p-4 rounded-lg shadow-sm'>
-                        <div className='h-40 bg-gray-100 rounded-md mb-3'></div>
-                        <p className='font-medium'>Sản phẩm bán chạy #1</p>
-                        <p className='text-sm text-gray-500 mt-1'>Đã bán: 120 sản phẩm</p>
-                     </div>
-                     <div className='bg-white p-4 rounded-lg shadow-sm'>
-                        <div className='h-40 bg-gray-100 rounded-md mb-3'></div>
-                        <p className='font-medium'>Sản phẩm bán chạy #2</p>
-                        <p className='text-sm text-gray-500 mt-1'>Đã bán: 98 sản phẩm</p>
-                     </div>
-                     <div className='bg-white p-4 rounded-lg shadow-sm'>
-                        <div className='h-40 bg-gray-100 rounded-md mb-3'></div>
-                        <p className='font-medium'>Sản phẩm bán chạy #3</p>
-                        <p className='text-sm text-gray-500 mt-1'>Đã bán: 85 sản phẩm</p>
-                     </div>
-                     <div className='bg-white p-4 rounded-lg shadow-sm'>
-                        <div className='h-40 bg-gray-100 rounded-md mb-3'></div>
-                        <p className='font-medium'>Sản phẩm bán chạy #4</p>
-                        <p className='text-sm text-gray-500 mt-1'>Đã bán: 72 sản phẩm</p>
-                     </div>
+                     {topRatedProducts.length > 0 ? (
+                        topRatedProducts.map((product) => (
+                           <div key={product.id} className='bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow overflow-hidden'>
+                              <Link href={`/seller/products/${product.id}`}>
+                                 <div className='relative aspect-square w-full max-h-[180px]'>
+                                    <Image
+                                       src={product.imageUrl}
+                                       alt={product.name}
+                                       className='object-contain'
+                                       onError={(e) => {
+                                          (e.target as HTMLImageElement).src = '/images/placeholder.jpg';
+                                       }}
+                                       loading="lazy"
+                                       fill
+                                       sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 25vw"
+                                    />
+                                 </div>
+                              </Link>
+                              <div className="p-4">
+                                 <Link href={`/seller/products/${product.id}`}>
+                                    <h3 className='text-sm font-medium text-gray-800 line-clamp-2 hover:text-indigo-600 transition-colors'>
+                                       {product.name}
+                                    </h3>
+                                 </Link>
+                                 <div className='flex items-center mt-2'>
+                                    <StarRating
+                                       rating={product.rating}
+                                       reviewCount={product.reviewCount}
+                                    />
+                                 </div>
+
+                              </div>
+                           </div>
+                        ))
+                     ) : (
+                        // Loading hoặc placeholder khi chưa có dữ liệu
+                        Array(4).fill(0).map((_, index) => (
+                           <div key={index} className='bg-white rounded-lg shadow-sm overflow-hidden'>
+                              <div className='relative pt-[100%] bg-gray-100 animate-pulse'></div>
+                              <div className='p-4'>
+                                 <div className='h-5 bg-gray-100 rounded w-3/4 mb-2 animate-pulse'></div>
+                                 <div className='h-4 bg-gray-100 rounded w-1/2 mb-2 animate-pulse'></div>
+                                 <div className='h-4 bg-gray-100 rounded w-2/3 animate-pulse'></div>
+                              </div>
+                           </div>
+                        ))
+                     )}
                   </div>
                </div>
             </main>

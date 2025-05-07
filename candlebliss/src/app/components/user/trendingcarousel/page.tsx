@@ -5,6 +5,7 @@ import { Eye, ChevronLeft, ChevronRight } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { HOST } from '@/app/constants/api';
+import StarRating from '@/app/components/StarRating';
 
 interface ProductImage {
    id: string;
@@ -81,17 +82,20 @@ const fetchRatingsForProducts = async (productIds: number[]) => {
 
       const ratingsResults = await Promise.all(ratingPromises);
 
-      // Map ratings to product IDs
-      const ratingsMap: Record<number, number> = {};
+      // Map ratings to product IDs with both average rating and count
+      const ratingsMap: Record<number, { rating: number, count: number }> = {};
 
       productIds.forEach((id, index) => {
          const productRatings = ratingsResults[index];
          if (Array.isArray(productRatings) && productRatings.length > 0) {
             const totalRating = productRatings.reduce((sum, item) =>
                sum + (item.rating || item.avg_rating || 0), 0);
-            ratingsMap[id] = productRatings.length > 0 ? totalRating / productRatings.length : 0;
+            ratingsMap[id] = {
+               rating: totalRating / productRatings.length,
+               count: productRatings.length
+            };
          } else {
-            ratingsMap[id] = 0; // Default rating of 0 for products with no ratings
+            ratingsMap[id] = { rating: 0, count: 0 }; // Default for products with no ratings
          }
       });
 
@@ -102,7 +106,7 @@ const fetchRatingsForProducts = async (productIds: number[]) => {
    }
 };
 
-// ProductCard component (same as in products page)
+// ProductCard component with updated StarRating implementation
 const ProductCard = ({
    id,
    title,
@@ -146,26 +150,9 @@ const ProductCard = ({
       return null;
    };
 
-   const StarDisplay = ({ rating }: { rating: number }) => {
-      return (
-         <div className="flex">
-            {[1, 2, 3, 4, 5].map((star) => (
-               <svg
-                  key={star}
-                  xmlns="http://www.w3.org/2000/svg"
-                  className={`h-4 w-4 ${star <= rating ? 'text-yellow-400' : 'text-gray-300'}`}
-                  viewBox="0 0 20 20"
-                  fill="currentColor"
-               >
-                  <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-               </svg>
-            ))}
-         </div>
-      );
-   };
-
+   // Thay thế renderStars để sử dụng component StarRating mới
    const renderStars = () => {
-      return <StarDisplay rating={rating} />;
+      return <StarRating rating={rating} size="md" showCount={false} />;
    };
 
    const formatPrice = (value: string | number) => {
@@ -499,8 +486,8 @@ export default function CandlesCarousel() {
                      discountPrice = variants[0].discountPrice;
                   }
 
-                  // Get the rating from ratingsMap
-                  const rating = ratingsMap[product.id] || 0;
+                  // Get the rating and count from ratingsMap
+                  const ratingData = ratingsMap[product.id] || { rating: 0, count: 0 };
 
                   return {
                      id: product.id,
@@ -508,7 +495,8 @@ export default function CandlesCarousel() {
                      description: product.description,
                      price: basePrice,
                      discountPrice: discountPrice,
-                     rating: rating, // Use actual rating from API
+                     rating: ratingData.rating,
+                     reviewCount: ratingData.count, // Add reviewCount to display in StarRating
                      imageUrl: imageUrl || '/images/placeholder.jpg',
                      variants: variants.length > 0 ? variants : undefined,
                   };
@@ -530,7 +518,7 @@ export default function CandlesCarousel() {
                   title: product.name,
                   description: product.description,
                   price: '0',
-                  rating: ratingsMap[product.id] || 0,
+                  rating: ratingsMap[product.id]?.rating || 0,
                   imageUrl: product.images && product.images.length > 0
                      ? product.images[0].path
                      : '/images/placeholder.jpg',
