@@ -274,7 +274,7 @@ const generateDefaultStatusTimeline = (order: Order) => {
 const nextPossibleStatuses: Record<string, string[]> = {
     'Đơn hàng vừa được tạo': ['Đang chờ thanh toán', 'Đã huỷ'],
     'Đang chờ thanh toán': ['Thanh toán thành công', 'Thanh toán thất bại', 'Đang xử lý', 'Đã huỷ'],
-    'Thanh toán thành công': ['Đang xử lý', 'Đã huỷ'],
+    'Thanh toán thành công': ['Đã đặt hàng ', 'Đã huỷ'],
     'Thanh toán thất bại': ['Đơn hàng vừa được tạo', 'Đã huỷ'],
     'Đang xử lý': ['Đang giao hàng', 'Đã huỷ'],
     'Đang giao hàng': ['Hoàn thành', 'Đổi trả hàng'],
@@ -553,6 +553,7 @@ export default function OrderDetailPage() {
             console.error('Error fetching customer info:', error);
         }
     };
+
     return (
         <div className="flex min-h-screen bg-gray-50">
             {/* Sidebar - thêm fixed để cố định khi cuộn */}
@@ -679,9 +680,23 @@ export default function OrderDetailPage() {
                                             <p className="text-gray-700">Tên khách hàng: <span className="font-medium">{order.customer_name}</span></p>
                                         )}
                                         {order.customer_phone && (
-                                            <p className="text-gray-700">Số điện thoại: <span className="font-medium">{order.customer_phone}</span></p>
+                                            <p className="text-gray-700">Số điện thoại:
+                                                <span className="font-medium print:hidden">
+                                                    {order.customer_phone}
+                                                </span>
+                                                <span className="font-medium hidden print:inline">
+                                                    {order.customer_phone.slice(0, -3) + '***'}
+                                                </span>
+                                            </p>
                                         )}
-                                        <p className="text-gray-700 md:col-span-2">Địa chỉ giao hàng: <span className="font-medium">{order.address}</span></p>
+                                        <p className="text-gray-700 md:col-span-2">Địa chỉ giao hàng:
+                                            <span className="font-medium print:hidden">
+                                                {order.address}
+                                            </span>
+                                            <span className="font-medium hidden print:inline">
+                                                {"*** " + order.address.split(', ').slice(-2).join(', ')}
+                                            </span>
+                                        </p>
                                     </div>
                                 </div>
                             </div>

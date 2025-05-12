@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import Image from 'next/image';
 import Toast from '@/app/components/ui/toast/Toast';
 
+// Update the VoucherTag props in the VoucherTags.tsx file
 interface VoucherTagProps {
    id: string;
    code: string;
@@ -17,6 +18,8 @@ interface VoucherTagProps {
    endDate: string;
    status: string;
    newCustomersOnly: boolean;
+   newCustomerText?: string | null; // Add this new prop
+   isEligible?: boolean; // Add this new prop
 }
 
 const VoucherTag: React.FC<VoucherTagProps> = ({
@@ -142,11 +145,10 @@ const VoucherTag: React.FC<VoucherTagProps> = ({
                      <div className='text-gray-600'>HSD: {endDate}</div>
                      <div className='flex items-center'>
                         <span
-                           className={`py-1 px-2 rounded-full text-xs font-medium ${
-                              status === 'Còn hiệu lực'
+                           className={`py-1 px-2 rounded-full text-xs font-medium ${status === 'Còn hiệu lực'
                                  ? 'bg-green-100 text-green-700'
                                  : 'bg-red-100 text-red-600'
-                           }`}
+                              }`}
                         >
                            {status}
                         </span>
@@ -168,9 +170,8 @@ const VoucherTag: React.FC<VoucherTagProps> = ({
                      {showDetails ? 'Ẩn chi tiết' : 'Xem chi tiết'}
                      <svg
                         xmlns='http://www.w3.org/2000/svg'
-                        className={`h-4 w-4 ml-1 transition-transform ${
-                           showDetails ? 'rotate-180' : ''
-                        }`}
+                        className={`h-4 w-4 ml-1 transition-transform ${showDetails ? 'rotate-180' : ''
+                           }`}
                         fill='none'
                         viewBox='0 0 24 24'
                         stroke='currentColor'

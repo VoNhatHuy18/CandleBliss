@@ -42,13 +42,13 @@ interface Pagination {
 export default function CustomerPage() {
     // State management
     const [customers, setCustomers] = useState<Customer[]>([]);
-    const [allCustomers, setAllCustomers] = useState<Customer[]>([]);
-    const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
     const [loading, setLoading] = useState<boolean>(true);
     const [searchTerm, setSearchTerm] = useState<string>('');
     const [showFilters, setShowFilters] = useState<boolean>(false);
     const [showModal, setShowModal] = useState<boolean>(false);
     const [modalMode, setModalMode] = useState<'view' | 'edit' | 'delete'>('view');
+    
+    // Initialize with safe defaults
     const [pagination, setPagination] = useState<Pagination>({
         currentPage: 1,
         totalPages: 1,
@@ -56,6 +56,7 @@ export default function CustomerPage() {
         limit: 10,
         hasNextPage: false
     });
+    const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
 
     // Filter states
     const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -70,7 +71,7 @@ export default function CustomerPage() {
         status: 1
     });
 
-    const fetchCustomers = async () => {
+    const fetchCustomers = async (page: number = 1) => {
         setLoading(true);
         try {
             const token = localStorage.getItem('token');
@@ -80,8 +81,8 @@ export default function CustomerPage() {
                 return;
             }
 
-            // Sử dụng API không có tham số phân trang
-            const response = await fetch(`${HOST}/api/v1/users`, {
+            // Sử dụng API có tham số phân trang
+            const response = await fetch(`${HOST}/api/v1/users?page=${page}&limit=${pagination.limit}`, {
                 headers: {
                     'Authorization': `Bearer ${token}`
                 }
@@ -92,30 +93,41 @@ export default function CustomerPage() {
             }
 
             const data = await response.json();
+            
+            // Kiểm tra dữ liệu trước khi sử dụng
+            if (!data || !data.data) {
+                console.error('Invalid response format:', data);
+                setLoading(false);
+                return;
+            }
 
-            // Lưu trữ tất cả dữ liệu người dùng vào state riêng
+            // Lọc người dùng có role là "User"
             const userCustomers = data.data.filter((user: { role?: { name: string } }) =>
                 user.role && user.role.name === 'User'
             );
 
-            // Lưu toàn bộ danh sách người dùng đã lọc
-            setAllCustomers(userCustomers);
-
-            // Tính toán số trang dựa trên tổng số khách hàng và số lượng hiển thị mỗi trang
-            const totalItems = userCustomers.length;
-            const totalPages = Math.ceil(totalItems / pagination.limit);
-
-            // Cập nhật thông tin phân trang
-            setPagination(prev => ({
-                ...prev,
-                currentPage: 1,
-                totalPages: totalPages,
-                total: totalItems,
-                // Không cần hasNextPage vì đã có totalPages
-            }));
-
-            // Hiển thị trang đầu tiên
-            updateDisplayedCustomers(1, userCustomers);
+            // Cập nhật state của customers
+            setCustomers(userCustomers);
+            
+            // Kiểm tra và cập nhật thông tin phân trang
+            if (data.pagination) {
+                setPagination({
+                    currentPage: data.pagination.currentPage || 1,
+                    totalPages: data.pagination.totalPages || 1,
+                    total: data.pagination.total || 0,
+                    limit: data.pagination.limit || 10,
+                    hasNextPage: !!data.pagination.hasNextPage
+                });
+            } else {
+                // Fallback nếu không có thông tin phân trang
+                setPagination({
+                    currentPage: page,
+                    totalPages: Math.ceil((userCustomers.length || 1) / pagination.limit),
+                    total: userCustomers.length || 0,
+                    limit: pagination.limit,
+                    hasNextPage: false
+                });
+            }
 
         } catch (error) {
             console.error('Error fetching customers:', error);
@@ -124,29 +136,16 @@ export default function CustomerPage() {
         }
     };
 
-    // Hàm này chỉ cập nhật danh sách khách hàng hiển thị dựa trên trang hiện tại
-    const updateDisplayedCustomers = (page: number, allUsers = allCustomers) => {
-        const startIndex = (page - 1) * pagination.limit;
-        const endIndex = startIndex + pagination.limit;
-        const paginatedCustomers = allUsers.slice(startIndex, endIndex);
-
-        setCustomers(paginatedCustomers);
-        setPagination(prev => ({
-            ...prev,
-            currentPage: page
-        }));
-    };
-
     // Cập nhật các hàm xử lý phân trang
     const nextPage = () => {
         if (pagination.currentPage < pagination.totalPages) {
-            updateDisplayedCustomers(pagination.currentPage + 1);
+            fetchCustomers(pagination.currentPage + 1);
         }
     };
 
     const prevPage = () => {
         if (pagination.currentPage > 1) {
-            updateDisplayedCustomers(pagination.currentPage - 1);
+            fetchCustomers(pagination.currentPage - 1);
         }
     };
 
@@ -205,7 +204,7 @@ export default function CustomerPage() {
             }
 
             // Refresh the customer list
-            fetchCustomers();
+            fetchCustomers(1);
             setShowModal(false);
 
         } catch (error) {
@@ -292,8 +291,7 @@ export default function CustomerPage() {
 
     // Initialize component
     useEffect(() => {
-        setPagination(prev => ({ ...prev, limit: 10 }));
-        fetchCustomers();
+        fetchCustomers(1);
     }, []);
 
     return (
@@ -315,7 +313,7 @@ export default function CustomerPage() {
 
                             <div className='flex items-center gap-3'>
                                 <button
-                                    onClick={() => fetchCustomers()}
+                                    onClick={() => fetchCustomers(1)}
                                     className='p-2 rounded-lg hover:bg-gray-100 text-gray-600 transition-all'
                                     title='Làm mới'
                                 >
@@ -499,13 +497,15 @@ export default function CustomerPage() {
                             {/* Pagination */}
                             <div className='px-6 py-4 border-t border-gray-100 flex items-center justify-between'>
                                 <div className='text-sm text-gray-500'>
-                                    Hiển thị {customers.length} khách hàng
+                                    Hiển thị {customers?.length || 0} khách hàng 
+                                    (Trang {pagination?.currentPage || 1}/{pagination?.totalPages || 1}, 
+                                    Tổng {pagination?.total || 0} khách hàng)
                                 </div>
                                 <div className='flex gap-2'>
                                     <button
                                         onClick={prevPage}
-                                        disabled={pagination.currentPage <= 1}
-                                        className={`p-2 rounded-md border ${pagination.currentPage <= 1
+                                        disabled={!pagination || pagination.currentPage <= 1}
+                                        className={`p-2 rounded-md border ${!pagination || pagination.currentPage <= 1
                                             ? 'bg-gray-50 text-gray-300 cursor-not-allowed'
                                             : 'bg-white text-gray-700 hover:bg-gray-50'
                                             }`}
@@ -513,12 +513,12 @@ export default function CustomerPage() {
                                         <ArrowLeft size={16} />
                                     </button>
                                     <span className='px-4 py-1.5 bg-white border rounded-md text-sm'>
-                                        Trang {pagination.currentPage}
+                                        Trang {pagination?.currentPage || 1}
                                     </span>
                                     <button
                                         onClick={nextPage}
-                                        disabled={pagination.currentPage >= pagination.totalPages}
-                                        className={`p-2 rounded-md border ${pagination.currentPage >= pagination.totalPages
+                                        disabled={!pagination || !pagination.hasNextPage}
+                                        className={`p-2 rounded-md border ${!pagination || !pagination.hasNextPage
                                             ? 'bg-gray-50 text-gray-300 cursor-not-allowed'
                                             : 'bg-white text-gray-700 hover:bg-gray-50'
                                             }`}

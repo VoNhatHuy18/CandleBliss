@@ -22,6 +22,17 @@ interface Voucher {
     new_customers_only: boolean;
     isActive: boolean;
     applicable_categories: string | null;
+
+}
+
+// Define user interface
+interface User {
+    id: number;
+    email: string;
+    firstName: string;
+    lastName: string;
+    createdAt: string;
+    // Add other fields as needed
 }
 
 export default function VouchersPage() {
@@ -33,31 +44,44 @@ export default function VouchersPage() {
     const [filterOptions, setFilterOptions] = useState({
         status: 'active', // Mặc định chỉ hiển thị voucher còn hiệu lực
     });
+    const [userData, setUserData] = useState<User | null>(null);
 
-    // Fetch vouchers when component mounts
+    // Fetch user data and vouchers when component mounts
     useEffect(() => {
-        const fetchVouchers = async () => {
+        const fetchData = async () => {
             setLoading(true);
             try {
-                // Fetch vouchers data from API using fetch
-                const response = await fetch(`${HOST}/api/v1/vouchers`);
+                // Fetch user data first (assuming we have the user ID from auth context or similar)
+                // For testing, using ID 44 as provided in the example
+                const userId = 44; // In a real app, get this from auth context
+                const userResponse = await fetch(`${HOST}/api/v1/users/${userId}`);
 
-                if (!response.ok) {
+                if (!userResponse.ok) {
+                    throw new Error('Failed to fetch user data');
+                }
+
+                const userData = await userResponse.json();
+                setUserData(userData);
+
+                // Now fetch vouchers
+                const vouchersResponse = await fetch(`${HOST}/api/v1/vouchers`);
+
+                if (!vouchersResponse.ok) {
                     throw new Error('Failed to fetch vouchers');
                 }
 
-                const data = await response.json();
-                setVouchers(data);
+                const vouchersData = await vouchersResponse.json();
+                setVouchers(vouchersData);
                 setError('');
             } catch (err) {
-                console.error('Failed to fetch vouchers:', err);
-                setError('Không thể tải mã giảm giá. Vui lòng thử lại sau.');
+                console.error('Failed to fetch data:', err);
+                setError('Không thể tải dữ liệu. Vui lòng thử lại sau.');
             } finally {
                 setLoading(false);
             }
         };
 
-        fetchVouchers();
+        fetchData();
     }, []);
 
     // Format date for display
@@ -71,8 +95,25 @@ export default function VouchersPage() {
         });
     };
 
+    // Check if user is eligible for new customer vouchers (created within last 7 days)
+    const isEligibleForNewCustomerVoucher = () => {
+        if (!userData) return false;
+
+        const userCreatedAt = new Date(userData.createdAt);
+        const now = new Date();
+        const diffTime = Math.abs(now.getTime() - userCreatedAt.getTime());
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+        return diffDays <= 7;
+    };
+
     // Determine voucher status
     const getVoucherStatus = (voucher: Voucher) => {
+        // First check if the voucher is for new customers only and if the user is eligible
+        if (voucher.new_customers_only && !isEligibleForNewCustomerVoucher()) {
+            return 'Không đủ điều kiện';
+        }
+
         if (!voucher.isActive) return 'Hết hiệu lực';
 
         const now = new Date();
@@ -102,6 +143,11 @@ export default function VouchersPage() {
             }
             // Nếu filterOptions.status === 'all' thì statusMatch vẫn là true
 
+            // For new customer vouchers, only show them if eligible
+            if (voucher.new_customers_only && !isEligibleForNewCustomerVoucher()) {
+                return filterOptions.status === 'all'; // Only show in "all" filter
+            }
+
             return searchMatch && statusMatch;
         });
     };
@@ -115,6 +161,16 @@ export default function VouchersPage() {
         } else {
             return `${parseInt(voucher.amount_off).toLocaleString('vi-VN')}đ`;
         }
+    };
+
+    // Get customer eligibility text for new customer vouchers
+    const getNewCustomerText = (isNewCustomersOnly: boolean) => {
+        if (!isNewCustomersOnly) return null;
+
+        if (isEligibleForNewCustomerVoucher()) {
+            return "Dành cho khách hàng mới (Bạn đủ điều kiện)";
+        }
+        return "Dành cho khách hàng mới (Tài khoản cần dưới 7 ngày)";
     };
 
     return (
@@ -294,6 +350,8 @@ export default function VouchersPage() {
                                         endDate={formatDate(voucher.end_date)}
                                         status={getVoucherStatus(voucher)}
                                         newCustomersOnly={voucher.new_customers_only}
+                                        newCustomerText={getNewCustomerText(voucher.new_customers_only)}
+                                        isEligible={!voucher.new_customers_only || isEligibleForNewCustomerVoucher()}
                                     />
                                 ))}
                             </div>
@@ -308,6 +366,7 @@ export default function VouchersPage() {
                                     <li>Mỗi mã giảm giá chỉ được sử dụng một lần</li>
                                     <li>Chú ý điều kiện và thời hạn sử dụng của từng mã</li>
                                     <li>Một số mã giảm giá có giá trị đơn hàng tối thiểu để áp dụng</li>
+                                    <li>Các mã dành cho khách hàng mới chỉ áp dụng cho tài khoản được tạo trong vòng 7 ngày</li>
                                 </ul>
                             </div>
                         )}

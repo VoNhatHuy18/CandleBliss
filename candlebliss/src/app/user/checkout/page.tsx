@@ -64,6 +64,8 @@ interface UserInfo {
    firstName: string;
    lastName: string;
    phone?: string;
+   createdAt: string; // Add createdAt field
+
 }
 
 // Thêm vào phần khai báo interface ở đầu file
@@ -85,11 +87,12 @@ const formatPrice = (price: number): string => {
    }).format(price);
 };
 
-// Cập nhật hàm kiểm tra tính hợp lệ của voucher
+// Update the isVoucherValid function to accept userInfo as a parameter
 const isVoucherValid = (
    voucher: Voucher,
    currentSubTotal: number,
    userId: number | null,
+   userInfo: UserInfo | null, // Add userInfo parameter
 ): { valid: boolean; message?: string } => {
    // Kiểm tra voucher có đang hoạt động không
    if (!voucher.isActive || voucher.isDeleted) {
@@ -121,6 +124,26 @@ const isVoucherValid = (
             minOrderValue,
          )} để áp dụng mã này. Bạn cần thêm ${formatPrice(minOrderValue - currentSubTotal)} nữa.`,
       };
+   }
+
+   // Kiểm tra điều kiện khách hàng mới
+   if (voucher.new_customers_only) {
+      // Check if user info is available
+      if (!userInfo) {
+         return { valid: false, message: 'Không thể xác minh thông tin người dùng' };
+      }
+
+      // Check user creation date
+      const userCreatedAt = new Date(userInfo.createdAt);
+      const diffTime = Math.abs(now.getTime() - userCreatedAt.getTime());
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+      if (diffDays > 7) {
+         return {
+            valid: false,
+            message: 'Mã giảm giá này chỉ áp dụng cho tài khoản được tạo trong vòng 7 ngày'
+         };
+      }
    }
 
    // THÊM KIỂM TRA: Số lần sử dụng voucher của người dùng
@@ -490,9 +513,23 @@ export default function CheckoutPage() {
    useEffect(() => {
       // Lấy voucher đã áp dụng từ localStorage nếu có
       const savedVoucher = localStorage.getItem('appliedVoucher');
-      if (savedVoucher && userId) {
+      if (savedVoucher && userId && userInfo) {
          try {
             const voucherData = JSON.parse(savedVoucher);
+
+            // Kiểm tra điều kiện khách hàng mới
+            if (voucherData.new_customers_only) {
+               const userCreatedAt = new Date(userInfo.createdAt);
+               const now = new Date();
+               const diffTime = Math.abs(now.getTime() - userCreatedAt.getTime());
+               const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+               if (diffDays > 7) {
+                  localStorage.removeItem('appliedVoucher');
+                  showToastMessage('Mã giảm giá này chỉ áp dụng cho tài khoản được tạo trong vòng 7 ngày', 'error');
+                  return;
+               }
+            }
 
             // Kiểm tra số lần sử dụng
             if (voucherData.usage_per_customer > 0) {
@@ -526,7 +563,31 @@ export default function CheckoutPage() {
             localStorage.removeItem('appliedVoucher');
          }
       }
-   }, [subTotal, userId]);
+   }, [subTotal, userId, userInfo]);
+
+   // Inside your useEffect for validating saved vouchers
+   useEffect(() => {
+      // Lấy voucher đã áp dụng từ localStorage nếu có
+      const savedVoucher = localStorage.getItem('appliedVoucher');
+      if (savedVoucher && userId && userInfo) {
+         try {
+            const voucherData = JSON.parse(savedVoucher);
+
+            // You can reuse your validation function here
+            const validationResult = isVoucherValid(voucherData, subTotal, userId, userInfo);
+            if (!validationResult.valid) {
+               localStorage.removeItem('appliedVoucher');
+               showToastMessage(validationResult.message || 'Unknown error occurred', 'error');
+               return;
+            }
+
+            // Rest of your existing code...
+         } catch (error) {
+            console.error('Error parsing saved voucher:', error);
+            localStorage.removeItem('appliedVoucher');
+         }
+      }
+   }, [subTotal, userId, userInfo]);
 
    // Thêm vào useEffect để load voucher đã áp dụng từ cart
    useEffect(() => {
@@ -640,6 +701,7 @@ export default function CheckoutPage() {
                firstName: user.firstName,
                lastName: user.lastName,
                phone: user.phone,
+               createdAt: user.createdAt, // Store the user's creation date
             });
 
             // Pre-fill new address form with user info
@@ -1332,7 +1394,8 @@ export default function CheckoutPage() {
          const voucher = await voucherResponse.json();
 
          // Kiểm tra tính hợp lệ của voucher, bao gồm số lần sử dụng
-         const validationResult = isVoucherValid(voucher, subTotal, userId);
+         const validationResult = isVoucherValid(voucher, subTotal, userId, userInfo); // Pass userInfo here
+
          if (!validationResult.valid) {
             throw new Error(validationResult.message);
          }
