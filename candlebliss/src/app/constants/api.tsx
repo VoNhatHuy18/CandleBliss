@@ -1,1 +1,1 @@
-export const HOST = 'http://68.183.226.198:3004';
+export const HOST = 'https://candlebliss.me/api';

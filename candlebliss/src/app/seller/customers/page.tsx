@@ -47,14 +47,14 @@ export default function CustomerPage() {
     const [showFilters, setShowFilters] = useState<boolean>(false);
     const [showModal, setShowModal] = useState<boolean>(false);
     const [modalMode, setModalMode] = useState<'view' | 'edit' | 'delete'>('view');
-    
+
     // Initialize with safe defaults
     const [pagination, setPagination] = useState<Pagination>({
         currentPage: 1,
         totalPages: 1,
         total: 0,
         limit: 10,
-        hasNextPage: false
+        hasNextPage: true
     });
     const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
 
@@ -81,8 +81,8 @@ export default function CustomerPage() {
                 return;
             }
 
-            // Sử dụng API có tham số phân trang
-            const response = await fetch(`${HOST}/api/v1/users?page=${page}&limit=${pagination.limit}`, {
+            // Update the API endpoint to use /v1/users without query parameters
+            const response = await fetch(`${HOST}/api/v1/users`, {
                 headers: {
                     'Authorization': `Bearer ${token}`
                 }
@@ -93,40 +93,54 @@ export default function CustomerPage() {
             }
 
             const data = await response.json();
-            
-            // Kiểm tra dữ liệu trước khi sử dụng
-            if (!data || !data.data) {
-                console.error('Invalid response format:', data);
-                setLoading(false);
-                return;
-            }
 
-            // Lọc người dùng có role là "User"
-            const userCustomers = data.data.filter((user: { role?: { name: string } }) =>
-                user.role && user.role.name === 'User'
-            );
+            // Handle the case where the API returns an array directly
+            if (Array.isArray(data)) {
+                // Filter users with role 'User'
+                const userCustomers = data.filter(user =>
+                    user.role && user.role.name === 'User'
+                );
 
-            // Cập nhật state của customers
-            setCustomers(userCustomers);
-            
-            // Kiểm tra và cập nhật thông tin phân trang
-            if (data.pagination) {
-                setPagination({
-                    currentPage: data.pagination.currentPage || 1,
-                    totalPages: data.pagination.totalPages || 1,
-                    total: data.pagination.total || 0,
-                    limit: data.pagination.limit || 10,
-                    hasNextPage: !!data.pagination.hasNextPage
-                });
-            } else {
-                // Fallback nếu không có thông tin phân trang
+                setCustomers(userCustomers);
+
+                // Since we have all data at once, implement client-side pagination
                 setPagination({
                     currentPage: page,
                     totalPages: Math.ceil((userCustomers.length || 1) / pagination.limit),
                     total: userCustomers.length || 0,
                     limit: pagination.limit,
-                    hasNextPage: false
+                    hasNextPage: page < Math.ceil((userCustomers.length || 1) / pagination.limit)
                 });
+            }
+            // Handle the original format where data is inside data.data
+            else if (data && data.data) {
+                const userCustomers = data.data.filter((user: Customer) =>
+                    user.role && user.role.name === 'User'
+                );
+
+                setCustomers(userCustomers);
+
+                if (data.pagination) {
+                    setPagination({
+                        currentPage: data.pagination.currentPage || 1,
+                        totalPages: data.pagination.totalPages || 1,
+                        total: data.pagination.total || 0,
+                        limit: data.pagination.limit || 10,
+                        hasNextPage: !!data.pagination.hasNextPage
+                    });
+                } else {
+                    setPagination({
+                        currentPage: page,
+                        totalPages: Math.ceil((userCustomers.length || 1) / pagination.limit),
+                        total: userCustomers.length || 0,
+                        limit: pagination.limit,
+                        hasNextPage: false
+                    });
+                }
+            } else {
+                console.error('Invalid response format:', data);
+                setLoading(false);
+                return;
             }
 
         } catch (error) {
@@ -135,7 +149,6 @@ export default function CustomerPage() {
             setLoading(false);
         }
     };
-
     // Cập nhật các hàm xử lý phân trang
     const nextPage = () => {
         if (pagination.currentPage < pagination.totalPages) {
@@ -497,8 +510,8 @@ export default function CustomerPage() {
                             {/* Pagination */}
                             <div className='px-6 py-4 border-t border-gray-100 flex items-center justify-between'>
                                 <div className='text-sm text-gray-500'>
-                                    Hiển thị {customers?.length || 0} khách hàng 
-                                    (Trang {pagination?.currentPage || 1}/{pagination?.totalPages || 1}, 
+                                    Hiển thị {customers?.length || 0} khách hàng
+                                    (Trang {pagination?.currentPage || 1}/{pagination?.totalPages || 1},
                                     Tổng {pagination?.total || 0} khách hàng)
                                 </div>
                                 <div className='flex gap-2'>

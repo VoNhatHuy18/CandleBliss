@@ -212,7 +212,7 @@ export default function MenuSideBar() {
                            <span className='text-sm'>Tất cả sản phẩm</span>
                         </Link>
                         <Link
-                           href='/products/gift-sets'
+                           href='/seller/gift'
                            className='flex items-center p-2 text-gray-600 hover:bg-gray-100 rounded'
                         >
                            <span className='text-sm'>Set quà</span>

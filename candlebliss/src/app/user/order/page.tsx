@@ -637,7 +637,7 @@ export default function OrderPage() {
 
    }, [orders, handlePaymentTimeout, showToastMessage]);
 
-  
+
    useEffect(() => {
       if (orders.length > 0) {
          checkPendingPayments();
@@ -668,11 +668,11 @@ export default function OrderPage() {
       const token = localStorage.getItem('token');
       if (!token) return;
 
-      // Update each order's status to "Đang xử lý" using query parameter
+      // Update each order's status to "Đã đặt hàng" using query parameter
       for (const order of codOrdersToUpdate) {
          try {
             // Use query parameter for status with proper URL encoding
-            const encodedStatus = encodeURIComponent('Đang xử lý');
+            const encodedStatus = encodeURIComponent('Đã đặt hàng');
             const response = await fetch(
                `${HOST}/api/orders/${order.id}/status?status=${encodedStatus}`,
                {
@@ -687,9 +687,9 @@ export default function OrderPage() {
             if (response.ok) {
                // Update the state locally
                setOrders((prevOrders) =>
-                  prevOrders.map((o) => (o.id === order.id ? { ...o, status: 'Đang xử lý' } : o)),
+                  prevOrders.map((o) => (o.id === order.id ? { ...o, status: 'Đã đặt hàng' } : o)),
                );
-               console.log(`Successfully updated COD order ${order.id} status to "Đang xử lý"`);
+               console.log(`Successfully updated COD order ${order.id} status to "Đã đặt hàng"`);
             } else {
                console.error(`Failed to update order ${order.id} status:`, await response.text());
             }
@@ -1358,7 +1358,7 @@ export default function OrderPage() {
 
                                  {/* Nút hủy đơn - chỉ hiển thị ở các trạng thái phù hợp */}
                                  {(order.status === 'Đơn hàng vừa được tạo' ||
-                                    order.status === 'Đang xử lý' ||
+                                    order.status === 'Đã đặt hàng' ||
                                     order.status === 'Đang chờ thanh toán') && (
                                        <button
                                           onClick={() => handleCancelOrder(order.id)}

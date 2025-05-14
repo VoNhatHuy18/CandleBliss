@@ -893,43 +893,65 @@ export default function FinancePage() {
       return validStatuses.includes(status);
    };
 
-   // Add this function inside your component:
-   const fetchNewCustomers = async () => {
-      try {
-         const token = localStorage.getItem('token');
-         if (!token) return;
-
-         const response = await fetch(`${HOST}/api/v1/users`, {
-            headers: { Authorization: `Bearer ${token}` }
-         });
-
-         if (!response.ok) throw new Error('Failed to fetch customers');
-
-         const data = await response.json();
-
-         // Calculate date 7 days ago
-         const sevenDaysAgo = new Date();
-         sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-
+     const fetchNewCustomers = async () => {
+     try {
+       const token = localStorage.getItem('token');
+       if (!token) return;
+   
+       const response = await fetch(`${HOST}/api/v1/users`, {
+         headers: { Authorization: `Bearer ${token}` }
+       });
+   
+       if (!response.ok) throw new Error('Failed to fetch customers');
+   
+       const data = await response.json();
+   
+       // Calculate date 7 days ago
+       const sevenDaysAgo = new Date();
+       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+   
+       // Handle the case where the API returns an array directly
+       if (Array.isArray(data)) {
          // Filter customers created within the last 7 days
-         const recentCustomers = data.data
-            .filter((user: { createdAt: string; role: { name: string } }) => {
-               const createdAt = new Date(user.createdAt);
-               return createdAt >= sevenDaysAgo && user.role.name === "User";
-            })
-            .map((user: { id: number; firstName: string; lastName: string; email: string; createdAt: string; phone?: number | null }) => ({
-               id: user.id,
-               firstName: user.firstName || '',
-               lastName: user.lastName || '',
-               email: user.email,
-               createdAt: user.createdAt,
-               phone: user.phone
-            }));
-
+         const recentCustomers = data
+           .filter((user: { createdAt: string; role: { name: string } }) => {
+             const createdAt = new Date(user.createdAt);
+             return createdAt >= sevenDaysAgo && user.role && user.role.name === "User";
+           })
+           .map((user: { id: number; firstName: string; lastName: string; email: string; createdAt: string; phone?: number | null }) => ({
+             id: user.id,
+             firstName: user.firstName || '',
+             lastName: user.lastName || '',
+             email: user.email,
+             createdAt: user.createdAt,
+             phone: user.phone
+           }));
+   
          setNewCustomers(recentCustomers);
-      } catch {
-         console.error('Error fetching new customers:');
-      }
+       }
+       // Handle the original format where data is inside data.data
+       else if (data && data.data) {
+         const recentCustomers = data.data
+           .filter((user: { createdAt: string; role: { name: string } }) => {
+             const createdAt = new Date(user.createdAt);
+             return createdAt >= sevenDaysAgo && user.role.name === "User";
+           })
+           .map((user: { id: number; firstName: string; lastName: string; email: string; createdAt: string; phone?: number | null }) => ({
+             id: user.id,
+             firstName: user.firstName || '',
+             lastName: user.lastName || '',
+             email: user.email,
+             createdAt: user.createdAt,
+             phone: user.phone
+           }));
+   
+         setNewCustomers(recentCustomers);
+       } else {
+         console.error('Invalid response format:', data);
+       }
+     } catch (error) {
+       console.error('Error fetching new customers:', error);
+     }
    };
 
    // Add this helper function for formatting time ago:

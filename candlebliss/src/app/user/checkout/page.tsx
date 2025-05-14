@@ -11,7 +11,6 @@ import { updateOrderPaymentMethod } from '@/app/utils/orderUtils';
 import { useCart } from '@/app/contexts/CartContext'; // Thêm import này
 import { HOST } from '@/app/constants/api';
 
-// Interfaces
 interface CartItem {
    id: number;
    detailId: number;
@@ -21,8 +20,19 @@ interface CartItem {
    image: string;
    type: string;
    options: { name: string; value: string }[];
+   isGift?: boolean;
+   productDetails?: {
+      id: number;
+      detailId: number;
+      name: string;
+      price: number;
+      quantity: number;
+      image: string;
+      type: string;
+      size: string;
+      value: string;
+   }[];
 }
-
 // Thêm vào interface ở đầu file page.tsx trong trang checkout
 // Cập nhật interface Voucher để phù hợp với API response
 interface Voucher {
@@ -2198,15 +2208,40 @@ export default function CheckoutPage() {
                                  </span>
                               </div>
                               <div className='ml-3 flex-1'>
-                                 <p className='font-medium text-sm line-clamp-2'>{item.name}</p>
+                                 <p className='font-medium text-sm line-clamp-2'>
+                                    {item.isGift ? `🎁 ${item.name}` : item.name}
+                                 </p>
 
                                  <div className='text-xs text-gray-500 mt-1'>
-                                    {/* Show product options */}
-                                    {item.options?.map((option, idx) => (
+                                    {/* Show regular product options */}
+                                    {!item.isGift && item.options?.map((option, idx) => (
                                        <p key={idx}>
                                           {option.name}: {option.value}
                                        </p>
                                     ))}
+
+                                    {/* Show gift product details */}
+                                    {item.isGift && item.productDetails && (
+                                       <div className='mt-1'>
+                                          <div className='text-xs text-gray-500 font-medium mb-1'>
+                                             Bao gồm {item.productDetails.length} sản phẩm:
+                                          </div>
+                                          <div className='text-xs text-gray-500 max-h-16 overflow-y-auto pl-2 border-l-2 border-amber-200'>
+                                             {item.productDetails.slice(0, 3).map((product, idx) => (
+                                                <div key={`gift-product-${product.id}-${idx}`} className='mb-1'>
+                                                   • {product.name}
+                                                   {product.size ? ` (${product.size})` : ''}
+                                                   {product.type ? ` - ${product.type}: ${product.value || ''}` : ''}
+                                                </div>
+                                             ))}
+                                             {item.productDetails.length > 3 && (
+                                                <div className='text-amber-600'>
+                                                   + {item.productDetails.length - 3} sản phẩm khác
+                                                </div>
+                                             )}
+                                          </div>
+                                       </div>
+                                    )}
                                  </div>
 
                                  <div className='flex justify-between mt-1'>

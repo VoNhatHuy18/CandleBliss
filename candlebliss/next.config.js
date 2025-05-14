@@ -1,6 +1,6 @@
 /** @type {import('next').NextConfig} */
 
-const HOST = 'http://68.183.226.198:3000';
+const HOST = 'https://candlebliss.me/api';
 module.exports = { HOST };
 const nextConfig = {
    async rewrites() {

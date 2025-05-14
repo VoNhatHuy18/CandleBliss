@@ -12,7 +12,7 @@ import { HOST } from '@/app/constants/api';
 // Interfaces
 interface CartItem {
    id: number;
-   detailId: number;
+   detailId?: number;
    name: string;
    price: number;
    quantity: number;
@@ -20,9 +20,22 @@ interface CartItem {
    type: string;
    size: string;
    value: string;
-   options: { name: string; value: string, type: string }[];
+   options?: { name: string; value: string, type: string }[];
    productDetailId?: number;
    totalPrice?: number;
+   isGift?: boolean;
+   productDetails?: {
+      id: number;
+      detailId: number;
+      name: string;
+      price: number;
+      quantity: number;
+      image: string;
+      type: string;
+      size: string;
+      value: string;
+      options: { name: string; value: string, type: string }[];
+   }[];
 }
 
 interface ApiCartItem {
@@ -380,6 +393,7 @@ export default function CartPage() {
          const detailsMap: Record<number, ProductDetail> = {};
 
          for (const detailId of uniqueDetailIds) {
+            if (typeof detailId === 'undefined') continue;
             try {
                // Fetch product detail info
                const response = await fetch(
@@ -467,7 +481,7 @@ export default function CartPage() {
 
       // Recalculate totals
       calculateTotals(updatedItems);
-      
+
       // Update badge - adjust by the difference in quantity
       const quantityDifference = newQuantity - oldQuantity;
       if (quantityDifference !== 0) {
@@ -705,159 +719,179 @@ export default function CartPage() {
 
                         {/* Items */}
                         <div className='divide-y divide-gray-100'>
-                           {cartItems.map((item, index) => (
-                              <div
-                                 key={`${item.id}-${item.detailId}`}
-                                 className='p-4 hover:bg-gray-50'
-                              >
-                                 <div className='md:grid md:grid-cols-12 gap-4'>
-                                    {/* Product info */}
-                                    <div className='md:col-span-6 flex mb-4 md:mb-0'>
-                                       <div className='relative w-20 h-20 bg-gray-100 rounded'>
-                                          <Image
-                                             src={item.image || '/images/placeholder.jpg'}
-                                             alt={item.name}
-                                             layout='fill'
-                                             objectFit='contain'
-                                             className='p-2'
-                                          />
-                                       </div>
-                                       <div className='ml-4 flex-1'>
-                                          <Link
-                                             href={`/user/products/${item.id}`}
-                                             className='text-gray-800 font-medium hover:text-orange-700'
-                                          >
-                                             {item.name}
-                                          </Link>
-                                          <div className='text-sm text-gray-500 mt-1'>
-                                             {/* Extract size from options */}
-                                             {item.options &&
-                                                item.options.find(
-                                                   (opt) => opt.name === 'Kích thước',
-                                                ) && (
-                                                   <div className='flex items-center'>
-                                                      <span className='text-gray-500'>
-                                                         Kích thước:
-                                                      </span>
-                                                      <span className='text-gray-700 ml-1'>
-                                                         {
-                                                            item.options.find(
-                                                               (opt) => opt.name === 'Kích thước',
-                                                            )?.value
-                                                         }
-                                                      </span>
+                           {cartItems.map((item, index) => {
+                              // Check if we have stock information for this item
+                              const productDetail = item.detailId ? productDetails[item.detailId] : undefined;
+                              const isOutOfStock = productDetail && productDetail.stock <= 0;
+
+                              return (
+                                 <div
+                                    key={`${item.id}-${item.detailId || index}`}
+                                    className='p-4 hover:bg-gray-50'
+                                 >
+                                    <div className='md:grid md:grid-cols-12 gap-4'>
+                                       {/* Product info */}
+                                       <div className='md:col-span-6 flex mb-4 md:mb-0'>
+                                          <div className='relative w-20 h-20 bg-gray-100 rounded'>
+                                             <Image
+                                                src={item.image || '/images/placeholder.jpg'}
+                                                alt={item.name}
+                                                layout='fill'
+                                                objectFit='contain'
+                                                className='p-2'
+                                             />
+                                          </div>
+                                          <div className='ml-4 flex-1'>
+                                             <Link
+                                                href={item.isGift ? `/user/gifts/${item.id}` : `/user/products/${item.id}`}
+                                                className='text-gray-800 font-medium hover:text-orange-700'
+                                             >
+                                                {item.isGift ? `🎁 ${item.name}` : item.name}
+                                             </Link>
+
+                                             {/* Hiển thị thông tin cho sản phẩm thường */}
+                                             {!item.isGift && item.options && (
+                                                <div className='text-sm text-gray-500 mt-1'>
+                                                   {/* Extract size from options */}
+                                                   {item.options.find((opt) => opt.name === 'Kích thước') && (
+                                                      <div className='flex items-center'>
+                                                         <span className='text-gray-500'>
+                                                            Kích thước:
+                                                         </span>
+                                                         <span className='text-gray-700 ml-1'>
+                                                            {
+                                                               item.options.find(
+                                                                  (opt) => opt.name === 'Kích thước',
+                                                               )?.value
+                                                            }
+                                                         </span>
+                                                      </div>
+                                                   )}
+
+                                                   {/* Extract fragrance/value from options */}
+                                                   {item.type && (
+                                                      <div className='flex items-center'>
+                                                         <span className='text-gray-500'>
+                                                            {item.type}:
+                                                         </span>
+                                                         <span className='text-gray-700 ml-1'>
+                                                            {
+                                                               item.options.find(
+                                                                  (opt) =>
+                                                                     opt.name === item.type ||
+                                                                     opt.name === 'Giá trị' ||
+                                                                     opt.name === 'Chất liệu' ||
+                                                                     opt.name === 'Mùi hương',
+                                                               )?.value || item.value || ''
+                                                            }
+                                                         </span>
+                                                      </div>
+                                                   )}
+                                                </div>
+                                             )}
+
+                                             {/* Hiển thị thông tin cho gift */}
+                                             {item.isGift && item.productDetails && (
+                                                <div className='mt-2'>
+                                                   <div className='text-xs text-gray-500 font-medium mb-1'>
+                                                      Bao gồm {item.productDetails.length} sản phẩm:
                                                    </div>
-                                                )}
-
-                                             {/* Extract fragrance/value from options */}
-
-                                             <div className='flex items-center'>
-                                                <span className='text-gray-500'>
-                                                   {item.type}
-                                                </span>
-                                                <span className='text-gray-700 ml-1'>
-                                                   {
-                                                      item.options.find(
-                                                         (opt) =>
-                                                            opt.name === 'Giá trị' ||
-                                                            opt.name === 'Chất liệu' ||
-                                                            opt.name === 'Mùi hương',
-                                                      )?.value
-                                                   }
-                                                </span>
-                                             </div>
-
-
-
-                                             {/* Add stock information if available in product details */}
-                                             {productDetails[item.detailId] && (
-                                                <div className='text-sm mt-1'>
-                                                   <span
-                                                      className={`${productDetails[item.detailId].stock > 10
-                                                         ? 'text-green-600'
-                                                         : productDetails[item.detailId].stock >
-                                                            0
-                                                            ? 'text-orange-600'
-                                                            : 'text-red-600'
-                                                         }`}
-                                                   ></span>
+                                                   <div className='text-xs text-gray-500 max-h-20 overflow-y-auto pl-2 border-l-2 border-amber-200'>
+                                                      {item.productDetails.slice(0, 3).map((product, idx) => (
+                                                         <div key={`gift-product-${product.id}-${idx}`} className='mb-1'>
+                                                            • {product.name}
+                                                            {product.size ? ` (${product.size})` : ''}
+                                                            {product.type ? ` - ${product.type}: ${product.value || ''}` : ''}
+                                                         </div>
+                                                      ))}
+                                                      {item.productDetails.length > 3 && (
+                                                         <div className='text-amber-600 hover:underline cursor-pointer'>
+                                                            + {item.productDetails.length - 3} sản phẩm khác
+                                                         </div>
+                                                      )}
+                                                   </div>
                                                 </div>
                                              )}
                                           </div>
                                        </div>
-                                    </div>
 
-                                    {/* Price */}
-                                    <div className='md:col-span-2 flex items-center justify-between md:justify-center mb-2 md:mb-0'>
-                                       <span className='md:hidden text-gray-500'>Đơn giá:</span>
-                                       <span className='font-medium'>
-                                          {formatPrice(item.price)}
-                                       </span>
-                                    </div>
+                                       {/* Phần giá và số lượng giữ nguyên */}
+                                       <div className='md:col-span-2 flex items-center justify-between md:justify-center mb-2 md:mb-0'>
+                                          <span className='md:hidden text-gray-500'>Đơn giá:</span>
+                                          <span className='font-medium'>
+                                             {formatPrice(item.price)}
+                                          </span>
+                                       </div>
 
-                                    {/* Quantity */}
-                                    <div className='md:col-span-2 flex items-center justify-between md:justify-center mb-2 md:mb-0'>
-                                       <div className='flex border border-gray-300 rounded'>
-                                          <button
-                                             className='px-2 py-1 text-gray-600 hover:bg-gray-100'
-                                             onClick={() =>
-                                                updateQuantity(index, item.quantity - 1)
-                                             }
-                                             disabled={item.quantity <= 1}
-                                          >
-                                             -
-                                          </button>
-                                          <input
-                                             type='text'
-                                             className='w-10 text-center border-x border-gray-300'
-                                             value={item.quantity}
-                                             readOnly
-                                          />
-                                          <button
-                                             className='px-2 py-1 text-gray-600 hover:bg-gray-100'
-                                             onClick={() =>
-                                                updateQuantity(index, item.quantity + 1)
-                                             }
-                                          >
-                                             +
-                                          </button>
+                                       <div className='md:col-span-2 flex items-center justify-between md:justify-center mb-2 md:mb-0'>
+                                          <div className='flex border border-gray-300 rounded'>
+                                             <button
+                                                className='px-2 py-1 text-gray-600 hover:bg-gray-100'
+                                                onClick={() =>
+                                                   updateQuantity(index, item.quantity - 1)
+                                                }
+                                                disabled={item.quantity <= 1}
+                                             >
+                                                -
+                                             </button>
+                                             <input
+                                                type='text'
+                                                className='w-10 text-center border-x border-gray-300'
+                                                value={item.quantity}
+                                                readOnly
+                                             />
+                                             <button
+                                                className='px-2 py-1 text-gray-600 hover:bg-gray-100'
+                                                onClick={() =>
+                                                   updateQuantity(index, item.quantity + 1)
+                                                }
+                                             >
+                                                +
+                                             </button>
+                                          </div>
+                                       </div>
+
+                                       <div className='md:col-span-2 flex items-center justify-between md:justify-center'>
+                                          <span className='md:hidden text-gray-500'>Thành tiền:</span>
+                                          <span className='text-red-600 font-medium'>
+                                             {formatPrice(item.price * item.quantity)}
+                                          </span>
                                        </div>
                                     </div>
 
-                                    {/* Subtotal */}
-                                    <div className='md:col-span-2 flex items-center justify-between md:justify-center'>
-                                       <span className='md:hidden text-gray-500'>Thành tiền:</span>
-                                       <span className='text-red-600 font-medium'>
-                                          {formatPrice(item.price * item.quantity)}
-                                       </span>
+                                    {/* Add stock warning if applicable */}
+                                    {isOutOfStock && (
+                                       <div className="mt-2 text-red-600 text-sm">
+                                          Sản phẩm này hiện đã hết hàng
+                                       </div>
+                                    )}
+
+                                    {/* Actions */}
+                                    <div className='flex justify-end mt-3'>
+                                       <button
+                                          className='text-gray-500 hover:text-red-600 text-sm flex items-center'
+                                          onClick={() => removeItem(index)}
+                                       >
+                                          <svg
+                                             className='w-4 h-4 mr-1'
+                                             fill='none'
+                                             stroke='currentColor'
+                                             viewBox='0 0 24 24'
+                                             xmlns='http://www.w3.org/2000/svg'
+                                          >
+                                             <path
+                                                strokeLinecap='round'
+                                                strokeLinejoin='round'
+                                                strokeWidth='2'
+                                                d='M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16'
+                                             ></path>
+                                          </svg>
+                                          Xóa
+                                       </button>
                                     </div>
                                  </div>
-
-                                 {/* Actions */}
-                                 <div className='flex justify-end mt-3'>
-                                    <button
-                                       className='text-gray-500 hover:text-red-600 text-sm flex items-center'
-                                       onClick={() => removeItem(index)}
-                                    >
-                                       <svg
-                                          className='w-4 h-4 mr-1'
-                                          fill='none'
-                                          stroke='currentColor'
-                                          viewBox='0 0 24 24'
-                                          xmlns='http://www.w3.org/2000/svg'
-                                       >
-                                          <path
-                                             strokeLinecap='round'
-                                             strokeLinejoin='round'
-                                             strokeWidth='2'
-                                             d='M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16'
-                                          ></path>
-                                       </svg>
-                                       Xóa
-                                    </button>
-                                 </div>
-                              </div>
-                           ))}
+                              );
+                           })}
                         </div>
                      </div>
                   </div>

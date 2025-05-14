@@ -730,6 +730,11 @@ function NavBarContent() {
                      <hr className='border-[#553C26]' />
                   </div>
                </div>
+               <Link href='/user/gifts'>
+                  <button className='text-base xl:text-lg hover:text-[#FF9900] focus:font-semibold focus:text-[#FF9900] font-mont hover:font-semibold'>
+                     Combo Khuyến Mãi
+                  </button>
+               </Link>
                <Link href='/user/vouchers'>
                   <button className='text-base xl:text-lg hover:text-[#FF9900] focus:font-semibold focus:text-[#FF9900] font-mont hover:font-semibold'>
                      Mã Giảm Giá
