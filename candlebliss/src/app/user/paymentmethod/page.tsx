@@ -139,8 +139,7 @@ export default function PaymentMethodPage() {
                               </p>
                               <ul className='list-disc pl-5 text-gray-700'>
                                  <li>Momo</li>
-                                 <li>ZaloPay</li>
-                                 <li>VNPay</li>
+
                               </ul>
                            </div>
                         </div>

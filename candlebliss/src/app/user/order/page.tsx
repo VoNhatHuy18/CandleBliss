@@ -221,14 +221,7 @@ const PaymentCountdown = ({
          Hết thời gian thanh toán
       </span>;
    }
-   // For waiting payment, show minutes and seconds
-   const minutes = Math.floor(timeLeft / 60);
-   const seconds = timeLeft % 60;
-   return (
-      <span className={`text-sm font-medium ${timeLeft < 180 ? 'text-red-600' : 'text-orange-600'}`}>
-         Thanh toán còn: {minutes}:{seconds < 10 ? `0${seconds}` : seconds}
-      </span>
-   );
+
 };
 
 export default function OrderPage() {
@@ -1172,17 +1165,6 @@ export default function OrderPage() {
                                        status={order.status}
                                     />
                                  )}
-                              {/* Countdown timer for "Đang chờ thanh toán" status */}
-                              {order.status === 'Đang chờ thanh toán' &&
-                                 order.method_payment !== 'COD' && (
-                                    <PaymentCountdown
-                                       createdAt={order.createdAt}
-                                       orderId={order.id}
-                                       onTimeout={handlePaymentTimeout}
-                                       status={order.status}
-                                    />
-                                 )
-                              }
 
                               {/* Countdown timer for "Thanh toán thất bại" status */}
                               {order.status === 'Thanh toán thất bại' &&

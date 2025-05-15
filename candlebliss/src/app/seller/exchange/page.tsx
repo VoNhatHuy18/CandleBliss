@@ -135,21 +135,21 @@ const formatDate = (dateString: string): string => {
 // Trạng thái đơn hàng và màu sắc tương ứng
 const orderStatusColors: Record<string, { bg: string; text: string; border: string }> = {
     'Đổi trả hàng': { bg: 'bg-yellow-50', text: 'text-yellow-700', border: 'border-yellow-200' },
-    'Đổi hàng hoàn tiền': { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200' },
+    'Đã chấp nhận đổi trả': { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200' },
+    'Đã từ chối đổi trả': { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200' },
     'Đang chờ hoàn tiền': { bg: 'bg-yellow-50', text: 'text-yellow-700', border: 'border-yellow-200' },
     'Hoàn tiền thành công': { bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-200' },
     'Hoàn tiền thất bại': { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200' },
-    'Hoàn thành': { bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-200' },
-    'Đã hủy': { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200' },
+    'Đã hoàn thành đổi trả và hoàn tiền': { bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-200' },
 };
 
 // Danh sách các trạng thái đơn hàng có thể chuyển đến tiếp theo
 const nextPossibleStatuses: Record<string, string[]> = {
     'Đổi trả hàng': ['Đã chấp nhận đổi trả', 'Đã từ chối đổi trả'],
-    'Đổi hàng hoàn tiền': ['Đang chờ hoàn tiền', 'Hoàn thành'],
+    'Đổi hàng hoàn tiền': ['Đang chờ hoàn tiền'],
     'Đang chờ hoàn tiền': ['Hoàn tiền thành công', 'Hoàn tiền thất bại'],
     'Hoàn tiền thành công': ['Đã hoàn thành đổi trả và hoàn tiền'],
-    'Hoàn tiền thất bại': ['Đang chờ hoàn tiền', 'Đã hủy'],
+    'Hoàn tiền thất bại': [],
     'Đã chấp nhận đổi trả': ['Đã hoàn thành đổi trả và hoàn tiền'],
     'Đã từ chối đổi trả': [], // Không thể chuyển tiếp
     'Hoàn thành': [], // Không thể chuyển tiếp
@@ -220,7 +220,11 @@ export default function ExchangePage() {
                 order.status === 'Đổi hàng hoàn tiền' ||
                 order.status === 'Đang chờ hoàn tiền' ||
                 order.status === 'Hoàn tiền thành công' ||
-                order.status === 'Hoàn tiền thất bại'
+                order.status === 'Hoàn tiền thất bại' ||
+                order.status === 'Đã chấp nhận đổi trả' ||
+                order.status === 'Đã từ chối đổi trả' ||
+                order.status === 'Đã hoàn thành đổi trả và hoàn tiền'
+
             );
 
             // Sort orders by createdAt date (newest first)

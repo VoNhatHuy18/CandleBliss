@@ -1,6 +1,7 @@
 import { OpenAI } from 'openai';
 import { NextRequest, NextResponse } from 'next/server';
 import { HOST } from '@/app/constants/api';
+// import https from 'https';
 
 const openai = new OpenAI({
    apiKey: process.env.OPENAI_API_KEY,
@@ -51,6 +52,7 @@ export async function POST(req: NextRequest) {
    try {
       const body = await req.json();
       const { message } = body;
+      // const agent = new https.Agent({ rejectUnauthorized: false });
 
       // Thêm tìm kiếm theo rating trong phần phân tích intent
       const intentAnalysis = await openai.chat.completions.create({
@@ -120,6 +122,7 @@ LƯU Ý:
       );
 
       // Nếu ý định là tìm kiếm sản phẩm
+
       if (intentResult.intent === 'search_product') {
          // Đầu tiên lấy danh sách categories để có thể mapping tên danh mục
          const categoriesResponse = await fetch(`${HOST}/api/categories`, {
@@ -175,13 +178,32 @@ LƯU Ý:
          }
 
          // Thay vì gọi API search không tồn tại
-         const productsResponse = await fetch(`${HOST}/api/products`, {
-            method: 'GET',
-            headers: {
-               'Content-Type': 'application/json',
-            },
-            cache: 'no-store',
-         });
+         let productsResponse: Response;
+         try {
+            productsResponse = await fetch(`${HOST}/api/products`, {
+               method: 'GET',
+               headers: {
+                  'Content-Type': 'application/json',
+               },
+               cache: 'no-store',
+            });
+
+            if (!productsResponse.ok) {
+               console.error(
+                  `Products API error: ${
+                     productsResponse.status
+                  } - ${await productsResponse.text()}`,
+               );
+               // Xử lý lỗi phù hợp
+            }
+
+            // Tiếp tục xử lý response
+         } catch (error) {
+            console.error('Fetch error:', error);
+            // Xử lý lỗi
+            // Đảm bảo productsResponse có giá trị để tránh lỗi tiếp theo
+            productsResponse = new Response(JSON.stringify([]), { status: 200 });
+         }
 
          let products: Product[] = await productsResponse.json();
 

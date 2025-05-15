@@ -274,8 +274,8 @@ const generateDefaultStatusTimeline = (order: Order) => {
 const nextPossibleStatuses: Record<string, string[]> = {
     'Đơn hàng vừa được tạo': ['Đang chờ thanh toán', 'Đã huỷ'],
     'Đang chờ thanh toán': ['Thanh toán thành công', 'Thanh toán thất bại', 'Đang xử lý', 'Đã huỷ'],
-    'Thanh toán thành công': ['Đã đặt hàng ', 'Đã huỷ'],
-    'Thanh toán thất bại': ['Đơn hàng vừa được tạo', 'Đã huỷ'],
+    'Thanh toán thành công': ['Đang xử lý', 'Đã huỷ'],
+    'Thanh toán thất bại': [],
     'Đang xử lý': ['Đang giao hàng', 'Đã huỷ'],
     'Đang giao hàng': ['Hoàn thành', 'Đổi trả hàng'],
     'Đã đặt hàng': ['Đang xử lý', 'Đã huỷ'],
@@ -667,7 +667,16 @@ export default function OrderDetailPage() {
                                             </div>
                                         </div>
 
-
+                                        {/* Add Update Status button */}
+                                        {order.status !== 'Hoàn thành' && order.status !== 'Đã huỷ' && (
+                                            <button
+                                                onClick={() => setShowUpdateStatusModal(true)}
+                                                className="flex items-center bg-[#442C08] text-white px-3 py-1.5 rounded-md hover:bg-opacity-90 print:hidden"
+                                            >
+                                                <ArrowPathIcon className="h-4 w-4 mr-1.5" />
+                                                Cập nhật trạng thái
+                                            </button>
+                                        )}
                                     </div>
                                 </div>
 

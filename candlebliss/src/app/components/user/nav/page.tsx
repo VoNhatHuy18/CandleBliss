@@ -97,6 +97,13 @@ function NavBarContent() {
    const [categories, setCategories] = useState<Category[]>([]);
    const [suggestedKeywords, setSuggestedKeywords] = useState<string[]>([]);
    const [isLoadingKeywords, setIsLoadingKeywords] = useState(false);
+   interface Product {
+      id: number;
+      name: string;
+      images?: { path: string }[];
+      // Add other fields as needed
+   }
+   const [allProducts, setAllProducts] = useState<Product[]>([]);
 
    const router = useRouter();
    const pathname = usePathname();
@@ -116,20 +123,26 @@ function NavBarContent() {
    };
 
    const handleLogout = useCallback(() => {
+      // Clear all authentication data
       localStorage.removeItem('userToken');
       localStorage.removeItem('token');
       localStorage.removeItem('refreshToken');
       localStorage.removeItem('userId');
-      localStorage.removeItem('cartBadge'); // Clear badge on logout
 
+      // Clear all cart-related data
+      localStorage.removeItem('cartBadge');
+      localStorage.removeItem('cart'); // Clear the local cart items
+      localStorage.removeItem('orderCompleted');
+
+      // Reset states
       setIsLoggedIn(false);
       setUserName(null);
       setUserId(null);
       setShowUserMenu(false);
-      updateCartBadge(0); // Use context method to reset badge
+      updateCartBadge(0); // Reset cart badge using context method
 
       router.push('/user/home');
-   }, [router, updateCartBadge]); // Add updateCartBadge to dependencies
+   }, [router, updateCartBadge]);
 
 
    const checkAuthStatus = useCallback(() => {
@@ -141,7 +154,29 @@ function NavBarContent() {
 
             const currentTime = Date.now() / 1000;
             if (decoded.exp && decoded.exp < currentTime) {
-               handleLogout();
+               console.log('Token expired, logging out and clearing cart data');
+               // Token expired - clear all cart and authentication data
+               localStorage.removeItem('userToken');
+               localStorage.removeItem('token');
+               localStorage.removeItem('refreshToken');
+               localStorage.removeItem('userId');
+
+               // Clear all cart-related data
+               localStorage.removeItem('cartBadge');
+               localStorage.removeItem('cart');
+               localStorage.removeItem('orderCompleted');
+
+               // Reset states
+               setIsLoggedIn(false);
+               setUserName(null);
+               setUserId(null);
+               updateCartBadge(0);
+
+               // Don't need to call the full handleLogout since we've already cleared everything
+               // Just need to handle redirects if necessary
+               if (pathname === '/user/profile' || pathname.startsWith('/user/orders')) {
+                  router.push('/user/signin');
+               }
                return;
             }
 
@@ -154,7 +189,23 @@ function NavBarContent() {
             }
          } catch (error) {
             console.error('Invalid token:', error);
-            handleLogout();
+            // Same cleanup as above for invalid tokens
+            localStorage.removeItem('userToken');
+            localStorage.removeItem('token');
+            localStorage.removeItem('refreshToken');
+            localStorage.removeItem('userId');
+            localStorage.removeItem('cartBadge');
+            localStorage.removeItem('cart');
+            localStorage.removeItem('orderCompleted');
+
+            setIsLoggedIn(false);
+            setUserName(null);
+            setUserId(null);
+            updateCartBadge(0);
+
+            if (pathname === '/user/profile' || pathname.startsWith('/user/orders')) {
+               router.push('/user/signin');
+            }
          }
       } else {
          setIsLoggedIn(false);
@@ -165,7 +216,7 @@ function NavBarContent() {
             router.push('/user/signin');
          }
       }
-   }, [pathname, router, handleLogout]);
+   }, [pathname, router, updateCartBadge]);
 
    useEffect(() => {
       checkAuthStatus();
@@ -551,7 +602,25 @@ function NavBarContent() {
       };
    }, [showSearchInput]);
 
-   // Thêm hàm để lấy từ khóa gợi ý từ API chatbot
+   useEffect(() => {
+      const loadAllProducts = async () => {
+         try {
+            const response = await fetch(`${HOST}/api/products`);
+            if (response.ok) {
+               const products = await response.json();
+               if (Array.isArray(products)) {
+                  setAllProducts(products);
+               }
+            }
+         } catch (error) {
+            console.error('Error loading products for keyword suggestions:', error);
+         }
+      };
+
+      loadAllProducts();
+   }, []);
+
+   // Thay thế hàm fetchSuggestedKeywords hiện tại bằng hàm mới:
    const fetchSuggestedKeywords = useCallback(async (query: string) => {
       if (!query || query.trim().length < 2) {
          setSuggestedKeywords([]);
@@ -560,31 +629,70 @@ function NavBarContent() {
 
       setIsLoadingKeywords(true);
 
+      // Tìm từ khóa từ danh sách sản phẩm đã có
+      const searchTermLower = query.toLowerCase();
+      const matchingKeywords: string[] = [];
+
+      allProducts.forEach(product => {
+         const productName = product.name?.toLowerCase() || '';
+
+         if (productName.includes(searchTermLower)) {
+            matchingKeywords.push(product.name);
+         }
+
+         // Tách từ và phân tích
+         const words = productName.split(/\s+/);
+         words.forEach((word: string) => {
+            if (word.startsWith(searchTermLower) && word !== searchTermLower && !matchingKeywords.includes(word)) {
+               matchingKeywords.push(word);
+            }
+         });
+      });
+
+      // Nếu có đủ từ khóa từ sản phẩm, trả về kết quả
+      if (matchingKeywords.length >= 3) {
+         setSuggestedKeywords(matchingKeywords.slice(0, 5));
+         setIsLoadingKeywords(false);
+         return;
+      }
+
+      // Nếu không có đủ từ khóa, kết hợp với AI
       try {
-         const response = await fetch('/api/chatbot', {
+         // Gọi API AI để lấy gợi ý bổ sung
+         const aiResponse = await fetch('/api/chatbot', {
             method: 'POST',
             headers: {
                'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-               message: `Gợi ý 5 từ khóa tìm kiếm liên quan đến: "${query}" cho cửa hàng nến thơm. Chỉ trả về mảng các từ khóa, không cần giải thích gì thêm.`
+               message: `Gợi ý 5 từ khóa tìm kiếm liên quan đến "${query}" cho cửa hàng nến thơm, đặc biệt là các loại nến thơm, tinh dầu, đèn xông tinh dầu, phụ kiện decor. Chỉ trả về danh sách từ khóa, không cần giải thích thêm.`
             }),
          });
 
-         if (response.ok) {
-            const data = await response.json();
-            // Phân tích kết quả trả về từ AI để lấy từ khóa
+         if (aiResponse.ok) {
+            const data = await aiResponse.json();
             if (data.result) {
-               const keywords = parseKeywordsFromAIResponse(data.result);
-               setSuggestedKeywords(keywords);
+               const aiKeywords = parseKeywordsFromAIResponse(data.result);
+
+               // Kết hợp từ khóa từ sản phẩm và AI, loại bỏ trùng lặp
+               const combinedKeywords = [...new Set([...matchingKeywords, ...aiKeywords])];
+               setSuggestedKeywords(combinedKeywords.slice(0, 5));
+            } else {
+               // Nếu AI không trả về kết quả, dùng chỉ từ khóa từ sản phẩm
+               setSuggestedKeywords(matchingKeywords.slice(0, 5));
             }
+         } else {
+            // Nếu gọi API thất bại, dùng chỉ từ khóa từ sản phẩm
+            setSuggestedKeywords(matchingKeywords.slice(0, 5));
          }
       } catch (error) {
-         console.error('Error fetching keyword suggestions:', error);
+         console.error('Error fetching AI keyword suggestions:', error);
+         // Nếu có lỗi, dùng chỉ từ khóa từ sản phẩm
+         setSuggestedKeywords(matchingKeywords.slice(0, 5));
       } finally {
          setIsLoadingKeywords(false);
       }
-   }, []);
+   }, [allProducts]);
 
    // Hàm phân tích từ khóa từ phản hồi của AI
    const parseKeywordsFromAIResponse = (response: string): string[] => {
@@ -785,17 +893,25 @@ function NavBarContent() {
                                        </div>
                                     ) : suggestedKeywords.length > 0 ? (
                                        <>
-                                          <p className='text-sm font-medium text-amber-800 mb-1'>Gợi ý tìm kiếm:</p>
+                                          <p className='text-sm font-medium text-amber-800 mb-1'>Từ khóa gợi ý:</p>
                                           <div className='flex flex-wrap gap-1'>
-                                             {suggestedKeywords.map((keyword, index) => (
-                                                <button
-                                                   key={index}
-                                                   className='text-xs bg-amber-50 hover:bg-amber-100 text-amber-800 rounded-full px-2 py-1'
-                                                   onClick={() => selectKeywordSuggestion(keyword)}
-                                                >
-                                                   {keyword}
-                                                </button>
-                                             ))}
+                                             {suggestedKeywords.map((keyword, index) => {
+                                                // Kiểm tra xem từ khóa có phải là sản phẩm thực không
+                                                const isRealProduct = allProducts.some(product => product.name === keyword);
+
+                                                return (
+                                                   <button
+                                                      key={index}
+                                                      className={`text-xs rounded-full px-2 py-1 flex items-center ${isRealProduct
+                                                         ? 'bg-amber-50 hover:bg-amber-100 text-amber-800'
+                                                         : 'bg-blue-50 hover:bg-blue-100 text-blue-800'
+                                                         }`}
+                                                      onClick={() => selectKeywordSuggestion(keyword)}
+                                                   >
+                                                      <span className="mr-1">{isRealProduct ? '🔍' : '✨'}</span> {keyword}
+                                                   </button>
+                                                );
+                                             })}
                                           </div>
                                        </>
                                     ) : null}

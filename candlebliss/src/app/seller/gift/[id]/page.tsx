@@ -83,6 +83,14 @@ const isGiftActive = (startDate: string, endDate: string): boolean => {
     return now >= start && now <= end;
 };
 
+// Add this calculation function near your other helper functions
+const calculateDiscountedPrice = (basePrice: string | number, discountPercentage: string | number): number => {
+    const base = typeof basePrice === 'string' ? parseFloat(basePrice) : basePrice;
+    const discount = typeof discountPercentage === 'string' ? parseFloat(discountPercentage) : discountPercentage;
+
+    return base * (1 - discount / 100);
+};
+
 // Skeleton loader component
 const GiftDetailSkeleton = () => {
     return (
@@ -307,17 +315,7 @@ export default function GiftDetail() {
         router.push(`/user/gifts/${giftId}`);
     };
 
-    // Calculate discount percentage
-    const calculateDiscount = () => {
-        if (!gift) return 0;
-        const basePrice = parseFloat(gift.base_price);
-        const discountPrice = parseFloat(gift.discount_price);
-
-        if (basePrice === 0 || discountPrice >= basePrice) return 0;
-
-        const discountPercentage = ((basePrice - discountPrice) / basePrice) * 100;
-        return Math.round(discountPercentage);
-    };
+ 
 
     if (loading && !gift) {
         return (
@@ -490,15 +488,15 @@ export default function GiftDetail() {
                                     <div className='mb-6'>
                                         <div className='flex items-end gap-3'>
                                             <span className='text-2xl font-bold text-red-600'>
-                                                {formatPrice(gift.discount_price)}
+                                                {formatPrice(calculateDiscountedPrice(gift.base_price, gift.discount_price))}
                                             </span>
-                                            {parseFloat(gift.discount_price) < parseFloat(gift.base_price) && (
+                                            {parseFloat(gift.discount_price) > 0 && (
                                                 <>
                                                     <span className='text-lg text-gray-400 line-through'>
                                                         {formatPrice(gift.base_price)}
                                                     </span>
                                                     <span className='text-sm bg-red-100 text-red-700 px-2 py-0.5 rounded'>
-                                                        Giảm {calculateDiscount()}%
+                                                        Giảm {gift.discount_price}%
                                                     </span>
                                                 </>
                                             )}

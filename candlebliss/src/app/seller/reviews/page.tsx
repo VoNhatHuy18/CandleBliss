@@ -15,7 +15,7 @@ import {
     StarIcon,
     ChatBubbleLeftEllipsisIcon,
 } from '@heroicons/react/24/outline';
-import {HOST} from '@/app/constants/api';
+import { HOST } from '@/app/constants/api';
 // Interface definitions
 interface User {
     id: number;
@@ -698,14 +698,23 @@ export default function ReviewsManagement() {
             }
 
             const usersData = await usersResponse.json();
+            console.log("Users data structure:", usersData); // Ghi log để kiểm tra cấu trúc
 
-            // Tạo map cho users
+            // Tạo map cho users - xử lý cả hai trường hợp cấu trúc API
             const usersMap = new Map();
-            if (usersData && usersData.data) {
+            if (Array.isArray(usersData)) {
+                // Trường hợp API trả về mảng trực tiếp
+                usersData.forEach((user: User) => {
+                    usersMap.set(user.id, user);
+                });
+            } else if (usersData && Array.isArray(usersData.data)) {
+                // Trường hợp API trả về object có thuộc tính data là mảng
                 usersData.data.forEach((user: User) => {
                     usersMap.set(user.id, user);
                 });
             }
+
+            console.log("Users map size:", usersMap.size); // Kiểm tra xem map có dữ liệu không
 
             // Tạo map cho products
             const productsMap = new Map();

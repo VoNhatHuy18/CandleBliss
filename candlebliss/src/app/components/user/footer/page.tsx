@@ -70,8 +70,8 @@ export default function Footer() {
                         { href: '/user/termsofuse', text: 'Điều khoản sử dụng' },
                         { href: '/user/privacypolicy', text: 'Chính sách bảo mật' },
                         { href: '/user/paymentmethod', text: 'Hình thức thanh toán' },
-                        { href: '/exchangepolicy', text: 'Hình thức đổi trả' },
-                        { href: '/shipping', text: 'Chính sách vận chuyển' }
+                        { href: '/user/exchangepolicy', text: 'Hình thức đổi trả' },
+                        { href: '/user/shipping', text: 'Chính sách vận chuyển' }
                      ].map((item, index) => (
                         <li key={index}>
                            <Link href={item.href} className='hover:text-[#FF9900] transition-colors'>

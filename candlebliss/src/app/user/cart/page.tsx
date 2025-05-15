@@ -827,24 +827,25 @@ export default function CartPage() {
                                           <div className='flex border border-gray-300 rounded'>
                                              <button
                                                 className='px-2 py-1 text-gray-600 hover:bg-gray-100'
-                                                onClick={() =>
-                                                   updateQuantity(index, item.quantity - 1)
-                                                }
+                                                onClick={() => updateQuantity(index, item.quantity - 1)}
                                                 disabled={item.quantity <= 1}
                                              >
                                                 -
                                              </button>
                                              <input
-                                                type='text'
-                                                className='w-10 text-center border-x border-gray-300'
+                                                min={1}
+                                                className='w-14 text-center border-x border-gray-300 outline-none'
                                                 value={item.quantity}
-                                                readOnly
+                                                onChange={e => {
+                                                   const val = parseInt(e.target.value, 10);
+                                                   if (!isNaN(val) && val > 0) {
+                                                      updateQuantity(index, val);
+                                                   }
+                                                }}
                                              />
                                              <button
                                                 className='px-2 py-1 text-gray-600 hover:bg-gray-100'
-                                                onClick={() =>
-                                                   updateQuantity(index, item.quantity + 1)
-                                                }
+                                                onClick={() => updateQuantity(index, item.quantity + 1)}
                                              >
                                                 +
                                              </button>

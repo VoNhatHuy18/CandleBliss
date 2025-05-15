@@ -332,22 +332,44 @@ export default function ProductDetailPage() {
          const users = await fetchAllUsers();
          console.log('Users fetched:', users.length);
 
+         // Cải thiện cách tạo userMap để tránh undefined
+         const userMap: Record<number, User> = {};
 
+         if (Array.isArray(users)) {
+            users.forEach((user: User) => {
+               if (user && typeof user.id === 'number') {
+                  userMap[user.id] = user;
+               }
+            });
+         }
 
-         const userMap = users.reduce((map: Record<number, User>, user: User) => {
-            map[user.id] = user;
-            return map;
-         }, {});
+         console.log('User map created with keys:', Object.keys(userMap).length);
 
          // Combine ratings with user information
          const formattedRatings = validRatings.map(rating => {
             const user = userMap[rating.user_id];
+
+            // Cải thiện cách hiển thị tên người dùng
+            let userName = 'Khách hàng';
+            if (user) {
+               const firstName = user.firstName || '';
+               const lastName = user.lastName || '';
+               userName = (firstName + ' ' + lastName).trim();
+
+               // Nếu không có tên thì hiển thị ID
+               if (!userName) {
+                  userName = `Khách hàng #${rating.user_id}`;
+               }
+            } else {
+               userName = `Khách hàng #${rating.user_id}`;
+            }
+
             return {
                id: rating.id,
                product_id: parseInt(productId as string),
                user_id: rating.user_id,
-               user_name: user ? `${user.firstName} ${user.lastName}` : `Khách hàng ${rating.user_id}`,
-               avatar: user?.photo?.path || null,
+               user_name: userName,
+               avatar: user?.photo?.path ?? undefined,
                rating: rating.rating || rating.avg_rating || 5,
                comment: rating.comment || '',
                created_at: rating.created_at || new Date().toISOString()
@@ -382,7 +404,17 @@ export default function ProductDetailPage() {
          }
 
          const result = await response.json();
-         return result.data || [];
+         console.log("Users API response structure:", result); // Log để debug cấu trúc dữ liệu
+
+         // Xử lý cả hai trường hợp: API trả về mảng trực tiếp hoặc qua result.data
+         if (Array.isArray(result)) {
+            return result;
+         } else if (result && Array.isArray(result.data)) {
+            return result.data;
+         } else {
+            console.warn("Unknown user data structure:", result);
+            return [];
+         }
       } catch (error) {
          console.error('Error fetching users information:', error);
          return [];
@@ -1069,28 +1101,39 @@ export default function ProductDetailPage() {
 
                      {/* Quantity */}
                      <div className='flex items-center mb-4'>
-                        <span className='text-gray-700 w-24 fưont-medium'>Số lượng:</span>
+                        <span className='text-gray-700 w-24 font-medium'>Số lượng:</span>
                         <div className='flex shadow-sm'>
                            <button
                               className='border border-gray-300 px-3 py-1 rounded-l hover:bg-gray-100'
                               onClick={decreaseQuantity}
                               disabled={
-                                 !selectedDetail?.isActive || selectedDetail?.quantities <= 0
+                                 !selectedDetail?.isActive || selectedDetail?.quantities <= 0 || quantity <= 1
                               }
                            >
                               -
                            </button>
                            <input
-                              type='text'
-                              className='border-t border-b border-gray-300 w-12 text-center'
+                              min={1}
+                              max={selectedDetail?.quantities || 100}
+                              className='border-t border-b border-gray-300 w-16 text-center outline-none'
                               value={quantity}
-                              readOnly
+                              onChange={e => {
+                                 let val = parseInt(e.target.value, 10);
+                                 if (isNaN(val) || val < 1) val = 1;
+                                 if (selectedDetail?.quantities && val > selectedDetail.quantities) {
+                                    val = selectedDetail.quantities;
+                                 }
+                                 setQuantity(val);
+                              }}
+                              disabled={!selectedDetail?.isActive || selectedDetail?.quantities <= 0}
                            />
                            <button
                               className='border border-gray-300 px-3 py-1 rounded-r hover:bg-gray-100'
                               onClick={increaseQuantity}
                               disabled={
-                                 !selectedDetail?.isActive || selectedDetail?.quantities <= 0
+                                 !selectedDetail?.isActive ||
+                                 selectedDetail?.quantities <= 0 ||
+                                 quantity >= (selectedDetail?.quantities || 100)
                               }
                            >
                               +

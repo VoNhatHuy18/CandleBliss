@@ -149,8 +149,8 @@ const orderStatusColors: Record<string, { bg: string; text: string; border: stri
 const nextPossibleStatuses: Record<string, string[]> = {
    'Đơn hàng vừa được tạo': ['Đang chờ thanh toán', 'Đã huỷ'],
    'Đang chờ thanh toán': ['Thanh toán thành công', 'Thanh toán thất bại', 'Đang xử lý', 'Đã huỷ'],
-   'Thanh toán thành công': ['Đã đặt hàng', 'Đã huỷ'],
-   'Thanh toán thất bại': ['Đơn hàng vừa được tạo', 'Đã huỷ'],
+   'Thanh toán thành công': ['Đang xử lý', 'Đã huỷ'],
+   'Thanh toán thất bại': [],
    'Đang xử lý': ['Đang giao hàng', 'Đã huỷ'],
    'Đang giao hàng': ['Hoàn thành', 'Đổi trả hàng'],
    'Đã đặt hàng': ['Đang xử lý', 'Đã huỷ'],

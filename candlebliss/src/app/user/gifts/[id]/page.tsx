@@ -87,7 +87,6 @@ export default function GiftDetailPage() {
     const [gift, setGift] = useState<Gift | null>(null);
     const [productDetails, setProductDetails] = useState<ProductDetail[]>([]);
     const [showCartNotification, setShowCartNotification] = useState(false);
-    const [isFavorite, setIsFavorite] = useState(false);
 
     // Inside your component
     const { updateCartBadge } = useCart();
@@ -214,14 +213,6 @@ export default function GiftDetailPage() {
         fetchGiftDetail();
     }, [giftId]);
 
-    // Kiểm tra sản phẩm yêu thích
-    useEffect(() => {
-        if (gift?.id) {
-            const favorites = JSON.parse(localStorage.getItem('favoriteGifts') || '[]');
-            setIsFavorite(favorites.includes(gift.id));
-        }
-    }, [gift?.id]);
-
     // Nếu không có hình, đặt hình placeholder
     useEffect(() => {
         if (gift && (!gift.images || gift.images.length === 0)) {
@@ -266,23 +257,6 @@ export default function GiftDetailPage() {
             .slice(0, 50);
 
         localStorage.setItem('giftViewHistory', JSON.stringify(updatedViews));
-    };
-
-    // Thêm/xóa quà tặng khỏi danh sách yêu thích
-    const toggleFavorite = () => {
-        if (!gift) return;
-
-        const favorites = JSON.parse(localStorage.getItem('favoriteGifts') || '[]');
-
-        if (isFavorite) {
-            const updatedFavorites = favorites.filter((favId: string) => favId !== gift.id);
-            localStorage.setItem('favoriteGifts', JSON.stringify(updatedFavorites));
-        } else {
-            favorites.push(gift.id);
-            localStorage.setItem('favoriteGifts', JSON.stringify(favorites));
-        }
-
-        setIsFavorite(!isFavorite);
     };
 
     // Giảm số lượng
@@ -770,59 +744,9 @@ export default function GiftDetailPage() {
                                         Mua ngay
                                     </button>
                                 </div>
-                                <div className='grid grid-cols-2 gap-3'>
-                                    <button
-                                        className={`py-2 px-4 rounded-lg flex items-center justify-center ${isFavorite
-                                            ? 'bg-pink-100 text-pink-700 border border-pink-300'
-                                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-200'
-                                            } transition-colors`}
-                                        onClick={toggleFavorite}
-                                    >
-                                        <svg
-                                            xmlns="http://www.w3.org/2000/svg"
-                                            className={`h-4 w-4 mr-2 ${isFavorite ? 'fill-pink-700' : 'fill-none'}`}
-                                            viewBox="0 0 24 24"
-                                            stroke="currentColor"
-                                        >
-                                            <path
-                                                strokeLinecap="round"
-                                                strokeLinejoin="round"
-                                                strokeWidth={2}
-                                                d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
-                                            />
-                                        </svg>
-                                        {isFavorite ? 'Đã yêu thích' : 'Thêm vào yêu thích'}
-                                    </button>
-
-                                    <button
-                                        className="py-2 px-4 rounded-lg flex items-center justify-center bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-200 transition-colors"
-                                        onClick={() => {
-                                            navigator.share({
-                                                title: gift.name,
-                                                text: gift.description,
-                                                url: window.location.href,
-                                            }).catch((err) => {
-                                                console.error('Error sharing:', err);
-                                            });
-                                        }}
-                                    >
-                                        <svg
-                                            xmlns="http://www.w3.org/2000/svg"
-                                            className="h-4 w-4 mr-2"
-                                            fill="none"
-                                            viewBox="0 0 24 24"
-                                            stroke="currentColor"
-                                        >
-                                            <path
-                                                strokeLinecap="round"
-                                                strokeLinejoin="round"
-                                                strokeWidth={2}
-                                                d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"
-                                            />
-                                        </svg>
-                                        Chia sẻ
-                                    </button>
-                                </div>
+                                <button className='bg-orange-50 border border-orange-700 py-3 text-sm text-orange-700 rounded hover:bg-orange-100 transition font-medium'>
+                                    Nhắn tin với shop
+                                </button>
                             </div>
                         </div>
                     </div>
