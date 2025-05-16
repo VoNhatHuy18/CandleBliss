@@ -63,7 +63,7 @@ interface Order {
     ship_price: string;
     voucher_id: string;
     method_payment: string;
-    cancel_images: string[] | null;
+    cancel_images: Array<string | { path: string }> | null;
     createdAt: string;
     updatedAt: string;
     item: OrderItem[];
@@ -307,7 +307,7 @@ export default function OrderDetailPage() {
     const [showUpdateStatusModal, setShowUpdateStatusModal] = useState(false);
     const [newStatus, setNewStatus] = useState('');
     const [updating, setUpdating] = useState(false);
-
+    const [previewImage, setPreviewImage] = useState<string | null>(null);
     // Add this inside your OrderDetailPage component
 
     // Update the list of valid statuses to match exactly what the API expects
@@ -324,9 +324,11 @@ export default function OrderDetailPage() {
         'Đã đặt hàng',
         'Hoàn thành',
         'Đã huỷ',
-        'Đổi trả hàng'
+        'Đổi trả hàng',
+        'Đã chấp nhận đổi trả',  // Add this
+        'Đã từ chối đổi trả',    // Add this
+        'Đã hoàn thành đổi trả và hoàn tiền'  // Add this
     ];
-
     // Handle status update
     const handleUpdateOrderStatus = async () => {
         if (!order || !newStatus) return;
@@ -346,8 +348,11 @@ export default function OrderDetailPage() {
                 return;
             }
 
-            // Use query parameter for status instead of JSON body
+            // Đảm bảo URL API chính xác
             const encodedStatus = encodeURIComponent(newStatus);
+
+            console.log(`Đang cập nhật trạng thái đơn hàng ${order.id} thành: ${newStatus}`);
+
             const response = await fetch(
                 `${HOST}/api/orders/${order.id}/status?status=${encodedStatus}`,
                 {
@@ -359,10 +364,23 @@ export default function OrderDetailPage() {
                 },
             );
 
+            console.log('Status code:', response.status);
+
+            // Thêm log để kiểm tra response
+            const responseText = await response.text();
+            console.log('Response:', responseText);
+
+            // Parse response JSON nếu có
+            let responseData;
+            try {
+                responseData = JSON.parse(responseText);
+            } catch (e) {
+                console.log('Response is not JSON');
+            }
+
             // Handle specific error codes
             if (response.status === 422) {
-                const errorData = await response.json();
-                showToastMessage(errorData.errors?.status || 'Trạng thái không hợp lệ', 'error');
+                showToastMessage(responseData?.errors?.status || 'Trạng thái không hợp lệ', 'error');
                 return;
             }
 
@@ -376,7 +394,7 @@ export default function OrderDetailPage() {
                 return {
                     ...prevOrder,
                     status: newStatus,
-                    updatedAt: new Date().toISOString() // Update the timestamp
+                    updatedAt: new Date().toISOString()
                 };
             });
 
@@ -767,9 +785,13 @@ export default function OrderDetailPage() {
                                                         <p className="text-sm font-medium text-red-700 mb-2">Hình ảnh đính kèm:</p>
                                                         <div className="flex flex-wrap gap-2">
                                                             {order.cancel_images.map((image, index) => (
-                                                                <div key={index} className="relative w-20 h-20 border border-red-200 rounded-md overflow-hidden">
+                                                                <div
+                                                                    key={index}
+                                                                    className="relative w-20 h-20 border border-red-200 rounded-md overflow-hidden cursor-pointer hover:opacity-90 transition-opacity"
+                                                                    onClick={() => setPreviewImage(typeof image === 'string' ? image : (image as { path: string }).path)}
+                                                                >
                                                                     <Image
-                                                                        src={image}
+                                                                        src={typeof image === 'string' ? image : image.path}
                                                                         alt={`Hình ảnh hủy/đổi trả ${index + 1}`}
                                                                         fill
                                                                         style={{ objectFit: 'cover' }}
@@ -796,7 +818,7 @@ export default function OrderDetailPage() {
                                             {/* Product image with better container */}
                                             <div className="relative w-24 h-24 bg-gray-50 rounded-lg border border-gray-100 flex items-center justify-center overflow-hidden">
                                                 <Image
-                                                    src={item.product?.images?.[0]?.path || '/images/default-product.png'}
+                                                    src={item.product?.images?.[0]?.path || '/images/logo.png'}
                                                     alt={item.product?.name || `Sản phẩm #${item.product_detail_id}`}
                                                     fill
                                                     sizes="96px"
@@ -1029,6 +1051,37 @@ export default function OrderDetailPage() {
                                     </>
                                 )}
                             </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {/* Image Preview Modal */}
+            {previewImage && (
+                <div
+                    className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-[100] p-4 print:hidden"
+                    onClick={() => setPreviewImage(null)}
+                >
+                    <div className="relative max-w-4xl w-full max-h-[90vh]">
+                        <button
+                            onClick={() => setPreviewImage(null)}
+                            className="absolute top-2 right-2 bg-black bg-opacity-50 text-white rounded-full p-1 hover:bg-opacity-70 z-10"
+                        >
+                            <X className="h-5 w-5" />
+                        </button>
+                        <div className="relative w-full h-auto">
+                            <Image
+                                src={previewImage}
+                                alt="Xem ảnh đổi/trả hàng"
+                                width={1000}
+                                height={800}
+                                style={{
+                                    objectFit: 'contain',
+                                    maxHeight: '85vh',
+                                    margin: '0 auto',
+                                    boxShadow: '0 4px 12px rgba(0,0,0,0.2)'
+                                }}
+                                className="rounded"
+                            />
                         </div>
                     </div>
                 </div>
