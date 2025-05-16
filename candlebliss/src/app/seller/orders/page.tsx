@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import {
@@ -173,7 +173,7 @@ export default function OrdersPage() {
    const [showFilterMenu, setShowFilterMenu] = useState(false);
    const [dateRange, setDateRange] = useState({ from: '', to: '' });
    const [priceRange, setPriceRange] = useState({ min: '', max: '' });
-   const [fetchedDetails, setFetchedDetails] = useState<Record<number, boolean>>({});
+   const [fetchedDetails, setFetchedDetails] = useState<Record<string | number, boolean>>({});
    const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
    const [showUpdateStatusModal, setShowUpdateStatusModal] = useState(false);
    const [newStatus, setNewStatus] = useState('');
@@ -185,6 +185,12 @@ export default function OrdersPage() {
    const [sortOption, setSortOption] = useState('newest');
    const [currentPage, setCurrentPage] = useState(1);
    const [ordersPerPage] = useState(5); // Mỗi trang hiển thị 5 đơn hàng
+   // Thêm state để theo dõi sản phẩm đang được tải
+   const [loadingDetails, setLoadingDetails] = useState<Record<string, boolean>>({});
+   const [lastFetchTime, setLastFetchTime] = useState<number>(0);
+   // Khởi tạo một loadingState riêng để tránh re-render toàn trang
+   const [pageLoading, setPageLoading] = useState(false);
+   const [isChangingPage, setIsChangingPage] = useState(false);
 
    // Define statuses to exclude from display
    const excludedStatuses = [
@@ -211,8 +217,18 @@ export default function OrdersPage() {
    }, []);
 
    // Load all orders (modified to filter out excluded statuses)
-   const loadOrders = useCallback(async () => {
+   const loadOrders = useCallback(async (forceRefresh = false) => {
       try {
+         // Thêm logic chống trùng lặp request
+         const currentTime = Date.now();
+         // Nếu không phải force refresh và thời gian giữa các lần gọi < 5 giây, bỏ qua
+         if (!forceRefresh && currentTime - lastFetchTime < 5000) {
+            return; // Bỏ qua request nếu mới gọi gần đây
+         }
+
+         setLastFetchTime(currentTime);
+         setLoading(true);
+
          const token = localStorage.getItem('token');
          if (!token) {
             showToastMessage('Phiên đăng nhập hết hạn, vui lòng đăng nhập lại', 'error');
@@ -249,188 +265,367 @@ export default function OrdersPage() {
             showToastMessage('Không có đơn hàng nào', 'info');
          }
          setCurrentPage(1); // Reset về trang đầu tiên khi tải lại dữ liệu
+         return data;
       } catch (error) {
          console.error('Error loading orders:', error);
          showToastMessage('Không thể tải danh sách đơn hàng', 'error');
+         throw error; // Re-throw để có thể xử lý ở caller
       } finally {
          setLoading(false);
       }
-   }, [showToastMessage]);
+   }, [showToastMessage, lastFetchTime, excludedStatuses]);
 
-   // Fetch additional product details
-   const fetchProductDetails = useCallback(
-      async (orders: Order[]) => {
-         const token = localStorage.getItem('token');
-         if (!token) return;
+   // Thêm useRef để lưu trữ dữ liệu đã fetch
+   const fetchedOrdersRef = useRef<Record<number, boolean>>({});
 
-         let hasUpdates = false;
-         const updatedOrders = [...orders];
+   // Cập nhật hàm fetchProductDetails để tránh fetch lại dữ liệu đã có
+   const fetchProductDetails = useCallback(async (ordersList: Order[]) => {
+      const token = localStorage.getItem('token');
+      if (!token) return;
 
-         for (const order of updatedOrders) {
-            // Fetch user information if not already present
-            if (!order.user && order.user_id) {
-               try {
-                  const userResponse = await fetch(
-                     `${HOST}/api/v1/users/${order.user_id}`,
-                     {
-                        headers: { Authorization: `Bearer ${token}` },
-                     },
-                  );
+      // Tìm các sản phẩm cần tải thông tin chi tiết
+      const productsToFetch: Array<{ itemId: number, orderId: number, productId?: string, detailId: number }> = [];
+      const usersToFetch: Set<number> = new Set();
 
-                  if (userResponse.ok) {
-                     const userData = await userResponse.json();
-                     order.user = {
-                        id: userData.id,
-                        name:
-                           userData.firstName && userData.lastName
-                              ? `${userData.firstName} ${userData.lastName}`
-                              : userData.firstName || userData.lastName || 'Không có tên',
-                        phone: userData.phone ? userData.phone.toString() : 'Không có SĐT',
-                        email: userData.email || 'Không có email',
-                     };
-                     hasUpdates = true;
-                  }
-               } catch (error) {
-                  console.error(`Failed to fetch user info for user ID ${order.user_id}:`, error);
-               }
+      // Thu thập tất cả product IDs và user IDs cần fetch mà chưa được fetch
+      ordersList.forEach(order => {
+         // Bỏ qua order đã fetch đầy đủ
+         if (fetchedOrdersRef.current[order.id]) return;
+
+         if (!order.user && order.user_id) {
+            usersToFetch.add(order.user_id);
+         }
+
+         let allItemsFetched = true;
+
+         order.item.forEach(item => {
+            if (item.product_id && !item.product) {
+               productsToFetch.push({
+                  itemId: item.id,
+                  orderId: order.id,
+                  productId: item.product_id,
+                  detailId: item.product_detail_id
+               });
+               allItemsFetched = false;
             }
+            else if (!fetchedDetails[item.product_detail_id] && item.product_detail_id && !item.product_detail) {
+               productsToFetch.push({
+                  itemId: item.id,
+                  orderId: order.id,
+                  detailId: item.product_detail_id
+               });
+               allItemsFetched = false;
+            }
+         });
 
-            // Fetch product details for each item
-            for (const item of order.item) {
-               // If we have a product_id but no product data yet
-               if (item.product_id && !item.product) {
+         // Đánh dấu order đã fetch đủ thông tin
+         if (allItemsFetched && order.user) {
+            fetchedOrdersRef.current[order.id] = true;
+         }
+      });
+
+      // Không cần fetch nếu không có gì mới
+      if (productsToFetch.length === 0 && usersToFetch.size === 0) {
+         return;
+      }
+
+      // Tạo bản sao của orders để cập nhật
+      const updatedOrders = [...ordersList];
+
+      // Fetch thông tin người dùng
+      const userFetchPromises = Array.from(usersToFetch).map(async userId => {
+         try {
+            // Kiểm tra xem có đang tải hay không
+            if (loadingDetails[`user_${userId}`]) return null;
+
+            setLoadingDetails(prev => ({ ...prev, [`user_${userId}`]: true }));
+
+            const userResponse = await fetch(
+               `${HOST}/api/v1/users/${userId}`,
+               { headers: { Authorization: `Bearer ${token}` } }
+            );
+
+            if (userResponse.ok) {
+               const userData = await userResponse.json();
+               return {
+                  userId,
+                  data: {
+                     id: userData.id,
+                     name: userData.firstName && userData.lastName
+                        ? `${userData.firstName} ${userData.lastName}`
+                        : userData.firstName || userData.lastName || 'Không có tên',
+                     phone: userData.phone ? userData.phone.toString() : 'Không có SĐT',
+                     email: userData.email || 'Không có email',
+                  }
+               };
+            }
+         } catch (error) {
+            console.error(`Failed to fetch user info for user ID ${userId}:`, error);
+         } finally {
+            setLoadingDetails(prev => ({ ...prev, [`user_${userId}`]: false }));
+         }
+         return null;
+      });
+
+      // Tạo bản đồ product_id -> [requests] để gom nhóm
+      const productRequestsMap: Record<string, Array<{ itemId: number, orderId: number, detailId: number }>> = {};
+      const detailRequestsMap: Record<number, Array<{ itemId: number, orderId: number }>> = {};
+
+      productsToFetch.forEach(request => {
+         if (request.productId) {
+            if (!productRequestsMap[request.productId]) {
+               productRequestsMap[request.productId] = [];
+            }
+            productRequestsMap[request.productId].push({
+               itemId: request.itemId,
+               orderId: request.orderId,
+               detailId: request.detailId
+            });
+         } else if (request.detailId) {
+            if (!detailRequestsMap[request.detailId]) {
+               detailRequestsMap[request.detailId] = [];
+            }
+            detailRequestsMap[request.detailId].push({
+               itemId: request.itemId,
+               orderId: request.orderId
+            });
+         }
+      });
+
+      // Fetch product data in parallel
+      const productFetchPromises = Object.entries(productRequestsMap).map(async ([productId, requests]) => {
+         try {
+            // Kiểm tra xem đang tải hay không
+            if (loadingDetails[`product_${productId}`]) return null;
+
+            setLoadingDetails(prev => ({ ...prev, [`product_${productId}`]: true }));
+
+            const productResponse = await fetch(
+               `${HOST}/api/products/${productId}`,
+               { headers: { Authorization: `Bearer ${token}` } }
+            );
+
+            if (productResponse.ok) {
+               const productData = await productResponse.json();
+
+               return {
+                  productId,
+                  requests,
+                  data: {
+                     id: productData.id,
+                     name: productData.name || "Sản phẩm không tên",
+                     images: productData.images || [],
+                     details: productData.details || []
+                  }
+               };
+            }
+         } catch (error) {
+            console.error(`Failed to fetch product for product_id ${productId}:`, error);
+         } finally {
+            setLoadingDetails(prev => ({ ...prev, [`product_${productId}`]: false }));
+         }
+         return null;
+      });
+
+      // Fetch product detail data in parallel
+      const detailFetchPromises = Object.entries(detailRequestsMap).map(async ([detailIdStr, requests]) => {
+         const detailId = parseInt(detailIdStr);
+         try {
+            // Kiểm tra xem đang tải hay không
+            if (loadingDetails[`detail_${detailId}`] || fetchedDetails[detailId]) return null;
+
+            setLoadingDetails(prev => ({ ...prev, [`detail_${detailId}`]: true }));
+
+            const detailResponse = await fetch(
+               `${HOST}/api/product-details/${detailId}`,
+               { headers: { Authorization: `Bearer ${token}` } }
+            );
+
+            if (detailResponse.ok) {
+               const detailData = await detailResponse.json();
+
+               // Đánh dấu là đã fetch
+               setFetchedDetails(prev => ({ ...prev, [detailId]: true }));
+
+               // Nếu chúng ta cần thông tin sản phẩm từ chi tiết
+               let productData = null;
+               if (detailData.product_id && !fetchedDetails[`product_from_detail_${detailData.product_id}`]) {
                   try {
                      const productResponse = await fetch(
-                        `${HOST}/api/products/${item.product_id}`,
-                        {
-                           headers: { Authorization: `Bearer ${token}` },
-                        },
+                        `${HOST}/api/products/${detailData.product_id}`,
+                        { headers: { Authorization: `Bearer ${token}` } }
                      );
 
                      if (productResponse.ok) {
-                        const productData = await productResponse.json();
-
-                        // Set product information
-                        item.product = {
-                           id: productData.id,
-                           name: productData.name || "Sản phẩm không tên",
-                           images: productData.images || []
-                        };
-
-                        // Find matching product detail
-                        const matchingDetail = productData.details?.find(
-                           (detail: { id: number }) => detail.id === item.product_detail_id
-                        );
-
-                        if (matchingDetail) {
-                           item.product_detail = {
-                              id: matchingDetail.id,
-                              size: matchingDetail.size,
-                              type: matchingDetail.type,
-                              values: matchingDetail.values,
-                              images: matchingDetail.images || []
-                           };
-
-                           // Also store full detail data
-                           item.productDetailData = {
-                              id: matchingDetail.id,
-                              size: matchingDetail.size,
-                              type: matchingDetail.type,
-                              values: matchingDetail.values,
-                              quantities: matchingDetail.quantities,
-                              isActive: matchingDetail.isActive,
-                              images: matchingDetail.images || []
-                           };
-
-                           // Mark this detail as fetched
-                           setFetchedDetails((prev) => ({
-                              ...prev,
-                              [item.product_detail_id]: true,
-                           }));
-                        }
-
-                        hasUpdates = true;
-                     }
-                  } catch (error) {
-                     console.error(`Failed to fetch product for product_id ${item.product_id}:`, error);
-                  }
-               }
-               // If we still don't have detail information and haven't fetched it yet
-               else if (!fetchedDetails[item.product_detail_id] && item.product_detail_id && !item.product_detail) {
-                  try {
-                     const detailResponse = await fetch(
-                        `${HOST}/api/product-details/${item.product_detail_id}`,
-                        {
-                           headers: { Authorization: `Bearer ${token}` },
-                        },
-                     );
-
-                     if (detailResponse.ok) {
-                        const detailData = await detailResponse.json();
-                        item.productDetailData = detailData;
-
-                        // Also set product_detail for consistent access
-                        item.product_detail = {
-                           id: detailData.id,
-                           size: detailData.size,
-                           type: detailData.type,
-                           values: detailData.values,
-                           images: detailData.images || []
-                        };
-
-                        hasUpdates = true;
-
-                        setFetchedDetails((prev) => ({
+                        productData = await productResponse.json();
+                        setFetchedDetails(prev => ({
                            ...prev,
-                           [item.product_detail_id]: true,
+                           [`product_from_detail_${detailData.product_id}`]: true
                         }));
-
-                        // If we have product_id from the detail but no product data yet
-                        if (!item.product && detailData.product_id) {
-                           try {
-                              const productResponse = await fetch(
-                                 `${HOST}/api/products/${detailData.product_id}`,
-                                 {
-                                    headers: { Authorization: `Bearer ${token}` },
-                                 },
-                              );
-
-                              if (productResponse.ok) {
-                                 const productData = await productResponse.json();
-                                 item.product = {
-                                    id: productData.id,
-                                    name: productData.name || "Sản phẩm không tên",
-                                    images: productData.images || []
-                                 };
-                                 hasUpdates = true;
-                              }
-                           } catch (error) {
-                              console.error(
-                                 `Failed to fetch product for product_id ${detailData.product_id}:`,
-                                 error,
-                              );
-                           }
-                        }
                      }
                   } catch (error) {
-                     console.error(
-                        `Failed to fetch details for product_detail_id ${item.product_detail_id}:`,
-                        error,
-                     );
+                     console.error(`Failed to fetch product from detail ${detailId}:`, error);
                   }
                }
+
+               return {
+                  detailId,
+                  requests,
+                  detailData,
+                  productData
+               };
             }
+         } catch (error) {
+            console.error(`Failed to fetch details for product_detail_id ${detailId}:`, error);
+         } finally {
+            setLoadingDetails(prev => ({ ...prev, [`detail_${detailId}`]: false }));
          }
+         return null;
+      });
 
-         if (hasUpdates) {
-            setOrders(updatedOrders);
-            applyFilters(updatedOrders); // Apply current filters to the updated data
-         }
-      },
-      [fetchedDetails],
-   );
+      // Đợi tất cả các promise hoàn thành
+      const [userResults, productResults, detailResults] = await Promise.all([
+         Promise.all(userFetchPromises),
+         Promise.all(productFetchPromises),
+         Promise.all(detailFetchPromises)
+      ]);
 
+      // Lọc ra các kết quả có giá trị
+      const validUserResults = userResults.filter(Boolean);
+      const validProductResults = productResults.filter(Boolean);
+      const validDetailResults = detailResults.filter(Boolean);
 
+      // Nếu không có kết quả, không cần cập nhật
+      if (validUserResults.length === 0 &&
+         validProductResults.length === 0 &&
+         validDetailResults.length === 0) {
+         return;
+      }
+
+      // Cập nhật thông tin người dùng
+      validUserResults.forEach(result => {
+         if (!result) return;
+
+         const { userId, data } = result;
+
+         updatedOrders.forEach(order => {
+            if (order.user_id === userId) {
+               order.user = data;
+            }
+         });
+      });
+
+      // Cập nhật thông tin sản phẩm
+      validProductResults.forEach(result => {
+         if (!result) return;
+
+         const { requests, data } = result;
+
+         requests.forEach(req => {
+            const order = updatedOrders.find(o => o.id === req.orderId);
+            if (!order) return;
+
+            const item = order.item.find(i => i.id === req.itemId);
+            if (!item) return;
+
+            // Thiết lập thông tin sản phẩm
+            item.product = {
+               id: data.id,
+               name: data.name,
+               images: data.images
+            };
+
+            // Tìm thông tin chi tiết phù hợp
+            const matchingDetail = data.details?.find(
+               (detail: { id: number }) => detail.id === req.detailId
+            );
+
+            if (matchingDetail) {
+               item.product_detail = {
+                  id: matchingDetail.id,
+                  size: matchingDetail.size,
+                  type: matchingDetail.type,
+                  values: matchingDetail.values,
+                  images: matchingDetail.images || []
+               };
+
+               item.productDetailData = {
+                  id: matchingDetail.id,
+                  size: matchingDetail.size,
+                  type: matchingDetail.type,
+                  values: matchingDetail.values,
+                  quantities: matchingDetail.quantities,
+                  isActive: matchingDetail.isActive,
+                  images: matchingDetail.images || []
+               };
+
+               setFetchedDetails(prev => ({ ...prev, [req.detailId]: true }));
+            }
+         });
+      });
+
+      // Cập nhật thông tin chi tiết sản phẩm
+      validDetailResults.forEach(result => {
+         if (!result) return;
+
+         const { requests, detailData, productData } = result;
+
+         requests.forEach(req => {
+            const order = updatedOrders.find(o => o.id === req.orderId);
+            if (!order) return;
+
+            const item = order.item.find(i => i.id === req.itemId);
+            if (!item) return;
+
+            // Thiết lập thông tin chi tiết
+            item.productDetailData = detailData;
+
+            item.product_detail = {
+               id: detailData.id,
+               size: detailData.size,
+               type: detailData.type,
+               values: detailData.values,
+               images: detailData.images || []
+            };
+
+            // Thêm thông tin sản phẩm nếu có
+            if (productData) {
+               item.product = {
+                  id: productData.id,
+                  name: productData.name || "Sản phẩm không tên",
+                  images: productData.images || []
+               };
+            }
+         });
+      });
+
+      // Cập nhật state nếu có thay đổi
+      if (validUserResults.length > 0 || validProductResults.length > 0 || validDetailResults.length > 0) {
+         // Sử dụng cập nhật state theo hàm để tránh phụ thuộc vào giá trị hiện tại
+         setOrders((prevOrders) => {
+            // Tạo bản sao mới của danh sách đơn hàng
+
+            const newOrders = [...prevOrders];
+
+            // Chỉ cập nhật các đơn hàng đã được xử lý
+            const processedOrderIds = new Set(updatedOrders.map(o => o.id));
+
+            // Kết hợp thông tin mới với danh sách hiện có
+            return newOrders.map(order => {
+               if (processedOrderIds.has(order.id)) {
+                  // Tìm phiên bản đã cập nhật
+                  const updatedOrder = updatedOrders.find(o => o.id === order.id);
+                  return updatedOrder || order;
+               }
+               return order;
+            });
+         });
+
+         // Áp dụng bộ lọc với phiên bản hiện tại của orders
+         // Gọi thông qua hàm để tránh phụ thuộc vào danh sách orders
+         applyFilters(updatedOrders);
+      }
+   }, [loadingDetails]); // Chỉ phụ thuộc vào loadingDetails, không phụ thuộc vào fetchedDetails
 
    // Thêm hàm sắp xếp đơn hàng
    const sortOrders = useCallback(
@@ -463,20 +658,20 @@ export default function OrdersPage() {
       [sortOption],
    );
 
-   // Apply all filters to the orders (modified to respect excluded statuses)
+   // Sửa hàm applyFilters để ngăn vòng lặp cập nhật
    const applyFilters = useCallback(
       (ordersList: Order[] = orders) => {
          let result = [...ordersList];
 
-         // Filter out excluded statuses (ensure they don't appear even after other filters)
+         // Filter out excluded statuses
          result = result.filter(order => !excludedStatuses.includes(order.status));
 
          // Apply status filter
          if (statusFilter) {
-            result = result.filter((order) => order.status === statusFilter);
+            result = result.filter(order => order.status === statusFilter);
          }
 
-         // Apply search filter and other filters...
+         // Apply search filter
          if (searchTerm.trim()) {
             const term = searchTerm.trim().toLowerCase();
             result = result.filter(
@@ -485,7 +680,7 @@ export default function OrdersPage() {
                   order.address.toLowerCase().includes(term) ||
                   order.user?.name?.toLowerCase().includes(term) ||
                   order.user?.phone?.includes(term) ||
-                  order.user?.email?.toLowerCase().includes(term),
+                  order.user?.email?.toLowerCase().includes(term)
             );
          }
 
@@ -515,61 +710,113 @@ export default function OrdersPage() {
          // Apply sorting
          result = sortOrders(result);
 
-         setFilteredOrders(result);
-         setCurrentPage(1); // Reset về trang đầu tiên khi thay đổi bộ lọc
+         // So sánh kết quả trước khi cập nhật state
+         // Chỉ cập nhật nếu kết quả thực sự khác nhau
+         const currentFilteredJson = JSON.stringify(filteredOrders);
+         const newFilteredJson = JSON.stringify(result);
+
+         if (currentFilteredJson !== newFilteredJson) {
+            setFilteredOrders(result);
+            // Chỉ reset trang khi bộ lọc thay đổi và gọi từ UI action
+            if (ordersList === orders) { // Khi gọi mặc định từ UI filters
+               setCurrentPage(1);
+            }
+         }
       },
-      [orders, statusFilter, searchTerm, dateRange, priceRange, sortOrders],
+      [orders, statusFilter, searchTerm, dateRange, priceRange, sortOrders, excludedStatuses, filteredOrders]
    );
 
-   // Initialize data
-   useEffect(() => {
-      const init = async () => {
-         try {
-            setLoading(true);
-            await loadOrders();
-         } catch (error) {
-            console.error('Error initializing data:', error);
-            showToastMessage('Có lỗi xảy ra khi tải dữ liệu', 'error');
-         }
-      };
+   // Sử dụng useMemo cho currentOrders và totalPages để tránh tính lại mỗi lần render
+   const { currentOrders, totalPages, indexOfFirstOrder, indexOfLastOrder } = useMemo(() => {
+      const indexOfLastOrder = currentPage * ordersPerPage;
+      const indexOfFirstOrder = indexOfLastOrder - ordersPerPage;
+      const currentOrders = filteredOrders.slice(indexOfFirstOrder, indexOfLastOrder);
+      const totalPages = Math.ceil(filteredOrders.length / ordersPerPage);
 
-      init();
-   }, [loadOrders, showToastMessage]);
+      return { currentOrders, totalPages, indexOfFirstOrder, indexOfLastOrder };
+   }, [currentPage, filteredOrders, ordersPerPage]);
 
-   // Fetch additional details
+
+   // Initialize data - chỉ gọi một lần
    useEffect(() => {
-      if (orders.length > 0) {
-         fetchProductDetails(orders);
+      loadOrders();
+      // Không thêm loadOrders vào dependencies - chỉ gọi một lần khi mount
+   }, []);
+
+   // Cải thiện useEffect cho việc fetch chi tiết sản phẩm
+   useEffect(() => {
+      // Sử dụng biến ref để tránh các lần gọi không cần thiết
+      const shouldFetch = orders.length > 0 && !loading && !isChangingPage;
+
+      if (shouldFetch) {
+         // Sử dụng giá trị lưu trữ thay vì tính toán lại
+         const fetchCurrentPage = () => {
+            // Dùng giá trị từ useMemo để tránh tính toán trùng lặp
+            if (currentOrders.length > 0) {
+               console.log(`Fetching details for ${currentOrders.length} orders on page ${currentPage}`);
+               fetchProductDetails(currentOrders);
+            }
+         };
+
+         const timer = setTimeout(fetchCurrentPage, 100);
+         return () => clearTimeout(timer);
       }
-   }, [orders, fetchProductDetails]);
+   }, [orders.length, loading, isChangingPage, currentOrders, currentPage, fetchProductDetails]);
 
-   // Apply filters when filter conditions change
+   // Apply filters when filter conditions change - chỉ cập nhật filteredOrders, không gọi API
    useEffect(() => {
       applyFilters();
    }, [statusFilter, searchTerm, dateRange, priceRange, sortOption, applyFilters]);
 
-   // Thêm hàm phân trang
-   const paginate = (pageNumber: number) => {
-      if (pageNumber > 0 && pageNumber <= Math.ceil(filteredOrders.length / ordersPerPage)) {
+   // Cải thiện hàm paginate để cuộn mượt hơn
+   const paginate = useCallback((pageNumber: number) => {
+      if (pageNumber > 0 && pageNumber <= Math.ceil(filteredOrders.length / ordersPerPage) && pageNumber !== currentPage) {
+         // Ngăn nhiều lần thay đổi trang nhanh liên tiếp
+         if (isChangingPage) return;
+
+         setIsChangingPage(true);
          setCurrentPage(pageNumber);
-         // Cuộn lên đầu danh sách đơn hàng
-         document.getElementById('orders-list')?.scrollIntoView({ behavior: 'smooth' });
+
+         // Đặt lại trạng thái sau khi chuyển trang
+         setTimeout(() => {
+            // Cuộn lên đầu danh sách đơn hàng
+            const ordersList = document.getElementById('orders-list');
+            if (ordersList) {
+               ordersList.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+
+            setIsChangingPage(false);
+         }, 300);
       }
-   };
+   }, [currentPage, filteredOrders.length, ordersPerPage, isChangingPage]);
 
    // Thêm hàm này trong component
-   const goToPage = (e: React.ChangeEvent<HTMLInputElement>) => {
+   const goToPage = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
       const value = parseInt(e.target.value);
-      if (!isNaN(value) && value > 0 && value <= totalPages) {
+      if (!isNaN(value) && value > 0 && value <= totalPages && value !== currentPage) {
          paginate(value);
       }
-   };
+   }, [currentPage, totalPages, paginate]);
 
-   // Tính toán các đơn hàng hiển thị trên trang hiện tại (thêm trước return)
-   const indexOfLastOrder = currentPage * ordersPerPage;
-   const indexOfFirstOrder = indexOfLastOrder - ordersPerPage;
-   const currentOrders = filteredOrders.slice(indexOfFirstOrder, indexOfLastOrder);
-   const totalPages = Math.ceil(filteredOrders.length / ordersPerPage);
+   // Add this ref
+   const lastRenderedPage = useRef(currentPage);
+
+   // Chỉ fetch chi tiết khi trang thay đổi thực sự
+   useEffect(() => {
+      if (lastRenderedPage.current !== currentPage && orders.length > 0 && !loading) {
+         lastRenderedPage.current = currentPage;
+
+         const fetchCurrentPage = () => {
+            if (currentOrders.length > 0) {
+               console.log(`Fetching details for ${currentOrders.length} orders on page ${currentPage}`);
+               fetchProductDetails(currentOrders);
+            }
+         };
+
+         const timer = setTimeout(fetchCurrentPage, 100);
+         return () => clearTimeout(timer);
+      }
+   }, [currentPage, orders.length, loading, currentOrders, fetchProductDetails]);
 
    // Get payment method icon
    const getPaymentMethodIcon = (method: string) => {
@@ -687,6 +934,14 @@ export default function OrdersPage() {
       setShowFilterMenu(false);
    };
 
+   // Sửa hàm refresh để gọi loadOrders với force refresh
+   const handleRefreshOrders = () => {
+      setPageLoading(true);
+      loadOrders(true).finally(() => {
+         setPageLoading(false);
+      });
+   };
+
    if (loading) {
       return (
          <div className='flex h-screen bg-[#F8F8F9]'>
@@ -756,11 +1011,12 @@ export default function OrdersPage() {
                      </div>
                      <div className='flex items-center w-full sm:w-auto gap-2'>
                         <button
-                           onClick={() => loadOrders()}
+                           onClick={handleRefreshOrders}
                            className='flex-1 sm:flex-none bg-[#E8E2D9] hover:bg-[#d6cfc6] text-[#442C08] px-2 sm:px-3 py-1.5 rounded-md flex items-center justify-center transition-colors text-xs sm:text-sm'
+                           disabled={pageLoading}
                         >
-                           <RefreshCw size={14} className='mr-1.5' />
-                           Làm mới
+                           <RefreshCw size={14} className={`mr-1.5 ${pageLoading ? 'animate-spin' : ''}`} />
+                           {pageLoading ? 'Đang tải...' : 'Làm mới'}
                         </button>
                      </div>
                   </div>
@@ -1010,7 +1266,13 @@ export default function OrdersPage() {
                </div>
 
                {/* Orders list */}
-               <div id="orders-list">
+               <div id="orders-list" className={`relative ${isChangingPage ? 'opacity-50' : ''} transition-opacity duration-300`}>
+                  {isChangingPage && (
+                     <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-30 z-10">
+                        <div className="w-6 h-6 border-2 border-gray-300 border-t-[#442C08] rounded-full animate-spin"></div>
+                     </div>
+                  )}
+
                   {filteredOrders.length === 0 ? (
                      <div className='bg-white rounded-lg shadow-sm border border-gray-100 p-8 text-center'>
                         <div className='flex flex-col items-center'>

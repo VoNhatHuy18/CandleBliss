@@ -667,16 +667,7 @@ export default function OrderDetailPage() {
                                             </div>
                                         </div>
 
-                                        {/* Add Update Status button */}
-                                        {order.status !== 'Hoàn thành' && order.status !== 'Đã huỷ' && (
-                                            <button
-                                                onClick={() => setShowUpdateStatusModal(true)}
-                                                className="flex items-center bg-[#442C08] text-white px-3 py-1.5 rounded-md hover:bg-opacity-90 print:hidden"
-                                            >
-                                                <ArrowPathIcon className="h-4 w-4 mr-1.5" />
-                                                Cập nhật trạng thái
-                                            </button>
-                                        )}
+
                                     </div>
                                 </div>
 

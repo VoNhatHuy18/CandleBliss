@@ -10,6 +10,7 @@ import Toast from '@/app/components/ui/toast/Toast';
 import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
 import OrderActionModal from '@/app/components/user/orderactionmodals/OrderActionModals';
 import { HOST } from '@/app/constants/api';
+import ConfirmationModal from '@/app/components/ui/modal/ConfirmationModal';
 
 // Interfaces
 interface OrderItem {
@@ -254,6 +255,11 @@ export default function OrderPage() {
    const [actionType, setActionType] = useState<'cancel' | 'exchange' | 'refund'>('cancel');
    const [actionLoading, setActionLoading] = useState(false);
 
+   // Add these new states inside your OrderPage component after the existing state declarations
+   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
+   const [completeOrderId, setCompleteOrderId] = useState<number | null>(null);
+   const [completeOrderLoading, setCompleteOrderLoading] = useState(false);
+
    // Wrap with useCallback
    const showToastMessage = useCallback((message: string, type: 'success' | 'error' | 'info') => {
       setToast({
@@ -446,18 +452,16 @@ export default function OrderPage() {
    // Modified handleCancelOrder function to only allow cancellation in specific statuses
 
    // Within the OrderPage component, add this new function to handle completing the order
-   const handleCompleteOrder = async (orderId: number) => {
-      // Show warning confirmation dialog
-      if (
-         !confirm(
-            'Khi bạn chọn Hoàn thành thì sẽ không thể đổi trả lại hàng, hãy quay clip và kiểm tra hàng trước khi chọn hoàn thành đơn. Bạn có chắc chắn muốn hoàn thành đơn hàng này?',
-         )
-      ) {
-         return; // If user cancels, exit the function
-      }
+   const openCompleteConfirmation = (orderId: number) => {
+      setCompleteOrderId(orderId);
+      setConfirmModalOpen(true);
+   };
+
+   const handleCompleteOrder = async () => {
+      if (!completeOrderId) return;
 
       try {
-         setLoading(true);
+         setCompleteOrderLoading(true);
          const token = localStorage.getItem('token');
 
          if (!token) {
@@ -469,14 +473,14 @@ export default function OrderPage() {
          // Use query parameter format instead of request body
          const encodedStatus = encodeURIComponent('Hoàn thành');
          const response = await fetch(
-            `${HOST}/api/orders/${orderId}/status?status=${encodedStatus}`,
+            `${HOST}/api/orders/${completeOrderId}/status?status=${encodedStatus}`,
             {
                method: 'PATCH',
                headers: {
                   Authorization: `Bearer ${token}`,
                   'Content-Type': 'application/json',
                },
-            },
+            }
          );
 
          if (!response.ok) {
@@ -486,11 +490,12 @@ export default function OrderPage() {
          // Update the state after successful API call
          setOrders((prevOrders) =>
             prevOrders.map((order) =>
-               order.id === orderId ? { ...order, status: 'Hoàn thành' } : order,
-            ),
+               order.id === completeOrderId ? { ...order, status: 'Hoàn thành' } : order
+            )
          );
 
          showToastMessage('Đơn hàng đã được hoàn thành', 'success');
+         setConfirmModalOpen(false); // Close the modal
       } catch (error: unknown) {
          console.error('Error completing order:', error);
 
@@ -503,7 +508,7 @@ export default function OrderPage() {
 
          showToastMessage(errorMessage, 'error');
       } finally {
-         setLoading(false);
+         setCompleteOrderLoading(false);
       }
    };
 
@@ -1353,7 +1358,7 @@ export default function OrderPage() {
                                  {/* Show Complete button for any order in "Đang giao hàng" status */}
                                  {order.status === 'Đang giao hàng' && (
                                     <button
-                                       onClick={() => handleCompleteOrder(order.id)}
+                                       onClick={() => openCompleteConfirmation(order.id)}
                                        className='text-sm text-green-600 border border-green-300 bg-white hover:bg-green-50 px-3 py-1 rounded'
                                     >
                                        Hoàn thành
@@ -1457,6 +1462,20 @@ export default function OrderPage() {
             actionType={actionType}
             onSubmit={handleActionSubmit}
             isLoading={actionLoading}
+         />
+
+
+         {/* Confirmation Modal for Order Completion */}
+         <ConfirmationModal
+            isOpen={confirmModalOpen}
+            title="Xác nhận hoàn thành đơn hàng"
+            message="Khi bạn chọn Hoàn thành thì sẽ không thể đổi trả lại hàng, hãy quay clip và kiểm tra hàng trước khi chọn hoàn thành đơn. Bạn có chắc chắn muốn hoàn thành đơn hàng này?"
+            confirmText="Hoàn thành đơn hàng"
+            cancelText="Hủy"
+            onConfirm={handleCompleteOrder}
+            onCancel={() => setConfirmModalOpen(false)}
+            type="warning"
+            isLoading={completeOrderLoading}
          />
       </div>
    );

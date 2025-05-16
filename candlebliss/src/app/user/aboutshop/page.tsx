@@ -129,7 +129,7 @@ export default function AboutShop() {
                                     </div>
                                     <div>
                                         <h3 className="font-medium text-gray-800">Địa chỉ</h3>
-                                        <p className="text-gray-600">25 Trần Hưng Đạo, Quận 1, TP. Hồ Chí Minh</p>
+                                        <p className="text-gray-600">12 Nguyễn Văn Bảo, Phường 04, Quận Gò Vấp, Thành phố Hồ Chí Minh, Việt Nam</p>
                                     </div>
                                 </div>
 
@@ -185,7 +185,7 @@ export default function AboutShop() {
                             </div>
                         </div>
 
-                     
+
                     </div>
                 </div>
             </main>
