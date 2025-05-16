@@ -130,7 +130,7 @@ const GiftCard = ({
                 {/* Badge giảm giá */}
                 {hasDiscount && (
                     <div className='absolute top-2 right-2 bg-red-500 text-white px-2 py-1 rounded-md text-xs font-medium'>
-                        -{discountPercent}%
+                        -{parseFloat(discountPercent).toFixed(0)}%
                     </div>
                 )}
 
@@ -188,7 +188,7 @@ const GiftCard = ({
                                 {formatPrice(basePrice)}đ
                             </span>
                             <div className='bg-red-600 text-white text-xs px-1.5 py-0.5 rounded ml-1.5'>
-                                -{discountPercent}%
+                                -{parseFloat(discountPercent).toFixed(0)}%
                             </div>
                         </div>
                     ) : (
@@ -468,7 +468,7 @@ export default function GiftPage() {
                 const data: Gift[] = await response.json();
                 setGifts(data);
 
-                // Mặc định áp dụng bộ lọc ban đầu
+                // Mặc định áp dụng bộ lọc rrn đầu
                 const filteredData = applyFiltersAndSort(data, '', null, 'default');
                 setFilteredGifts(filteredData);
 
