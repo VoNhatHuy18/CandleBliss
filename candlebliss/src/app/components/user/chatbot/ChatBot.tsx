@@ -73,7 +73,7 @@ export default function ChatBotModal() {
   const quickSearches = [
     { id: 1, text: "Nến thơm bán chạy" },
     { id: 2, text: "Nến thơm dưới 500k" },
-    { id: 3, text: "Tinh dầu" },  
+    { id: 3, text: "Tinh dầu" },
     { id: 4, text: "Bộ phụ kiện nến cao cấp" },
   ];
 
@@ -107,7 +107,7 @@ export default function ChatBotModal() {
     setIsTyping(true);
 
     try {
-      const response = await fetch('/api/chatbot', {
+      const response = await fetch(`${window.location.origin}/api/chatbot`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: messageText }),

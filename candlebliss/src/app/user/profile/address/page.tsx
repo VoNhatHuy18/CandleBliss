@@ -212,7 +212,7 @@ export default function AddressPage() {
                if (storedAddresses.length > 0) {
                   try {
                      const firstAddress = storedAddresses[0];
-                     const checkResponse = await fetch(`/api/v1/address/${firstAddress.id}`, {
+                     const checkResponse = await fetch(`${HOST}/api/v1/address/${firstAddress.id}`, {
                         headers: { Authorization: `Bearer ${token}` },
                      });
 
@@ -242,7 +242,7 @@ export default function AddressPage() {
 
                for (let id = 1; id <= maxAddressIdToTry; id++) {
                   addressPromises.push(
-                     fetch(`/api/v1/address/${id}`, {
+                     fetch(`${HOST}/api/v1/address/${id}`, {
                         headers: { Authorization: `Bearer ${token}` },
                      })
                         .then((response) => {
@@ -275,7 +275,7 @@ export default function AddressPage() {
             }
 
             const addressPromises = userAddressIds.map((id: number) =>
-               fetch(`/api/v1/address/${id}`, {
+               fetch(`${HOST}/api/v1/address/${id}`, {
                   headers: { Authorization: `Bearer ${token}` },
                })
                   .then((response) => {

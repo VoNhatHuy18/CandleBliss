@@ -277,7 +277,7 @@ const nextPossibleStatuses: Record<string, string[]> = {
     'Thanh toán thành công': ['Đang xử lý', 'Đã huỷ'],
     'Thanh toán thất bại': [],
     'Đang xử lý': ['Đang giao hàng', 'Đã huỷ'],
-    'Đang giao hàng': ['Hoàn thành', 'Đổi trả hàng'],
+    'Đang giao hàng': ['Hoàn thành'],
     'Đã đặt hàng': ['Đang xử lý', 'Đã huỷ'],
     'Đổi trả hàng': ['Đã chấp nhận đổi trả', 'Đã từ chối đổi trả'],
     'Đã chấp nhận đổi trả': ['Đã hoàn thành đổi trả và hoàn tiền'],
@@ -450,17 +450,18 @@ export default function OrderDetailPage() {
                 // Fetch thông tin khách hàng và sản phẩm cùng lúc
                 const fetchPromises = [];
 
-                // Thêm promise fetch thông tin khách hàng
+                // Fetch customer info and product data
                 if (data.user_id) {
-                    fetchPromises.push(fetchCustomerInfo(data.user_id, data));
+                    fetchPromises.push(fetchCustomerInfo(data.user_id, data).then(updatedOrder => {
+                        setOrder(updatedOrder); // Update state with the result
+                    }));
                 }
 
-                // Thêm promise fetch thông tin sản phẩm
                 if (data.item && data.item.length > 0) {
                     fetchPromises.push(fetchProductData(data));
                 }
 
-                // Chờ tất cả fetch hoàn thành
+                // Wait for all promises to complete
                 await Promise.all(fetchPromises);
 
             } catch (error) {
@@ -544,7 +545,7 @@ export default function OrderDetailPage() {
     const fetchCustomerInfo = async (userId: number, currentOrder: Order) => {
         try {
             const token = localStorage.getItem('token');
-            if (!token) return;
+            if (!token) return currentOrder;
 
             const response = await fetch(`${HOST}/api/v1/users/${userId}`, {
                 headers: {
@@ -564,8 +565,7 @@ export default function OrderDetailPage() {
                     customer_phone: userData.phone ? userData.phone.toString() : 'Không có thông tin'
                 };
 
-                // Cập nhật state order với đầy đủ thông tin
-                setOrder(updatedOrder);
+                // Return the updated order without setting state here
                 return updatedOrder;
             }
         } catch (error) {

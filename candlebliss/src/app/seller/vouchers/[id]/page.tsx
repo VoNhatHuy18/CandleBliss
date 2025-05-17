@@ -100,7 +100,11 @@ export default function VoucherDetail() {
 
    // Format currency
    const formatCurrency = (amount: number) => {
-      return amount.toLocaleString('vi-VN') + ' VND';
+      return new Intl.NumberFormat('vi-VN', {
+         style: 'decimal',
+         maximumFractionDigits: 0,
+         minimumFractionDigits: 0
+      }).format(amount) + ' VND';
    };
 
    // Format date để hiển thị
@@ -521,7 +525,7 @@ export default function VoucherDetail() {
                               <div className='relative mt-1'>
                                  <input
                                     type='text'
-                                    value={voucher.percent_off}
+                                    value={Math.floor(voucher.percent_off)}
                                     className='block w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500'
                                     readOnly
                                  />

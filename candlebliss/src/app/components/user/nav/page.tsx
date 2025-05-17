@@ -659,7 +659,7 @@ function NavBarContent() {
       // Nếu không có đủ từ khóa, kết hợp với AI
       try {
          // Gọi API AI để lấy gợi ý bổ sung
-         const aiResponse = await fetch('/api/chatbot', {
+         const aiResponse = await fetch(`${window.location.origin}/api/chatbot`, {
             method: 'POST',
             headers: {
                'Content-Type': 'application/json',

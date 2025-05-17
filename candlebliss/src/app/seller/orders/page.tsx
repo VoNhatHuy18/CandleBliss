@@ -152,7 +152,7 @@ const nextPossibleStatuses: Record<string, string[]> = {
    'Thanh toán thành công': ['Đang xử lý', 'Đã huỷ'],
    'Thanh toán thất bại': [],
    'Đang xử lý': ['Đang giao hàng', 'Đã huỷ'],
-   'Đang giao hàng': ['Hoàn thành', 'Đổi trả hàng'],
+   'Đang giao hàng': ['Hoàn thành'],
    'Đã đặt hàng': ['Đang xử lý', 'Đã huỷ'],
    'Đổi trả hàng': ['Đã chấp nhận đổi trả', 'Đã từ chối đổi trả'],
    'Đã chấp nhận đổi trả': ['Đã hoàn thành đổi trả và hoàn tiền'],

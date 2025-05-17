@@ -499,11 +499,6 @@ LƯU Ý:
                      method: 'GET',
                      headers: {
                         'Content-Type': 'application/json',
-                        Authorization:
-                           'Bearer ' +
-                           (typeof localStorage !== 'undefined'
-                              ? localStorage.getItem('token')
-                              : ''),
                      },
                      cache: 'no-store',
                   });

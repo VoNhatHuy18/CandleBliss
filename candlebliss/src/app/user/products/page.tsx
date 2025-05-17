@@ -89,7 +89,7 @@ interface PriceRange {
 }
 
 
-// Update ProductCard component to better handle variants and their prices
+// Update ProductCard component to ensure consistent sizing
 const ProductCard = ({
    id,
    title,
@@ -192,7 +192,7 @@ const ProductCard = ({
    const { basePrice, discountPrice: calculatedDiscountPrice, discountPercent } = getDisplayPrice();
 
    return (
-      <div className='rounded-lg bg-white p-3 shadow-lg hover:shadow-md transition-shadow'>
+      <div className='rounded-lg bg-white p-3 shadow-lg hover:shadow-md transition-shadow h-full flex flex-col'>
          <div className='relative aspect-square overflow-hidden rounded-lg group'>
             <Image
                src={imageUrl}
@@ -222,11 +222,11 @@ const ProductCard = ({
             </div>
          </div>
 
-         <div className='mt-3'>
+         <div className='mt-3 flex-grow flex flex-col'>
             <h3 className='text-sm font-medium text-gray-700 mb-1 truncate whitespace-nowrap overflow-hidden'>
                {title}
             </h3>
-            <p className='text-xs text-gray-500 line-clamp-2 mb-1'>{description}</p>
+            <p className='text-xs text-gray-500 line-clamp-2 mb-1 min-h-[2rem]'>{description}</p>
             <div className='flex items-center'>{renderStars()}</div>
 
             {/* Hiển thị tùy chọn variants */}
@@ -242,7 +242,7 @@ const ProductCard = ({
             )}
 
             {/* Hiển thị giá */}
-            <div className='mt-1.5'>
+            <div className='mt-auto pt-2'>
                {(() => {
                   // Nếu có giảm giá
                   if (
@@ -547,7 +547,7 @@ const RecommendedProducts = ({ allProducts, currentSearchTerm, onViewDetail }: R
             {/* Hiển thị sản phẩm trong trang hiện tại */}
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                {visibleProducts.map((product) => (
-                  <div key={`rec-${product.id}`}>
+                  <div key={`rec-${product.id}`} className="h-full">
                      <ProductCard
                         id={product.id}
                         title={product.title}

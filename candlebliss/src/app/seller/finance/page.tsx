@@ -220,6 +220,13 @@ export default function FinancePage() {
       for (const order of updatedOrders) {
          if (!order.user && order.user_id && !fetchedUserIds[order.user_id]) {
             try {
+               // Mark this user ID as processed even before fetching
+               // This prevents repeated attempts to fetch the same problematic ID
+               setFetchedUserIds((prev) => ({
+                  ...prev,
+                  [order.user_id]: true,
+               }));
+
                const userResponse = await fetch(
                   `${HOST}/api/v1/users/${order.user_id}`,
                   {
@@ -228,25 +235,77 @@ export default function FinancePage() {
                );
 
                if (userResponse.ok) {
-                  const userData = await userResponse.json();
+                  // Check if response has content before trying to parse JSON
+                  const contentType = userResponse.headers.get('content-type');
+                  if (contentType && contentType.includes('application/json')) {
+                     const text = await userResponse.text();
+                     if (text && text.trim()) {
+                        try {
+                           const userData = JSON.parse(text);
+                           order.user = {
+                              id: userData.id,
+                              name:
+                                 userData.firstName && userData.lastName
+                                    ? `${userData.firstName} ${userData.lastName}`
+                                    : userData.firstName || userData.lastName || 'Không có tên',
+                              phone: userData.phone ? userData.phone.toString() : 'Không có SĐT',
+                              email: userData.email || 'Không có email',
+                           };
+                           hasUpdates = true;
+                        } catch (jsonError) {
+                           console.error(`Invalid JSON for user ID ${order.user_id}:`, jsonError);
+                           // Provide a fallback user object when JSON parsing fails
+                           order.user = {
+                              id: order.user_id,
+                              name: `Khách hàng #${order.user_id}`,
+                              phone: 'Không có SĐT',
+                              email: 'Không có email',
+                           };
+                           hasUpdates = true;
+                        }
+                     } else {
+                        console.warn(`Empty response for user ID ${order.user_id}`);
+                        // Provide a fallback for empty responses
+                        order.user = {
+                           id: order.user_id,
+                           name: `Khách hàng #${order.user_id}`,
+                           phone: 'Không có SĐT',
+                           email: 'Không có email',
+                        };
+                        hasUpdates = true;
+                     }
+                  } else {
+                     console.warn(`Non-JSON response for user ID ${order.user_id}`);
+                     // Provide a fallback for non-JSON responses
+                     order.user = {
+                        id: order.user_id,
+                        name: `Khách hàng #${order.user_id}`,
+                        phone: 'Không có SĐT',
+                        email: 'Không có email',
+                     };
+                     hasUpdates = true;
+                  }
+               } else {
+                  console.warn(`Failed response (${userResponse.status}) for user ID ${order.user_id}`);
+                  // Provide a fallback for failed responses
                   order.user = {
-                     id: userData.id,
-                     name:
-                        userData.firstName && userData.lastName
-                           ? `${userData.firstName} ${userData.lastName}`
-                           : userData.firstName || userData.lastName || 'Không có tên',
-                     phone: userData.phone ? userData.phone.toString() : 'Không có SĐT',
-                     email: userData.email || 'Không có email',
+                     id: order.user_id,
+                     name: `Khách hàng #${order.user_id}`,
+                     phone: 'Không có SĐT',
+                     email: 'Không có email',
                   };
                   hasUpdates = true;
-
-                  setFetchedUserIds((prev) => ({
-                     ...prev,
-                     [order.user_id]: true,
-                  }));
                }
             } catch (error) {
                console.error(`Failed to fetch user info for user ID ${order.user_id}:`, error);
+               // Provide a fallback for network errors
+               order.user = {
+                  id: order.user_id,
+                  name: `Khách hàng #${order.user_id}`,
+                  phone: 'Không có SĐT',
+                  email: 'Không có email',
+               };
+               hasUpdates = true;
             }
          }
       }

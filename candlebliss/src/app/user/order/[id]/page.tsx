@@ -1715,7 +1715,7 @@ export default function OrderDetailPage() {
                         {/* Nút đánh giá sản phẩm khi đơn hàng đã giao hoặc hoàn thành */}
                         {(['Hoàn thành', 'Đã giao hàng'].includes(order.status)) && (
                            <Link
-                              href={`/user/review?order=${order.id}`}
+                              href={`/user/order/rating`}
                               className='block w-full py-2 text-center bg-green-600 rounded text-white hover:bg-green-700'
                            >
                               Đánh giá sản phẩm
