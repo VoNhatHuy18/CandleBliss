@@ -109,14 +109,14 @@ export default function PaymentMethodPage() {
                               <div className='bg-gray-50 p-4 rounded-lg mb-4'>
                                  <p className='font-medium'>Thông tin tài khoản:</p>
                                  <ul className='list-none pl-0 text-gray-700'>
-                                    <li>Ngân hàng: Vietcombank</li>
-                                    <li>Số tài khoản: 1234567890</li>
-                                    <li>Chủ tài khoản: CANDLEBLISS</li>
+                                    <li>Ngân hàng: Viettinbank</li>
+                                    <li>Số tài khoản: 108872240239</li>
+                                    <li>Chủ tài khoản: NGUYEN DANG THAO VY</li>
                                     <li>Chi nhánh: TP.HCM</li>
                                  </ul>
                               </div>
                               <p className='text-gray-700 italic'>
-                                 Nội dung chuyển khoản: [Mã đơn hàng] - [Số điện thoại]
+                                 Nội dung chuyển khoản: [Tên của bạn] - [Số điện thoại]
                               </p>
                            </div>
                         </div>

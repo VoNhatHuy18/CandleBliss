@@ -2124,14 +2124,14 @@ export default function CheckoutPage() {
                               <div className='mt-3 p-3 bg-gray-50 rounded-lg border border-gray-200 text-sm'>
                                  <p className='font-medium'>Thông tin chuyển khoản:</p>
                                  <p>
-                                    Ngân hàng: <span className='font-medium'>VietComBank</span>
+                                    Ngân hàng: <span className='font-medium'>ViettinBank</span>
                                  </p>
                                  <p>
-                                    Số tài khoản: <span className='font-medium'>0123456789</span>
+                                    Số tài khoản: <span className='font-medium'>108872240239</span>
                                  </p>
                                  <p>
                                     Chủ tài khoản:{' '}
-                                    <span className='font-medium'>CÔNG TY TNHH CANDLE BLISS</span>
+                                    <span className='font-medium'>NGUYEN DANG THAO VY</span>
                                  </p>
                                  <p className='mt-2'>
                                     Nội dung chuyển khoản:{' '}
