@@ -976,7 +976,7 @@ const ProductTable = ({
                                                                         strokeLinecap="round"
                                                                         strokeLinejoin="round"
                                                                         strokeWidth={1.5}
-                                                                        d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                                                                        d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V7a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
                                                                      />
                                                                   </svg>
                                                                </div>
@@ -1668,12 +1668,16 @@ export default function ProductManagement() {
             });
          case 'Hết hàng':
             return filtered.filter((product) => {
-               const totalQuantity =
-                  product.details?.reduce((sum, detail) => {
-                     const quantity = detail?.quantities !== undefined ? Number(detail.quantities) : 0;
-                     return sum + quantity;
-                  }, 0) || 0;
-               return totalQuantity === 0;
+               // Sản phẩm không có chi tiết
+               if (!product.details || product.details.length === 0) {
+                  return true;
+               }
+
+               // Có ít nhất một phiên bản hết hàng (quantity = 0)
+               return product.details.some(detail => {
+                  const quantity = Number(detail.quantities) || 0;
+                  return quantity === 0;
+               });
             });
          default:
             return filtered;
@@ -1701,9 +1705,16 @@ export default function ProductManagement() {
             ),
          ).length,
          'Hết hàng': filtered.filter((p) => {
-            const totalQuantity =
-               p.details?.reduce((sum, d) => sum + (Number(d.quantities) || 0), 0) || 0;
-            return totalQuantity === 0;
+            // Sản phẩm không có chi tiết
+            if (!p.details || p.details.length === 0) {
+               return true;
+            }
+
+            // Có ít nhất một phiên bản hết hàng (quantity = 0)
+            return p.details.some(detail => {
+               const quantity = Number(detail.quantities) || 0;
+               return quantity === 0;
+            });
          }).length,
       };
    }, [products, selectedCategory]);

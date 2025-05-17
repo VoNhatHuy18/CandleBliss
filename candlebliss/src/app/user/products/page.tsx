@@ -11,6 +11,7 @@ import Footer from '@/app/components/user/footer/page';
 import ChatBot from '@/app/components/user/chatbot/ChatBot';
 import { HOST } from '@/app/constants/api';
 import StarRating from '@/app/components/StarRating';
+import { hybridCache } from '@/app/utils/hybridCache';
 
 interface ProductImage {
    id: string;
@@ -339,68 +340,6 @@ const fetchRatingsForProducts = async (productIds: number[]) => {
    }
 };
 
-// Thêm vào file page.tsx
-interface ViewHistory {
-   productId: number;
-   viewCount: number;
-   lastViewed: number; // timestamp
-}
-
-interface SearchHistory {
-   term: string;
-   count: number;
-   lastSearched: number; // timestamp
-}
-
-// Hàm lưu lịch sử tìm kiếm
-const saveSearchTerm = (term: string) => {
-   if (!term.trim()) return;
-
-   const searches: SearchHistory[] = JSON.parse(localStorage.getItem('searchHistory') || '[]');
-   const existingSearch = searches.find(s => s.term.toLowerCase() === term.toLowerCase());
-
-   if (existingSearch) {
-      existingSearch.count++;
-      existingSearch.lastSearched = Date.now();
-   } else {
-      searches.push({
-         term: term,
-         count: 1,
-         lastSearched: Date.now()
-      });
-   }
-
-   // Giữ tối đa 20 từ khóa tìm kiếm
-   const updatedSearches = searches
-      .sort((a, b) => b.lastSearched - a.lastSearched)
-      .slice(0, 20);
-
-   localStorage.setItem('searchHistory', JSON.stringify(updatedSearches));
-};
-
-// Hàm lưu lịch sử xem sản phẩm
-const saveProductView = (productId: number) => {
-   const views: ViewHistory[] = JSON.parse(localStorage.getItem('viewHistory') || '[]');
-   const existingView = views.find(v => v.productId === productId);
-
-   if (existingView) {
-      existingView.viewCount++;
-      existingView.lastViewed = Date.now();
-   } else {
-      views.push({
-         productId: productId,
-         viewCount: 1,
-         lastViewed: Date.now()
-      });
-   }
-
-   // Giữ tối đa 50 sản phẩm đã xem
-   const updatedViews = views
-      .sort((a, b) => b.lastViewed - a.lastViewed)
-      .slice(0, 50);
-
-   localStorage.setItem('viewHistory', JSON.stringify(updatedViews));
-};
 
 // Thêm vào file page.tsx
 interface RecommendedProductsProps {
@@ -434,8 +373,8 @@ const RecommendedProducts = ({ allProducts, currentSearchTerm, onViewDetail }: R
    useEffect(() => {
       // Kết hợp cả hai loại khuyến nghị (tìm kiếm và sản phẩm đã xem)
       const getCombinedRecommendations = () => {
-         // Lấy khuyến nghị dựa trên lịch sử xem
-         const viewHistory: ViewHistory[] = JSON.parse(localStorage.getItem('viewHistory') || '[]');
+         // Lấy khuyến nghị dựa trên lịch sử xem từ hybridCache
+         const viewHistory = hybridCache.getViewHistory();
 
          // Khởi tạo mảng sản phẩm đề xuất
          let recommendedProducts: typeof allProducts = [];
@@ -509,7 +448,7 @@ const RecommendedProducts = ({ allProducts, currentSearchTerm, onViewDetail }: R
             }
          } else {
             // Nếu không có từ khóa hiện tại, lấy từ lịch sử tìm kiếm
-            const searchHistory: SearchHistory[] = JSON.parse(localStorage.getItem('searchHistory') || '[]');
+            const searchHistory = hybridCache.getSearchHistory();
 
             if (searchHistory.length > 0) {
                // Sắp xếp lịch sử tìm kiếm theo số lần tìm kiếm
@@ -674,7 +613,7 @@ const getSimilarityScore = (product1: RecommendedProductsProps['allProducts'][0]
    // Điểm cao cho sản phẩm có giá gần nhau
    if (priceRatio <= 0.1) { // Giá chênh lệch ≤ 10%
       score += 5;
-   } else if (priceRatio <= 0.2) { // Giá chênh lệch ≤ 20%
+   } else if (priceRatio <= 0.2) { // Giá chên lệch ≤ 20%
       score += 3;
    } else if (priceRatio <= 0.3) { // Giá chênh lệch ≤ 30%
       score += 1;
@@ -1256,8 +1195,8 @@ export default function ProductPage() {
    const handleSearch = (query: string) => {
       if (loading) return;
 
-      // Lưu từ khóa tìm kiếm
-      saveSearchTerm(query);
+      // Lưu từ khóa tìm kiếm vào hybridCache
+      hybridCache.saveSearchTerm(query);
 
       setSearchQuery(query);
 
@@ -1292,7 +1231,7 @@ export default function ProductPage() {
 
    const handleViewDetail = (productId: number) => {
       console.log('View detail clicked for product ID:', productId);
-      saveProductView(productId);
+      hybridCache.saveProductView(productId);
    };
 
    return (

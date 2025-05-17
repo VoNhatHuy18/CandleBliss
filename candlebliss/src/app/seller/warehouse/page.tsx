@@ -452,9 +452,8 @@ const StockReceiptModal = ({
          return;
       }
 
-      const variantInfo = `${variant.size || ''} ${variant.type || ''} ${
-         variant.values || ''
-      }`.trim();
+      const variantInfo = `${variant.size || ''} ${variant.type || ''} ${variant.values || ''
+         }`.trim();
 
       // Get image for this item
       let itemImage = '/placeholder.png';
@@ -567,9 +566,8 @@ const StockReceiptModal = ({
                         >
                            <option value=''>Chọn phiên bản</option>
                            {selectedProduct?.details?.map((detail) => {
-                              const variantInfo = `${detail.size || ''} ${detail.type || ''} ${
-                                 detail.values || ''
-                              }`.trim();
+                              const variantInfo = `${detail.size || ''} ${detail.type || ''} ${detail.values || ''
+                                 }`.trim();
                               return (
                                  <option key={detail.id} value={detail.id}>
                                     {variantInfo || `#${detail.id}`}
@@ -599,11 +597,10 @@ const StockReceiptModal = ({
                         />
                         {operationType === 'decrease' && selectedVariant && (
                            <p
-                              className={`text-xs mt-1 ${
-                                 quantity > selectedVariant.quantities
-                                    ? 'text-red-500'
-                                    : 'text-gray-500'
-                              }`}
+                              className={`text-xs mt-1 ${quantity > selectedVariant.quantities
+                                 ? 'text-red-500'
+                                 : 'text-gray-500'
+                                 }`}
                            >
                               {quantity > selectedVariant.quantities
                                  ? 'Vượt quá số lượng tồn kho!'
@@ -664,9 +661,8 @@ const StockReceiptModal = ({
                            {selectedVariant && (
                               <p className='text-sm text-gray-600 mt-1'>
                                  Phiên bản:{' '}
-                                 {`${selectedVariant.size || ''} ${selectedVariant.type || ''} ${
-                                    selectedVariant.values || ''
-                                 }`.trim() || `#${selectedVariant.id}`}
+                                 {`${selectedVariant.size || ''} ${selectedVariant.type || ''} ${selectedVariant.values || ''
+                                    }`.trim() || `#${selectedVariant.id}`}
                               </p>
                            )}
                         </div>
@@ -854,19 +850,17 @@ const InventoryFilters = ({
                            setActiveTab(tab.id);
                            setCurrentPage(1); // Reset to first page when changing tabs
                         }}
-                        className={`py-3 px-5 text-sm font-medium whitespace-nowrap ${
-                           activeTab === tab.id
-                              ? 'border-b-2 border-amber-500 text-amber-600'
-                              : 'text-gray-500 hover:text-gray-700'
-                        }`}
+                        className={`py-3 px-5 text-sm font-medium whitespace-nowrap ${activeTab === tab.id
+                           ? 'border-b-2 border-amber-500 text-amber-600'
+                           : 'text-gray-500 hover:text-gray-700'
+                           }`}
                      >
                         {tab.label}
                         <span
-                           className={`ml-2 px-2 py-0.5 rounded-full text-xs ${
-                              activeTab === tab.id
-                                 ? 'bg-amber-100 text-amber-800'
-                                 : 'bg-gray-100 text-gray-600'
-                           }`}
+                           className={`ml-2 px-2 py-0.5 rounded-full text-xs ${activeTab === tab.id
+                              ? 'bg-amber-100 text-amber-800'
+                              : 'bg-gray-100 text-gray-600'
+                              }`}
                         >
                            {tabCounts[tab.id] || 0}
                         </span>
@@ -1405,8 +1399,8 @@ const ProductTable = ({
                                              ? `${categoryNames[product.category_id]} `
                                              : `Đang tải... (ID: ${product.category_id})`
                                           : product.categories && product.categories.length > 0
-                                          ? `${product.categories[0].name} `
-                                          : 'Chưa có danh mục'}
+                                             ? `${product.categories[0].name} `
+                                             : 'Chưa có danh mục'}
                                     </p>
                                  </div>
                               </div>
@@ -1438,19 +1432,18 @@ const ProductTable = ({
 
                            <div className='hidden md:flex items-center'>
                               <span
-                                 className={`px-2.5 py-1 text-xs rounded-full ${
-                                    activeVariants > 0
-                                       ? 'bg-green-100 text-green-800'
-                                       : totalVariants === 0
+                                 className={`px-2.5 py-1 text-xs rounded-full ${activeVariants > 0
+                                    ? 'bg-green-100 text-green-800'
+                                    : totalVariants === 0
                                        ? 'bg-gray-100 text-gray-800'
                                        : 'bg-yellow-100 text-yellow-800'
-                                 }`}
+                                    }`}
                               >
                                  {activeVariants > 0
                                     ? 'Đang kinh doanh'
                                     : totalVariants === 0
-                                    ? 'Chưa có phiên bản'
-                                    : 'Chưa kinh doanh'}
+                                       ? 'Chưa có phiên bản'
+                                       : 'Chưa kinh doanh'}
                               </span>
                            </div>
 
@@ -1471,19 +1464,18 @@ const ProductTable = ({
                               </div>
                               <div className='text-right'>
                                  <span
-                                    className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                                       activeVariants > 0
-                                          ? 'bg-green-100 text-green-800'
-                                          : totalVariants === 0
+                                    className={`text-xs font-medium px-2 py-0.5 rounded-full ${activeVariants > 0
+                                       ? 'bg-green-100 text-green-800'
+                                       : totalVariants === 0
                                           ? 'bg-gray-100 text-gray-800'
                                           : 'bg-yellow-100 text-yellow-800'
-                                    }`}
+                                       }`}
                                  >
                                     {activeVariants > 0
                                        ? 'Đang kinh doanh'
                                        : totalVariants === 0
-                                       ? 'Chưa có phiên bản'
-                                       : 'Chưa kinh doanh'}
+                                          ? 'Chưa có phiên bản'
+                                          : 'Chưa kinh doanh'}
                                  </span>
                               </div>
                               <div className='col-span-2 text-xs text-gray-500 mt-1'>
@@ -1491,10 +1483,10 @@ const ProductTable = ({
                                  <span className='text-gray-700'>
                                     {product.category_id
                                        ? categoryNames[product.category_id] ||
-                                         `Đang tải... (ID: ${product.category_id})`
+                                       `Đang tải... (ID: ${product.category_id})`
                                        : product.categories && product.categories.length > 0
-                                       ? `${product.categories[0].name} (ID: ${product.categories[0].id})`
-                                       : 'Chưa có danh mục'}
+                                          ? `${product.categories[0].name} (ID: ${product.categories[0].id})`
+                                          : 'Chưa có danh mục'}
                                  </span>
                               </div>
                            </div>
@@ -1560,7 +1552,7 @@ const ProductTable = ({
                                                             className='h-10 w-10 flex-shrink-0 mr-3 border rounded-md overflow-hidden hover:opacity-80 transition-opacity'
                                                          >
                                                             {detailImagesCache[detail.id]?.length >
-                                                            0 ? (
+                                                               0 ? (
                                                                // Sử dụng hình ảnh từ cache nếu có
                                                                <div className='relative h-full w-full'>
                                                                   <Image
@@ -1569,9 +1561,8 @@ const ProductTable = ({
                                                                            detail.id
                                                                         ][0].path
                                                                      }
-                                                                     alt={`${product.name} - ${
-                                                                        detail.size || ''
-                                                                     } ${detail.type || ''}`}
+                                                                     alt={`${product.name} - ${detail.size || ''
+                                                                        } ${detail.type || ''}`}
                                                                      width={40}
                                                                      height={40}
                                                                      className='object-cover h-full w-full'
@@ -1584,13 +1575,13 @@ const ProductTable = ({
                                                                   />
                                                                   {detailImagesCache[detail.id]
                                                                      .length > 1 && (
-                                                                     <div className='absolute bottom-0 right-0 bg-black bg-opacity-50 text-white text-xs rounded-tl-sm px-1'>
-                                                                        +
-                                                                        {detailImagesCache[
-                                                                           detail.id
-                                                                        ].length - 1}
-                                                                     </div>
-                                                                  )}
+                                                                        <div className='absolute bottom-0 right-0 bg-black bg-opacity-50 text-white text-xs rounded-tl-sm px-1'>
+                                                                           +
+                                                                           {detailImagesCache[
+                                                                              detail.id
+                                                                           ].length - 1}
+                                                                        </div>
+                                                                     )}
                                                                </div>
                                                             ) : (
                                                                <div className='flex items-center justify-center h-full w-full text-gray-400 bg-gray-100'>
@@ -1627,9 +1618,24 @@ const ProductTable = ({
                                                    </td>
                                                    <td className='px-6 py-4 whitespace-nowrap text-sm'>
                                                       {Number(detail.quantities) === 0 ? (
-                                                         <span className='inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800'>
-                                                            Hết hàng
-                                                         </span>
+                                                         <div className='flex items-center'>
+                                                            <span className='inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 mr-2'>
+                                                               Hết hàng
+                                                            </span>
+                                                            <button
+                                                               onClick={() =>
+                                                                  openStockReceiptModal(
+                                                                     product.id,
+                                                                     detail.id,
+                                                                     'increase',
+                                                                  )
+                                                               }
+                                                               className='text-xs text-amber-600 hover:text-amber-800'
+                                                               title='Nhập thêm hàng'
+                                                            >
+                                                               <PlusIcon className='h-4 w-4' />
+                                                            </button>
+                                                         </div>
                                                       ) : Number(detail.quantities) <= 10 ? (
                                                          <div className='flex items-center'>
                                                             <span className='inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 mr-2'>
@@ -1662,11 +1668,10 @@ const ProductTable = ({
                                                    </td>
                                                    <td className='px-6 py-4 whitespace-nowrap'>
                                                       <span
-                                                         className={`px-2 py-1 text-xs rounded-full ${
-                                                            detail.isActive
-                                                               ? 'bg-green-100 text-green-800'
-                                                               : 'bg-gray-100 text-gray-800'
-                                                         }`}
+                                                         className={`px-2 py-1 text-xs rounded-full ${detail.isActive
+                                                            ? 'bg-green-100 text-green-800'
+                                                            : 'bg-gray-100 text-gray-800'
+                                                            }`}
                                                       >
                                                          {detail.isActive
                                                             ? 'Đang bán'
@@ -1733,11 +1738,10 @@ const ProductTable = ({
                                     )}
                                     <button
                                        onClick={() => goToPage(page)}
-                                       className={`px-3 py-1 border rounded text-sm ${
-                                          currentPage === page
-                                             ? 'bg-amber-500 text-white border-amber-500'
-                                             : 'bg-white text-gray-700 hover:bg-gray-50'
-                                       }`}
+                                       className={`px-3 py-1 border rounded text-sm ${currentPage === page
+                                          ? 'bg-amber-500 text-white border-amber-500'
+                                          : 'bg-white text-gray-700 hover:bg-gray-50'
+                                          }`}
                                     >
                                        {page}
                                     </button>
@@ -1827,11 +1831,10 @@ const ProductTable = ({
                                              currentImageIndex: index,
                                           })
                                        }
-                                       className={`h-16 w-16 flex-shrink-0 rounded border-2 ${
-                                          detailImagesModal.currentImageIndex === index
-                                             ? 'border-amber-600'
-                                             : 'border-transparent hover:border-gray-300'
-                                       }`}
+                                       className={`h-16 w-16 flex-shrink-0 rounded border-2 ${detailImagesModal.currentImageIndex === index
+                                          ? 'border-amber-600'
+                                          : 'border-transparent hover:border-gray-300'
+                                          }`}
                                     >
                                        <div className='relative h-full w-full'>
                                           <Image
@@ -2085,9 +2088,8 @@ const InventoryHistoryModal = ({
          const productNameMatch = (item.product_detail?.product?.name || '')
             .toLowerCase()
             .includes(searchLower);
-         const variantInfoMatch = `${item.product_detail?.size || ''} ${
-            item.product_detail?.type || ''
-         } ${item.product_detail?.values || ''}`
+         const variantInfoMatch = `${item.product_detail?.size || ''} ${item.product_detail?.type || ''
+            } ${item.product_detail?.values || ''}`
             .toLowerCase()
             .includes(searchLower);
          const idMatch = item.product_detail_id.toString().includes(searchLower);
@@ -2148,11 +2150,11 @@ const InventoryHistoryModal = ({
          const data = filteredHistory.map((item) => {
             const productInfo = item.product_detail?.product
                ? {
-                    name: item.product_detail.product.name,
-                    size: item.product_detail.size || '',
-                    type: item.product_detail.type || '',
-                    values: item.product_detail.values || '',
-                 }
+                  name: item.product_detail.product.name,
+                  size: item.product_detail.size || '',
+                  type: item.product_detail.type || '',
+                  values: item.product_detail.values || '',
+               }
                : getProductInfo(item.product_detail_id);
 
             return {
@@ -2196,7 +2198,7 @@ const InventoryHistoryModal = ({
          console.error('Error exporting data:', error);
          showToast(
             'Không thể xuất dữ liệu: ' +
-               (error instanceof Error ? error.message : 'Lỗi không xác định'),
+            (error instanceof Error ? error.message : 'Lỗi không xác định'),
             'error',
          );
       }
@@ -2406,17 +2408,17 @@ const InventoryHistoryModal = ({
                                        </th>
                                     </tr>
                                  </thead>
-                                 <tbody className='bg-white divide-y divide-gray-200'>
+                                 <tbody className='bg-gray-50 divide-y divide-gray-200'>
                                     {items.map((item) => {
                                        // Lấy thông tin sản phẩm từ cache hoặc tính toán
                                        const productInfo = item.product_detail?.product
                                           ? {
-                                               name: item.product_detail.product.name,
-                                               image: item.product_detail.product.image,
-                                               size: item.product_detail.size || '',
-                                               type: item.product_detail.type || '',
-                                               values: item.product_detail.values || '',
-                                            }
+                                             name: item.product_detail.product.name,
+                                             image: item.product_detail.product.image,
+                                             size: item.product_detail.size || '',
+                                             type: item.product_detail.type || '',
+                                             values: item.product_detail.values || '',
+                                          }
                                           : getProductInfo(item.product_detail_id);
 
                                        return (
@@ -2461,11 +2463,10 @@ const InventoryHistoryModal = ({
                                              </td>
                                              <td className='px-6 py-4 whitespace-nowrap'>
                                                 <span
-                                                   className={`px-2 py-1 text-xs rounded-full ${
-                                                      item.status === 'increase'
-                                                         ? 'bg-green-100 text-green-800'
-                                                         : 'bg-red-100 text-red-800'
-                                                   }`}
+                                                   className={`px-2 py-1 text-xs rounded-full ${item.status === 'increase'
+                                                      ? 'bg-green-100 text-green-800'
+                                                      : 'bg-red-100 text-red-800'
+                                                      }`}
                                                 >
                                                    {item.status === 'increase'
                                                       ? 'Nhập kho'
@@ -2654,8 +2655,8 @@ export default function Warehouse() {
                      images: Array.isArray(product.images)
                         ? product.images
                         : product.images
-                        ? [product.images]
-                        : [],
+                           ? [product.images]
+                           : [],
                      details: [],
                      pricing: [],
                      categories: product.categories || [],
@@ -2670,8 +2671,8 @@ export default function Warehouse() {
                   images: Array.isArray(detailData.images)
                      ? detailData.images
                      : detailData.images
-                     ? [detailData.images]
-                     : [],
+                        ? [detailData.images]
+                        : [],
                   details: detailData.details || [],
                   pricing: [], // We'll fetch pricing separately
                   categories: detailData.categories || [],
@@ -2682,8 +2683,8 @@ export default function Warehouse() {
                   images: Array.isArray(product.images)
                      ? product.images
                      : product.images
-                     ? [product.images]
-                     : [],
+                        ? [product.images]
+                        : [],
                   details: [],
                   pricing: [],
                   categories: product.categories || [],
@@ -2905,20 +2906,14 @@ export default function Warehouse() {
          // Sửa phần case 'Hết hàng' trong filteredProducts
          case 'Hết hàng':
             return products.filter((product) => {
-               // Kiểm tra sản phẩm không có phiên bản nào
+               // Nếu không có chi tiết sản phẩm nào, cũng coi là "hết hàng"
                if (!product.details || product.details.length === 0) {
                   return true;
                }
 
-               // Kiểm tra tất cả phiên bản của sản phẩm có hết hàng không
-               return product.details.every((detail) => {
-                  // Chuyển đổi quantities thành số và xử lý null/undefined
-                  const quantity =
-                     detail.quantities !== undefined && detail.quantities !== null
-                        ? Number(detail.quantities)
-                        : 0;
-
-                  // Kiểm tra số lượng bằng 0
+               // Sản phẩm có ít nhất một phiên bản đang hết hàng (quantities = 0)
+               return product.details.some(detail => {
+                  const quantity = Number(detail.quantities) || 0;
                   return quantity === 0;
                });
             });
@@ -2952,7 +2947,7 @@ export default function Warehouse() {
                }) && !p.details?.every((d) => Number(d.quantities) === 0),
          ).length,
          'Hết hàng': products.filter(
-            (p) => !p.details?.length || p.details?.every((d) => Number(d.quantities) === 0),
+            (p) => !p.details?.length || p.details?.some((d) => Number(d.quantities) === 0)
          ).length,
          'Khuyến mãi': products.filter((p) =>
             p.pricing?.some(
@@ -3009,9 +3004,8 @@ export default function Warehouse() {
             const errorData = await response.json().catch(() => ({}));
             throw new Error(
                errorData.message ||
-                  `Lỗi khi ${receiptData.operationType === 'increase' ? 'nhập' : 'xuất'} kho: ${
-                     response.status
-                  }`,
+               `Lỗi khi ${receiptData.operationType === 'increase' ? 'nhập' : 'xuất'} kho: ${response.status
+               }`,
             );
          }
 
