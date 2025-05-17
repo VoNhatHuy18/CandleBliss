@@ -1164,7 +1164,7 @@ function NavBarContent() {
                      </span>
                   </Link>
                   <div className='relative'>
-                     <Link href='/user/product' onClick={toggleMobileMenu}>
+                     <Link href='/user/products' onClick={toggleMobileMenu}>
                         <span className='block text-[#553C26] text-lg font-mont hover:text-[#FF9900]'>
                            Sản Phẩm
                         </span>
