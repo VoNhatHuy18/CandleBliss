@@ -245,6 +245,9 @@ export default function OrderPage() {
    // Add a new state to track which products have been fetched
    const [fetchedProducts, setFetchedProducts] = useState<Record<string, boolean>>({});
 
+   // Add state to track if COD orders have been processed
+   const [codOrdersProcessed, setCodOrdersProcessed] = useState(false);
+
    const [selectedOrderId, setSelectedOrderId] = useState<number | null>(null);
 
    // Add this state to track which order is currently processing payment
@@ -289,6 +292,8 @@ export default function OrderPage() {
                headers: {
                   Authorization: `Bearer ${token}`,
                },
+               // Thêm cache control để tránh fetch lặp lại
+               cache: 'no-store'
             });
 
             if (!response.ok) {
@@ -304,6 +309,12 @@ export default function OrderPage() {
 
             setOrders(sortedOrders);
 
+            // Reset các state liên quan khi tải lại orders
+            setFetchedProducts({});
+            setFetchedDetails({});
+            setCodOrdersProcessed(false);
+            setCheckedPayments(false);
+
             if (sortedOrders.length === 0) {
                showToastMessage('Bạn chưa có đơn hàng nào', 'info');
             }
@@ -312,16 +323,19 @@ export default function OrderPage() {
             showToastMessage('Không thể tải danh sách đơn hàng', 'error');
          }
       },
-      [router, showToastMessage],
+      [router, showToastMessage]
    );
 
+   // Sửa lại hàm fetchProductDetails để tránh re-render không cần thiết
    const fetchProductDetails = useCallback(
-      async (orders: Order[]) => {
+      async (ordersToProcess: Order[]) => {
          const token = localStorage.getItem('token');
-         if (!token) return;
+         if (!token || ordersToProcess.length === 0) return;
 
          let hasUpdates = false;
-         const updatedOrders = [...orders];
+         const updatedOrders = [...ordersToProcess];
+         const newFetchedProducts = { ...fetchedProducts };
+         const newFetchedDetails = { ...fetchedDetails };
 
          for (const order of updatedOrders) {
             for (const item of order.item) {
@@ -340,19 +354,10 @@ export default function OrderPage() {
 
                      if (productResponse.ok) {
                         const productData = await productResponse.json();
-                        console.log(`Product data fetched:`, productData);
 
                         // Find the matching product detail
                         const matchingDetail = productData.details?.find(
-                           (detail: {
-                              id: number;
-                              size: string;
-                              type: string;
-                              values: string;
-                              quantities: number;
-                              isActive: boolean;
-                              images: Array<{ id: string; path: string; public_id: string }>;
-                           }) => detail.id === item.product_detail_id,
+                           (detail: { id: number }) => detail.id === item.product_detail_id,
                         );
 
                         // Set the product information
@@ -375,18 +380,11 @@ export default function OrderPage() {
                            };
 
                            // Mark detail as fetched
-                           setFetchedDetails((prev) => ({
-                              ...prev,
-                              [item.product_detail_id]: true,
-                           }));
+                           newFetchedDetails[item.product_detail_id] = true;
                         }
 
                         // Mark product as fetched
-                        setFetchedProducts((prev) => ({
-                           ...prev,
-                           [item.product_id]: true,
-                        }));
-
+                        newFetchedProducts[item.product_id] = true;
                         hasUpdates = true;
                      } else {
                         console.error(
@@ -404,6 +402,8 @@ export default function OrderPage() {
          }
 
          if (hasUpdates) {
+            setFetchedProducts(newFetchedProducts);
+            setFetchedDetails(newFetchedDetails);
             setOrders(updatedOrders);
             setFilteredOrders(
                statusFilter
@@ -412,12 +412,15 @@ export default function OrderPage() {
             );
          }
       },
-      [fetchedDetails, fetchedProducts, statusFilter],
+      [fetchedProducts, fetchedDetails, statusFilter],
    );
 
    // Update useEffect with all dependencies
    useEffect(() => {
       const init = async () => {
+         // Kiểm tra đã tải orders chưa để tránh fetch lặp lại
+         if (orders.length > 0 && !loading) return;
+
          // Lấy thông tin userId từ localStorage
          const storedUserId = localStorage.getItem('userId');
          if (!storedUserId) {
@@ -440,14 +443,26 @@ export default function OrderPage() {
       };
 
       init();
-   }, [router, loadOrders, showToastMessage]);
+      // Chỉ chạy một lần khi component mount
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+   }, []);
 
-   // Call fetchProductDetails when orders change
+   // Chỉ gọi fetchProductDetails khi orders thay đổi
+   // và tối ưu để chỉ gọi 1 lần cho mỗi sản phẩm
    useEffect(() => {
-      if (orders.length > 0) {
-         fetchProductDetails(orders);
+      if (orders.length > 0 && !loading) {
+         // Lọc ra những order có item chưa được fetch chi tiết
+         const ordersNeedingDetails = orders.filter(order =>
+            order.item.some(item =>
+               item.product_id && !fetchedProducts[item.product_id]
+            )
+         );
+
+         if (ordersNeedingDetails.length > 0) {
+            fetchProductDetails(ordersNeedingDetails);
+         }
       }
-   }, [orders, fetchProductDetails]);
+   }, [orders, fetchProductDetails, fetchedProducts, loading]);
 
    // Modified handleCancelOrder function to only allow cancellation in specific statuses
 
@@ -602,14 +617,17 @@ export default function OrderPage() {
       }
    }, [showToastMessage]);
 
-   // Thêm hàm kiểm tra các đơn hàng chưa thanh toán khi component mount
+   // Thêm state để tránh kiểm tra liên tục
+   const [checkedPayments, setCheckedPayments] = useState(false);
+
+   // Kiểm tra các đơn hàng chưa thanh toán khi component mount
    const checkPendingPayments = useCallback(() => {
+      if (checkedPayments || orders.length === 0) return;
+
       // Filter orders with "Đang chờ thanh toán" status
       const pendingOrders = orders.filter(
          (order) => order.status === 'Đang chờ thanh toán' && order.method_payment !== 'COD'
       );
-
-      // No longer need to check failed orders for automatic cancellation
 
       if (pendingOrders.length > 0) {
          // Show warning toast for pending orders
@@ -618,8 +636,11 @@ export default function OrderPage() {
             'info'
          );
       }
+
       // Check pending orders (15 minutes timeout)
       const now = new Date().getTime();
+      let hasExpired = false;
+
       pendingOrders.forEach((order) => {
          const createdTime = new Date(order.createdAt).getTime();
          const timePassed = now - createdTime;
@@ -628,28 +649,27 @@ export default function OrderPage() {
          if (timePassed >= timeoutMs) {
             console.log(`Order ${order.id} payment time (15min) has expired, updating status...`);
             handlePaymentTimeout(order.id, 'Đang chờ thanh toán');
+            hasExpired = true;
          }
       });
 
-      // Remove check for failed payment orders (24 hours timeout)
+      // Đánh dấu đã kiểm tra
+      setCheckedPayments(true);
 
-   }, [orders, handlePaymentTimeout, showToastMessage]);
+      // Chỉ thiết lập interval nếu có đơn hàng đang chờ thanh toán
+      return pendingOrders.length > 0 && !hasExpired;
+   }, [orders, handlePaymentTimeout, showToastMessage, checkedPayments]);
 
-
+   // Thiết lập kiểm tra thanh toán định kỳ nếu cần
    useEffect(() => {
       if (orders.length > 0) {
-         checkPendingPayments();
-      }
-   }, [orders, checkPendingPayments]);
+         const shouldSetInterval = checkPendingPayments();
 
-   useEffect(() => {
-      if (orders.length > 0) {
-         checkPendingPayments();
-
-         // Thiết lập kiểm tra định kỳ mỗi phút
-         const intervalId = setInterval(checkPendingPayments, 60000);
-
-         return () => clearInterval(intervalId);
+         // Chỉ thiết lập interval nếu cần thiết
+         if (shouldSetInterval) {
+            const intervalId = setInterval(checkPendingPayments, 60000);
+            return () => clearInterval(intervalId);
+         }
       }
    }, [orders, checkPendingPayments]);
 
@@ -661,7 +681,10 @@ export default function OrderPage() {
          (order) => order.status === 'Đơn hàng vừa được tạo' && order.method_payment === 'COD',
       );
 
-      if (codOrdersToUpdate.length === 0) return;
+      if (codOrdersToUpdate.length === 0) {
+         setCodOrdersProcessed(true);
+         return;
+      }
 
       const token = localStorage.getItem('token');
       if (!token) return;
@@ -695,14 +718,18 @@ export default function OrderPage() {
             console.error(`Error updating order ${order.id} status:`, error);
          }
       }
-   }, [orders]);
 
-   // Add a new useEffect to run the COD status update
+      // Đánh dấu đã xử lý xong
+      setCodOrdersProcessed(true);
+   }, [orders, codOrdersProcessed]);
+
+   // Sử dụng một useEffect riêng cho việc xử lý đơn hàng COD
    useEffect(() => {
-      if (orders.length > 0) {
+      if (orders.length > 0 && !codOrdersProcessed) {
          handleCODOrderStatus();
       }
-   }, [orders, handleCODOrderStatus]);
+   }, [orders, handleCODOrderStatus, codOrdersProcessed]);
+
    // Cập nhật hàm handleRetryPayment để xử lý thanh toán lại qua MOMO
    const handleRetryPayment = async (orderId: number) => {
       try {
@@ -793,9 +820,15 @@ export default function OrderPage() {
       }
    };
 
+   // Thêm state để tránh kiểm tra nhiều lần
+   const [paymentChecked, setPaymentChecked] = useState(false);
+
    // Add this useEffect near the top of your OrderPage component, after other useEffect hooks
    useEffect(() => {
       const checkMomoPayment = async () => {
+         if (paymentChecked) return;
+         setPaymentChecked(true);
+
          // Check if there's a pending order ID in localStorage
          const pendingOrderId = localStorage.getItem('pendingOrderId');
 
@@ -830,7 +863,7 @@ export default function OrderPage() {
       };
 
       checkMomoPayment();
-   }, []);
+   }, [loadOrders, showToastMessage, paymentChecked]);
 
    // Function to handle cancel order
    const handleCancelOrder = (orderId: number) => {
@@ -1110,7 +1143,7 @@ export default function OrderPage() {
                >
                   Tất cả
                </Link>
-               {['Đang xử lý', 'Đang giao hàng', 'Hoàn thành'].map((status) => (
+               {['Đang xử lý', 'Đang giao hàng', 'Hoàn thành', 'Đã huỷ'].map((status) => (
                   <Link
                      key={status}
                      href={`/user/order?status=${encodeURIComponent(status)}`}

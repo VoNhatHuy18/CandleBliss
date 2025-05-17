@@ -108,7 +108,7 @@ export default function AddressPage() {
             throw new Error('No authentication token found');
          }
 
-         const response = await fetch(`/api/v1/users/${userId}`, {
+         const response = await fetch(`${HOST}/api/v1/users/${userId}`, {
             headers: {
                Authorization: `Bearer ${token}`,
                'Content-Type': 'application/json',
@@ -291,33 +291,17 @@ export default function AddressPage() {
 
             const validAddresses = addressesData
                .filter((data) => data && (data.userId === userId || data.user?.id === userId))
-               .map((data) => {
-                  const receiverName =
-                     data.fullName ||
-                     (data.user
-                        ? `${data.user.firstName || ''} ${data.user.lastName || ''}`.trim()
-                        : userInfo
-                           ? `${userInfo.firstName || ''} ${userInfo.lastName || ''}`.trim()
-                           : '');
-
-                  const receiverPhone =
-                     data.phone ||
-                     data.user?.phone?.toString() ||
-                     userInfo?.phone?.toString() ||
-                     '';
-
-                  return {
-                     id: data.id,
-                     fullName: receiverName,
-                     phone: receiverPhone,
-                     province: data.province || '',
-                     district: data.district || '',
-                     ward: data.ward || '',
-                     streetAddress: data.street || '',
-                     isDefault: data.isDefault || false,
-                     userId: userId,
-                  };
-               });
+               .map((data) => ({
+                  id: data.id,
+                  fullName: data.fullName || `${userInfo?.firstName || ''} ${userInfo?.lastName || ''}`.trim(),
+                  phone: data.phone || userInfo?.phone?.toString() || '',
+                  province: data.province || '',
+                  district: data.district || '',
+                  ward: data.ward || '',
+                  streetAddress: data.street || '', // Make sure to map street to streetAddress
+                  isDefault: data.isDefault || false,
+                  userId: userId,
+               }));
 
             if (validAddresses.length > 0) {
                localStorage.setItem(addressStorageKey, JSON.stringify(validAddresses));
@@ -510,7 +494,7 @@ export default function AddressPage() {
          }
 
          const isUpdate = !!addressData.id;
-         const url = isUpdate ? `/api/v1/address/${addressData.id}` : '/api/v1/address';
+         const url = isUpdate ? `${HOST}/api/v1/address/${addressData.id}` : `${HOST}/api/v1/address`;
 
          const method = isUpdate ? 'PATCH' : 'POST';
 
@@ -548,7 +532,7 @@ export default function AddressPage() {
             province: addressData.province,
             district: addressData.district,
             ward: addressData.ward,
-            street: addressData.street,
+            streetAddress: addressData.street, // Chuyển từ street sang streetAddress
             isDefault: addressData.isDefault,
             userId: addressData.userId,
          };

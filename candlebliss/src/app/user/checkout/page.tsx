@@ -868,14 +868,12 @@ export default function CheckoutPage() {
             .filter((data) => data && (data.userId === userId || data.user?.id === userId))
             .map((data) => ({
                id: data.id,
-               fullName:
-                  data.fullName ||
-                  `${userInfo?.firstName || ''} ${userInfo?.lastName || ''}`.trim(),
+               fullName: data.fullName || `${userInfo?.firstName || ''} ${userInfo?.lastName || ''}`.trim(),
                phone: data.phone || userInfo?.phone?.toString() || '',
                province: data.province || '',
                district: data.district || '',
                ward: data.ward || '',
-               streetAddress: data.street || '',
+               streetAddress: data.streetAddress || data.street || '', // Kiểm tra cả hai trường
                isDefault: data.isDefault || false,
                userId: userId,
             }));
@@ -1171,8 +1169,8 @@ export default function CheckoutPage() {
          // Tạo dữ liệu gửi lên API, chuyển đổi streetAddress thành street
          const apiAddressData = {
             ...addressData,
-            street: addressData.streetAddress, // Chuyển đổi tên trường từ streetAddress sang street cho API
-            streetAddress: undefined, // Không gửi trường này lên API
+            street: addressData.streetAddress, // Convert streetAddress to street for API
+            streetAddress: undefined, // Remove this field from API payload
          };
 
          const response = await fetch(url, {
@@ -1667,8 +1665,8 @@ export default function CheckoutPage() {
          return;
       }
 
-      // Format địa chỉ thành chuỗi
-      const formattedAddress = `${selectedAddress.fullName}, ${selectedAddress.phone}, ${selectedAddress.streetAddress}, ${selectedAddress.ward}, ${selectedAddress.district}, ${selectedAddress.province}`;
+      // Format địa chỉ thành chuỗi theo định dạng mới
+      const formattedAddress = `${selectedAddress.streetAddress}, ${selectedAddress.ward}, ${selectedAddress.district}, ${selectedAddress.province}`;
 
       // Chuẩn bị thông tin tóm tắt đơn hàng
       setOrderSummary({
@@ -1759,7 +1757,8 @@ export default function CheckoutPage() {
                show={toast.show}
                message={toast.message}
                type={toast.type}
-               onClose={() => setToast((prev) => ({ ...prev, show: false }))}
+               onClose={() => setToast((prev) => ({ ...prev, show: false }))
+               }
             />
          </div>
 

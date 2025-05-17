@@ -301,14 +301,10 @@ export default function OrderDetailPage() {
         message: '',
         type: 'info' as 'success' | 'error' | 'info',
     });
-    const [customerInfoFetched, setCustomerInfoFetched] = useState(false);
-
-    // Add near the beginning of your OrderDetailPage component
     const [showUpdateStatusModal, setShowUpdateStatusModal] = useState(false);
     const [newStatus, setNewStatus] = useState('');
     const [updating, setUpdating] = useState(false);
     const [previewImage, setPreviewImage] = useState<string | null>(null);
-    // Add this inside your OrderDetailPage component
 
     // Update the list of valid statuses to match exactly what the API expects
     const validOrderStatuses = [
@@ -374,7 +370,7 @@ export default function OrderDetailPage() {
             let responseData;
             try {
                 responseData = JSON.parse(responseText);
-            } catch (e) {
+            } catch {
                 console.log('Response is not JSON');
             }
 
@@ -426,6 +422,7 @@ export default function OrderDetailPage() {
     useEffect(() => {
         const fetchOrderDetails = async () => {
             try {
+                setLoading(true);
                 const token = localStorage.getItem('token');
                 if (!token) {
                     showToastMessage('Phiên đăng nhập hết hạn, vui lòng đăng nhập lại', 'error');
@@ -433,7 +430,7 @@ export default function OrderDetailPage() {
                     return;
                 }
 
-                // Updated API URL format
+                // Fetch đơn hàng
                 const response = await fetch(
                     `${HOST}/api/orders/{id}?id=${params.id}`,
                     {
@@ -450,10 +447,22 @@ export default function OrderDetailPage() {
                 const data = await response.json();
                 setOrder(data);
 
-                // Fetch product details for each item
-                if (data.item && data.item.length > 0) {
-                    fetchProductData(data);
+                // Fetch thông tin khách hàng và sản phẩm cùng lúc
+                const fetchPromises = [];
+
+                // Thêm promise fetch thông tin khách hàng
+                if (data.user_id) {
+                    fetchPromises.push(fetchCustomerInfo(data.user_id, data));
                 }
+
+                // Thêm promise fetch thông tin sản phẩm
+                if (data.item && data.item.length > 0) {
+                    fetchPromises.push(fetchProductData(data));
+                }
+
+                // Chờ tất cả fetch hoàn thành
+                await Promise.all(fetchPromises);
+
             } catch (error) {
                 console.error('Error fetching order details:', error);
                 showToastMessage('Không thể tải thông tin đơn hàng', 'error');
@@ -531,15 +540,8 @@ export default function OrderDetailPage() {
         }
     };
 
-    // Thêm useEffect để fetch thông tin khách hàng
-    useEffect(() => {
-        if (order?.user_id && !customerInfoFetched) {
-            fetchCustomerInfo(order.user_id);
-        }
-    }, [order?.user_id, customerInfoFetched]);
-
-    // Sửa hàm fetch thông tin khách hàng
-    const fetchCustomerInfo = async (userId: number) => {
+    // Sửa hàm fetchCustomerInfo để không sử dụng setCustomerInfoFetched
+    const fetchCustomerInfo = async (userId: number, currentOrder: Order) => {
         try {
             const token = localStorage.getItem('token');
             if (!token) return;
@@ -552,24 +554,24 @@ export default function OrderDetailPage() {
 
             if (response.ok) {
                 const userData = await response.json();
-                console.log("Customer data fetched:", userData); // Debug log
 
-                // Cập nhật thông tin khách hàng vào order với hàm cập nhật state đảm bảo
-                setOrder(prevOrder => {
-                    if (!prevOrder) return null;
-                    return {
-                        ...prevOrder,
-                        customer_name: userData.firstName && userData.lastName
-                            ? `${userData.firstName} ${userData.lastName}`
-                            : userData.firstName || userData.lastName || userData.username || 'Không có thông tin',
-                        customer_phone: userData.phone ? userData.phone.toString() : 'Không có thông tin'
-                    };
-                });
-                setCustomerInfoFetched(true);  // Mark as fetched
+                // Cập nhật thông tin khách hàng vào order
+                const updatedOrder = {
+                    ...currentOrder,
+                    customer_name: userData.firstName && userData.lastName
+                        ? `${userData.firstName} ${userData.lastName}`
+                        : userData.firstName || userData.lastName || userData.username || 'Không có thông tin',
+                    customer_phone: userData.phone ? userData.phone.toString() : 'Không có thông tin'
+                };
+
+                // Cập nhật state order với đầy đủ thông tin
+                setOrder(updatedOrder);
+                return updatedOrder;
             }
         } catch (error) {
             console.error('Error fetching customer info:', error);
         }
+        return currentOrder;
     };
 
     return (

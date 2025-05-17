@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import {
     Search, Filter, Trash2, Eye,
-    ArrowLeft, ArrowRight, Download, RefreshCcw, ChevronDown, X
+    ArrowLeft, ArrowRight, Download, RefreshCcw, ChevronDown, X, ShoppingBag, ExternalLink
 } from 'lucide-react';
 import Sidebar from '@/app/components/seller/menusidebar/page';
 import Header from '@/app/components/seller/header/page';
@@ -12,6 +12,8 @@ import { vi } from 'date-fns/locale';
 import { saveAs } from 'file-saver';
 import * as XLSX from 'xlsx';
 import { HOST } from '@/app/constants/api'
+import Image from 'next/image';
+import Link from 'next/link';
 
 interface Customer {
     id: number;
@@ -39,6 +41,58 @@ interface Pagination {
     hasNextPage?: boolean;
 }
 
+// Định nghĩa interface Order
+interface Order {
+    id: number;
+    order_code: string;
+    user_id: number;
+    cancelReason: string | null;
+    status: string;
+    address: string;
+    total_quantity: number;
+    total_price: string;
+    discount: string;
+    ship_price: string;
+    voucher_id: string;
+    method_payment: string;
+    cancel_images: Array<{ path: string }> | null;
+    createdAt: string;
+    updatedAt: string;
+    item: {
+        id: number;
+        status: string;
+        unit_price: string;
+        product_detail_id: number;
+        product_id: string;
+        quantity: number;
+        totalPrice: string;
+        __entity: string;
+        product_name?: string;
+        product_image?: string | null;
+        product_detail?: {
+            id: number;
+            size?: string;
+            values?: string;
+            type?: string;
+        };
+    }[];
+    __entity: string;
+}
+
+// Định nghĩa màu sắc trạng thái đơn hàng
+const orderStatusColors: Record<string, string> = {
+    'Đơn hàng vừa được tạo': 'bg-blue-100 text-blue-800',
+    'Đang chờ thanh toán': 'bg-blue-100 text-blue-800',
+    'Thanh toán thất bại': 'bg-red-100 text-red-800',
+    'Thanh toán thành công': 'bg-green-100 text-green-800',
+    'Đang xử lý': 'bg-yellow-100 text-yellow-800',
+    'Đã đặt hàng': 'bg-blue-100 text-blue-800',
+    'Đang giao hàng': 'bg-purple-100 text-purple-800',
+    'Hoàn thành': 'bg-green-100 text-green-800',
+    'Đã huỷ': 'bg-red-100 text-red-800',
+    'Đổi trả hàng': 'bg-yellow-100 text-yellow-800',
+};
+
 export default function CustomerPage() {
     // State management
     const [customers, setCustomers] = useState<Customer[]>([]);
@@ -47,6 +101,11 @@ export default function CustomerPage() {
     const [showFilters, setShowFilters] = useState<boolean>(false);
     const [showModal, setShowModal] = useState<boolean>(false);
     const [modalMode, setModalMode] = useState<'view' | 'edit' | 'delete'>('view');
+
+    // Thêm state cho tab và đơn hàng - chuyển vào trong component
+    const [activeTab, setActiveTab] = useState<string>('info');
+    const [customerOrders, setCustomerOrders] = useState<Order[]>([]);
+    const [ordersLoading, setOrdersLoading] = useState<boolean>(false);
 
     // Initialize with safe defaults
     const [pagination, setPagination] = useState<Pagination>({
@@ -71,6 +130,10 @@ export default function CustomerPage() {
         status: 1
     });
 
+    // State cho modal chi tiết đơn hàng
+    const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+    const [showOrderDetailModal, setShowOrderDetailModal] = useState<boolean>(false);
+
     const fetchCustomers = async (page: number = 1) => {
         setLoading(true);
         try {
@@ -83,7 +146,8 @@ export default function CustomerPage() {
 
             // Update the API endpoint to use /v1/users without query parameters
             const response = await fetch(`${HOST}/api/v1/users`, {
-                headers: {
+                headers:
+                {
                     'Authorization': `Bearer ${token}`
                 }
             });
@@ -195,7 +259,145 @@ export default function CustomerPage() {
         }
     };
 
+    // Thêm hàm formatPrice cho việc hiển thị giá
+    const formatPrice = (price: string | number): string => {
+        const numPrice = typeof price === 'string' ? parseFloat(price) : price;
+        return new Intl.NumberFormat('vi-VN', {
+            style: 'currency',
+            currency: 'VND',
+            minimumFractionDigits: 0,
+        }).format(numPrice);
+    };
 
+    // Thêm hàm fetch đơn hàng của khách hàng
+    const fetchProductInfo = async (productId: string, item: Order['item'][0], token: string) => {
+        try {
+            const response = await fetch(`${HOST}/api/products/${productId}`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+
+            if (!response.ok) {
+                console.log(`Product API returned status ${response.status} for product ID ${productId}`);
+                return {
+                    ...item,
+                    product_name: `Sản phẩm #${productId}`,
+                    product_image: null,
+                };
+            }
+
+            const productData = await response.json();
+
+            // Kiểm tra xem productData có đúng định dạng không
+            if (!productData || typeof productData !== 'object') {
+                console.log(`Invalid product data format for product ID ${productId}`);
+                return {
+                    ...item,
+                    product_name: `Sản phẩm #${productId}`,
+                    product_image: null,
+                };
+            }
+
+            // Thêm thông tin sản phẩm vào item
+            return {
+                ...item,
+                product_name: productData.name || `Sản phẩm #${productId}`,
+                product_image: productData.images?.[0]?.path || null,
+                product_detail: productData.details?.find(
+                    (detail: { id: number; size?: string; values?: string; type?: string }) => detail.id === item.product_detail_id
+                ) || null
+            };
+        } catch (error) {
+            console.error(`Error fetching product ${productId}:`, error);
+            return {
+                ...item,
+                product_name: `Sản phẩm #${productId}`,
+                product_image: null,
+            };
+        }
+    };
+
+    const fetchCustomerOrders = async (userId: number) => {
+        setOrdersLoading(true);
+        try {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                setOrdersLoading(false);
+                return;
+            }
+
+            const response = await fetch(`${HOST}/api/orders?user_id=${userId}`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to fetch customer orders');
+            }
+
+            const data = await response.json();
+
+            // Xử lý dữ liệu trả về
+            let orders = [];
+
+            // Kiểm tra cấu trúc data
+            if (Array.isArray(data)) {
+                orders = data;
+            } else if (data && typeof data === 'object') {
+                // Nếu API trả về một object đơn lẻ có __entity là OrdersEntity hoặc có id
+                if (data.__entity === 'OrdersEntity' || data.id) {
+                    orders = [data];
+                }
+                // Nếu API trả về dạng {data: [...]}
+                else if (data.data && Array.isArray(data.data)) {
+                    orders = data.data;
+                }
+            }
+
+            if (orders.length === 0) {
+                setCustomerOrders([]);
+                setOrdersLoading(false);
+                return;
+            }
+
+            // Phải copy ra một mảng mới để không ảnh hưởng đến dữ liệu gốc
+            const ordersWithProductDetails = [...orders];
+
+            // Fetch thông tin sản phẩm cho mỗi item trong đơn hàng
+            const fetchPromises = [];
+            for (let orderIndex = 0; orderIndex < ordersWithProductDetails.length; orderIndex++) {
+                const order = ordersWithProductDetails[orderIndex];
+
+                if (order.item && Array.isArray(order.item)) {
+                    for (let itemIndex = 0; itemIndex < order.item.length; itemIndex++) {
+                        const item = order.item[itemIndex];
+                        if (item.product_id) {
+                            // Thêm promise vào danh sách
+                            fetchPromises.push(
+                                fetchProductInfo(item.product_id, item, token).then(updatedItem => {
+                                    // Cập nhật item trong order
+                                    ordersWithProductDetails[orderIndex].item[itemIndex] = updatedItem;
+                                })
+                            );
+                        }
+                    }
+                }
+            }
+
+            // Đợi tất cả các promise hoàn thành
+            await Promise.all(fetchPromises);
+
+            // Cập nhật state với dữ liệu đã có thông tin sản phẩm
+            setCustomerOrders(ordersWithProductDetails);
+        } catch (error) {
+            console.error('Error fetching customer orders:', error);
+            setCustomerOrders([]);
+        } finally {
+            setOrdersLoading(false);
+        }
+    };
 
     // Delete customer
     const deleteCustomer = async () => {
@@ -230,6 +432,15 @@ export default function CustomerPage() {
         setSelectedCustomer(customer);
         setModalMode(action);
         fetchCustomerDetails(customer.id);
+
+        // Reset activeTab về tab thông tin khi mở modal mới
+        setActiveTab('info');
+
+        // Nếu là view mode, fetch đơn hàng của khách hàng
+        if (action === 'view') {
+            fetchCustomerOrders(customer.id);
+        }
+
         setShowModal(true);
     };
 
@@ -306,6 +517,11 @@ export default function CustomerPage() {
     useEffect(() => {
         fetchCustomers(1);
     }, []);
+
+    const openOrderDetail = (order: Order) => {
+        setSelectedOrder(order);
+        setShowOrderDetailModal(true);
+    };
 
     return (
         <div className='flex h-screen bg-gray-50'>
@@ -566,47 +782,218 @@ export default function CustomerPage() {
                         <div className='p-6 overflow-y-auto max-h-[calc(90vh-120px)]'>
                             {modalMode === 'view' && (
                                 <div className='space-y-6'>
-                                    <div className='flex justify-center'>
-                                        <div className='h-24 w-24 rounded-full overflow-hidden border border-gray-200 bg-amber-50 flex items-center justify-center text-amber-700 text-3xl font-medium'>
-                                            {selectedCustomer.firstName?.charAt(0)}{selectedCustomer.lastName?.charAt(0)}
+                                    {/* Tab Navigation */}
+                                    <div className='border-b border-gray-200'>
+                                        <div className='flex space-x-8'>
+                                            <button
+                                                onClick={() => setActiveTab('info')}
+                                                className={`py-3 px-1 border-b-2 font-medium text-sm ${activeTab === 'info'
+                                                    ? 'border-amber-500 text-amber-600'
+                                                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                                                    }`}
+                                            >
+                                                Thông tin khách hàng
+                                            </button>
+                                            <button
+                                                onClick={() => setActiveTab('orders')}
+                                                className={`py-3 px-1 border-b-2 font-medium text-sm ${activeTab === 'orders'
+                                                    ? 'border-amber-500 text-amber-600'
+                                                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                                                    }`}
+                                            >
+                                                Đơn hàng ({customerOrders.length})
+                                            </button>
                                         </div>
                                     </div>
 
-                                    <div className='grid grid-cols-1 md:grid-cols-2 gap-6'>
-                                        <div>
-                                            <p className='text-sm text-gray-500'>Họ</p>
-                                            <p className='font-medium'>{selectedCustomer.lastName || '-'}</p>
+                                    {/* Tab Content - Thông tin khách hàng */}
+                                    {activeTab === 'info' && (
+                                        <div className='space-y-6'>
+                                            <div className='flex justify-center'>
+                                                <div className='h-24 w-24 rounded-full overflow-hidden border border-gray-200 bg-amber-50 flex items-center justify-center text-amber-700 text-3xl font-medium'>
+                                                    {selectedCustomer.firstName?.charAt(0)}{selectedCustomer.lastName?.charAt(0)}
+                                                </div>
+                                            </div>
+
+                                            <div className='grid grid-cols-1 md:grid-cols-2 gap-6'>
+                                                <div>
+                                                    <p className='text-sm text-gray-500'>Họ</p>
+                                                    <p className='font-medium'>{selectedCustomer.lastName || '-'}</p>
+                                                </div>
+                                                <div>
+                                                    <p className='text-sm text-gray-500'>Tên</p>
+                                                    <p className='font-medium'>{selectedCustomer.firstName || '-'}</p>
+                                                </div>
+                                                <div>
+                                                    <p className='text-sm text-gray-500'>Email</p>
+                                                    <p className='font-medium'>{selectedCustomer.email}</p>
+                                                </div>
+                                                <div>
+                                                    <p className='text-sm text-gray-500'>Số điện thoại</p>
+                                                    <p className='font-medium'>{selectedCustomer.phone || '-'}</p>
+                                                </div>
+                                                <div>
+                                                    <p className='text-sm text-gray-500'>Trạng thái</p>
+                                                    <span
+                                                        className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full 
+                            ${selectedCustomer.status.name === 'Active'
+                                                                ? 'bg-green-100 text-green-800'
+                                                                : 'bg-red-100 text-red-800'}`}
+                                                    >
+                                                        {selectedCustomer.status.name === 'Active' ? 'Hoạt động' : 'Không hoạt động'}
+                                                    </span>
+                                                </div>
+                                                <div>
+                                                    <p className='text-sm text-gray-500'>Ngày tạo tài khoản</p>
+                                                    <p className='font-medium'>
+                                                        {format(new Date(selectedCustomer.createdAt), 'dd/MM/yyyy HH:mm', { locale: vi })}
+                                                    </p>
+                                                </div>
+                                            </div>
                                         </div>
-                                        <div>
-                                            <p className='text-sm text-gray-500'>Tên</p>
-                                            <p className='font-medium'>{selectedCustomer.firstName || '-'}</p>
+                                    )}
+
+                                    {/* Tab Content - Đơn hàng */}
+                                    {activeTab === 'orders' && (
+                                        <div className='space-y-4'>
+                                            <div className='flex justify-between items-center'>
+                                                <h3 className='text-lg font-medium text-gray-800'>Đơn hàng của khách hàng</h3>
+                                                <button
+                                                    onClick={() => {
+                                                        if (selectedCustomer) {
+                                                            fetchCustomerOrders(selectedCustomer.id);
+                                                        }
+                                                    }}
+                                                    className='p-2 rounded-lg hover:bg-amber-50 text-amber-500 transition-all'
+                                                    title='Làm mới'
+                                                    disabled={ordersLoading}
+                                                >
+                                                    <RefreshCcw size={18} className={ordersLoading ? 'animate-spin' : ''} />
+                                                </button>
+                                            </div>
+
+                                            {ordersLoading ? (
+                                                <div className='flex justify-center py-12'>
+                                                    <div className='animate-spin rounded-full h-10 w-10 border-b-2 border-amber-500'></div>
+                                                </div>
+                                            ) : customerOrders && customerOrders.length > 0 ? (
+                                                <div className="space-y-4">
+                                                    {customerOrders.map((order) => (
+                                                        <div key={order.id} className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
+                                                            {/* Phần header đơn hàng */}
+                                                            <div className="bg-gray-50 p-4 flex flex-wrap items-center justify-between gap-3 border-b border-gray-200">
+                                                                <div>
+                                                                    <div className="flex items-center">
+                                                                        <span className="text-gray-600 text-sm">Mã đơn: </span>
+                                                                        <span className="ml-2 font-medium">{order.order_code}</span>
+                                                                    </div>
+                                                                    <div className="text-sm text-gray-500 mt-1">
+                                                                        {format(new Date(order.createdAt), 'dd/MM/yyyy HH:mm', { locale: vi })}
+                                                                    </div>
+                                                                </div>
+
+                                                                <div className="flex items-center gap-3">
+                                                                    <span className={`px-2 py-1 text-xs leading-5 font-semibold rounded-full ${orderStatusColors[order.status] || 'bg-gray-100 text-gray-800'}`}>
+                                                                        {order.status}
+                                                                    </span>
+                                                                    <button
+                                                                        onClick={() => openOrderDetail(order)}
+                                                                        className="flex items-center px-3 py-1 bg-amber-50 text-amber-600 rounded-md hover:bg-amber-100 transition-colors"
+                                                                    >
+                                                                        <Eye size={14} className="mr-1" />
+                                                                        <span>Chi tiết</span>
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+
+                                                            {/* Phần danh sách sản phẩm */}
+                                                            <div className="p-4">
+                                                                {order.item && order.item.length > 0 ? (
+                                                                    <div className="space-y-3">
+                                                                        {order.item.map((item) => (
+                                                                            <div key={item.id} className="flex items-center gap-3 py-2 border-b border-gray-100 last:border-0">
+                                                                                {/* Ảnh sản phẩm */}
+                                                                                <div className="w-12 h-12 bg-gray-100 rounded-md flex items-center justify-center text-gray-400 flex-shrink-0 overflow-hidden">
+                                                                                    {item.product_image ? (
+                                                                                        <Image
+                                                                                            src={item.product_image}
+                                                                                            alt={item.product_name || `Sản phẩm #${item.product_id}`}
+                                                                                            width={64}
+                                                                                            height={64}
+                                                                                            className="object-cover w-full h-full"
+                                                                                            unoptimized // Thêm tùy chọn này để tránh lỗi với URL không được xác thực
+                                                                                            onError={(e) => {
+                                                                                                // Fallback khi ảnh lỗi
+                                                                                                e.currentTarget.onerror = null;
+                                                                                                e.currentTarget.style.display = 'none';
+                                                                                                if (e.currentTarget.parentElement) {
+                                                                                                    e.currentTarget.parentElement.innerHTML = `<div class="w-full h-full flex items-center justify-center"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-shopping-bag"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"></path><path d="M3 6h18"></path><path d="M16 10a4 4 0 0 1-8 0"></path></svg></div>`;
+                                                                                                }
+                                                                                            }}
+                                                                                        />
+                                                                                    ) : (
+                                                                                        <ShoppingBag size={24} />
+                                                                                    )}
+                                                                                </div>
+                                                                                <div className="flex-1 min-w-0">
+                                                                                    <div className="font-medium truncate">
+                                                                                        {item.product_name || `Sản phẩm ID: ${item.product_id}`}
+                                                                                    </div>
+                                                                                    <div className="flex flex-wrap gap-2 mt-1">
+                                                                                        {item.product_detail && (
+                                                                                            <>
+                                                                                                {item.product_detail.size && (
+                                                                                                    <span className="px-1.5 py-0.5 bg-gray-100 rounded text-xs text-gray-600">
+                                                                                                        {item.product_detail.size}
+                                                                                                    </span>
+                                                                                                )}
+                                                                                                {item.product_detail.values && (
+                                                                                                    <span className="px-1.5 py-0.5 bg-gray-100 rounded text-xs text-gray-600">
+                                                                                                        {item.product_detail.values}
+                                                                                                    </span>
+                                                                                                )}
+                                                                                            </>
+                                                                                        )}
+                                                                                        <span className="px-1.5 py-0.5 bg-amber-50 text-amber-700 rounded text-xs">
+                                                                                            {item.quantity} x {formatPrice(item.unit_price)}
+                                                                                        </span>
+                                                                                    </div>
+                                                                                </div>
+                                                                                <div className="font-medium text-amber-600">
+                                                                                    {formatPrice(item.totalPrice)}
+                                                                                </div>
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                ) : (
+                                                                    <div className="text-center py-3 text-gray-500">
+                                                                        Không có thông tin sản phẩm
+                                                                    </div>
+                                                                )}
+                                                            </div>
+
+                                                            {/* Phần footer đơn hàng */}
+                                                            <div className="bg-gray-50 px-4 py-3 border-t border-gray-200 flex justify-between items-center">
+                                                                <div>
+                                                                    <span className="text-gray-600 text-sm">Số lượng: </span>
+                                                                    <span className="font-medium">{order.total_quantity}</span>
+                                                                </div>
+                                                                <div className="text-right">
+                                                                    <div className="text-xs text-gray-500">Tổng tiền:</div>
+                                                                    <div className="font-bold text-amber-600">{formatPrice(order.total_price)}</div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <div className='text-center py-12 border rounded-lg bg-gray-50'>
+                                                    <ShoppingBag size={36} className="mx-auto text-gray-300 mb-2" />
+                                                    <p className='text-gray-500'>Khách hàng chưa có đơn hàng nào</p>
+                                                </div>
+                                            )}
                                         </div>
-                                        <div>
-                                            <p className='text-sm text-gray-500'>Email</p>
-                                            <p className='font-medium'>{selectedCustomer.email}</p>
-                                        </div>
-                                        <div>
-                                            <p className='text-sm text-gray-500'>Số điện thoại</p>
-                                            <p className='font-medium'>{selectedCustomer.phone || '-'}</p>
-                                        </div>
-                                        <div>
-                                            <p className='text-sm text-gray-500'>Trạng thái</p>
-                                            <span
-                                                className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full 
-                        ${selectedCustomer.status.name === 'Active'
-                                                        ? 'bg-green-100 text-green-800'
-                                                        : 'bg-red-100 text-red-800'}`}
-                                            >
-                                                {selectedCustomer.status.name === 'Active' ? 'Hoạt động' : 'Không hoạt động'}
-                                            </span>
-                                        </div>
-                                        <div>
-                                            <p className='text-sm text-gray-500'>Ngày tạo tài khoản</p>
-                                            <p className='font-medium'>
-                                                {format(new Date(selectedCustomer.createdAt), 'dd/MM/yyyy HH:mm', { locale: vi })}
-                                            </p>
-                                        </div>
-                                    </div>
+                                    )}
                                 </div>
                             )}
 
@@ -691,6 +1078,198 @@ export default function CustomerPage() {
                                     Xác nhận xóa
                                 </button>
                             )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal Chi tiết đơn hàng */}
+            {showOrderDetailModal && selectedOrder && (
+                <div className='fixed inset-0 bg-black bg-opacity-30 z-50 flex items-center justify-center p-4'>
+                    <div className='bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden'>
+                        <div className='p-6 border-b border-gray-100 flex justify-between items-center'>
+                            <h3 className='text-xl font-bold text-gray-800'>
+                                Chi tiết đơn hàng: {selectedOrder.order_code}
+                            </h3>
+                            <button
+                                onClick={() => setShowOrderDetailModal(false)}
+                                className='text-gray-400 hover:text-gray-500'
+                            >
+                                <X size={24} />
+                            </button>
+                        </div>
+
+                        <div className='p-6 overflow-y-auto max-h-[calc(90vh-120px)]'>
+                            <div className='space-y-6'>
+                                {/* Thông tin đơn hàng */}
+                                <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
+                                    <div>
+                                        <p className='text-sm text-gray-500'>Mã đơn hàng</p>
+                                        <p className='font-medium'>{selectedOrder.order_code}</p>
+                                    </div>
+                                    <div>
+                                        <p className='text-sm text-gray-500'>Ngày đặt</p>
+                                        <p className='font-medium'>
+                                            {format(new Date(selectedOrder.createdAt), 'dd/MM/yyyy HH:mm', { locale: vi })}
+                                        </p>
+                                    </div>
+                                    <div>
+                                        <p className='text-sm text-gray-500'>Trạng thái</p>
+                                        <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${orderStatusColors[selectedOrder.status] || 'bg-gray-100 text-gray-800'}`}>
+                                            {selectedOrder.status}
+                                        </span>
+                                    </div>
+                                    <div>
+                                        <p className='text-sm text-gray-500'>Phương thức thanh toán</p>
+                                        <p className='font-medium'>{selectedOrder.method_payment || 'COD'}</p>
+                                    </div>
+                                </div>
+
+                                <div className='border-t pt-4'>
+                                    <h4 className='font-medium text-gray-800 mb-3'>Địa chỉ giao hàng</h4>
+                                    <p className='text-gray-700'>{selectedOrder.address}</p>
+                                </div>
+
+                                {/* Danh sách sản phẩm */}
+                                <div className='border-t pt-4'>
+                                    <h4 className='font-medium text-gray-800 mb-3'>Sản phẩm ({selectedOrder.item?.length || 0})</h4>
+                                    {selectedOrder.item && selectedOrder.item.length > 0 ? (
+                                        <div className='space-y-3'>
+                                            {selectedOrder.item.map(item => (
+                                                <div key={item.id} className="border border-gray-200 p-3 rounded-lg flex items-start gap-3">
+                                                    {/* Ảnh sản phẩm */}
+                                                    <div className="w-16 h-16 bg-gray-100 rounded-md flex items-center justify-center text-gray-400 flex-shrink-0 overflow-hidden">
+                                                        {item.product_image ? (
+                                                            <Image
+                                                                src={item.product_image}
+                                                                alt={item.product_name || `Sản phẩm #${item.product_id}`}
+                                                                width={64}
+                                                                height={64}
+                                                                className="object-cover w-full h-full"
+                                                                unoptimized // Thêm tùy chọn này để tránh lỗi với URL không được xác thực
+                                                                onError={(e) => {
+                                                                    // Fallback khi ảnh lỗi
+                                                                    e.currentTarget.onerror = null;
+                                                                    e.currentTarget.style.display = 'none';
+                                                                    if (e.currentTarget.parentElement) {
+                                                                        e.currentTarget.parentElement.innerHTML = `<div class="w-full h-full flex items-center justify-center"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-shopping-bag"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"></path><path d="M3 6h18"></path><path d="M16 10a4 4 0 0 1-8 0"></path></svg></div>`;
+                                                                    }
+                                                                }}
+                                                            />
+                                                        ) : (
+                                                            <ShoppingBag size={24} />
+                                                        )}
+                                                    </div>
+
+                                                    {/* Thông tin sản phẩm */}
+                                                    <div className="flex-1">
+                                                        <div className="flex justify-between items-start">
+                                                            <div>
+                                                                <p className="font-medium text-gray-800">
+                                                                    {item.product_name || `Sản phẩm ID: ${item.product_id}`}
+                                                                </p>
+
+                                                                <div className="flex flex-wrap gap-2 mt-1.5">
+                                                                    {item.product_detail ? (
+                                                                        <>
+                                                                            {item.product_detail.size && (
+                                                                                <span className="px-2 py-0.5 bg-gray-100 rounded text-xs text-gray-600">
+                                                                                    Size: {item.product_detail.size}
+                                                                                </span>
+                                                                            )}
+                                                                            {item.product_detail.values && (
+                                                                                <span className="px-2 py-0.5 bg-gray-100 rounded text-xs text-gray-600">
+                                                                                    Loại: {item.product_detail.values}
+                                                                                </span>
+                                                                            )}
+                                                                            {item.product_detail.type && (
+                                                                                <span className="px-2 py-0.5 bg-gray-100 rounded text-xs text-gray-600">
+                                                                                    {item.product_detail.type}
+                                                                                </span>
+                                                                            )}
+                                                                        </>
+                                                                    ) : (
+                                                                        <span className="px-2 py-0.5 bg-gray-100 rounded text-xs text-gray-600">
+                                                                            Chi tiết SP: #{item.product_detail_id}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                            <p className="font-medium text-amber-600">
+                                                                {formatPrice(item.totalPrice)}
+                                                            </p>
+                                                        </div>
+
+                                                        <div className="flex justify-between items-center mt-3">
+                                                            <p className="text-sm text-gray-600">
+                                                                Đơn giá: {formatPrice(item.unit_price)}
+                                                            </p>
+                                                            <div className="flex gap-2">
+                                                                <p className="px-2 py-0.5 bg-amber-50 text-amber-700 rounded text-sm">
+                                                                    Số lượng: {item.quantity}
+                                                                </p>
+                                                                {item.product_id && (
+                                                                    <Link href={`/seller/products/${item.product_id}`} target="_blank">
+                                                                        <button className="text-xs flex items-center gap-1 px-2 py-0.5 border border-gray-200 rounded hover:bg-gray-50">
+                                                                            <ExternalLink size={12} />
+                                                                            <span>Chi tiết SP</span>
+                                                                        </button>
+                                                                    </Link>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <p className='text-gray-500'>Không có thông tin sản phẩm</p>
+                                    )}
+                                </div>
+
+                                {/* Thông tin thanh toán */}
+                                <div className='border-t pt-4'>
+                                    <h4 className='font-medium text-gray-800 mb-3'>Tổng thanh toán</h4>
+                                    <div className='space-y-2'>
+                                        <div className='flex justify-between'>
+                                            <span className='text-gray-600'>Tạm tính:</span>
+                                            <span>{formatPrice(
+                                                // Tính tổng giá sản phẩm từ các item
+                                                selectedOrder.item.reduce((sum, item) => sum + parseFloat(item.totalPrice), 0)
+                                            )}</span>
+                                        </div>
+                                        {parseFloat(selectedOrder.discount) > 0 && (
+                                            <div className='flex justify-between'>
+                                                <span className='text-gray-600'>Giảm giá:</span>
+                                                <span>-{formatPrice(selectedOrder.discount)}</span>
+                                            </div>
+                                        )}
+                                        <div className='flex justify-between'>
+                                            <span className='text-gray-600'>Phí vận chuyển:</span>
+                                            <span>{formatPrice(selectedOrder.ship_price)}</span>
+                                        </div>
+                                        <div className='flex justify-between border-t pt-2 font-medium'>
+                                            <span>Tổng cộng:</span>
+                                            <span>{formatPrice(selectedOrder.total_price)}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className='p-6 border-t border-gray-100 flex justify-end gap-3'>
+                            <button
+                                onClick={() => setShowOrderDetailModal(false)}
+                                className='px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-all'
+                            >
+                                Đóng
+                            </button>
+
+                            <Link href={`/seller/orders/${selectedOrder.id}`}>
+                                <button className='px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-all'>
+                                    Xem đầy đủ
+                                </button>
+                            </Link>
                         </div>
                     </div>
                 </div>

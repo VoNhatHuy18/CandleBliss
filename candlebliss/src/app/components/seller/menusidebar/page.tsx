@@ -15,6 +15,7 @@ import {
    ChevronDown,
    ChevronUp,
    Globe, // Import Globe icon for store/client navigation
+   User, // Import User icon and alias it as Person
 } from 'lucide-react';
 import { HOST } from '@/app/constants/api';
 
@@ -273,6 +274,15 @@ export default function MenuSideBar() {
                   >
                      <CreditCard size={18} className='mr-2' />
                      <span>Quản Lý Tài Chính</span>
+                  </Link>
+               </div>
+               <div className='px-4 py-2'>
+                  <Link
+                     href='/seller/customers'
+                     className='flex items-center p-2 text-gray-600 hover:bg-gray-100 rounded'
+                  >
+                     <User size={18} className='mr-2' />
+                     <span>Quản Lý Khách Hàng</span>
                   </Link>
                </div>
                <div className='px-4 py-2'>

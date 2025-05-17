@@ -166,9 +166,11 @@ export default function HomePage() {
                      cháy sạch và trung thực, không chứa độc tố. Mỗi bấc chúng tôi sử dụng đều được
                      chế tác cẩn thận từ cotton, đảm bảo cháy nhẹ nhàng, đều đặn.
                   </p>
-                  <button className='bg-[#DDA15E] h-8 w-36 text-white hover:animate-pulse mx-auto block'>
-                     Đọc Thêm
-                  </button>
+                  <Link href='/user/aboutshop'>
+                     <button className='bg-[#DDA15E] h-8 w-36 text-white hover:animate-pulse mx-auto block'>
+                        Đọc Thêm
+                     </button>
+                  </Link>
                </div>
                <div className='relative h-full'>
                   <Image
@@ -213,9 +215,11 @@ export default function HomePage() {
                         Liên hệ ngay hôm nay để cùng chúng tôi lan tỏa ánh sáng và hương thơm đặc
                         biệt!.
                      </p>
-                     <button className='h-10 w-40 bg-[#DDA15E] text-white hover:bg-orange-600'>
-                        Liên Hệ !
-                     </button>
+                     <Link href='https://www.facebook.com/vo.huy.5283' target='_blank'>
+                        <button className='h-10 w-40 bg-[#DDA15E] text-white hover:bg-orange-600'>
+                           Liên Hệ !
+                        </button>
+                     </Link>
                   </div>
                </div>
             </div>

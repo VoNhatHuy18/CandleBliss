@@ -21,12 +21,12 @@ export default function AboutShop() {
                         className="object-cover"
                         priority
                     />
-                    <div className="absolute inset-0 bg-gradient-to-r from-amber-800/70 to-transparent flex items-center">
+                    <div className="absolute inset-0 bg-gradient-to-r from-amber-800/70 to-transparent flex items-center justify-end">
                         <div className="px-8 md:px-16">
-                            <h1 className="text-2xl md:text-4xl lg:text-5xl font-semibold text-white">
+                            <h1 className="text-2xl md:text-4xl lg:text-5xl font-semibold text-amber-900">
                                 Về CandleBliss
                             </h1>
-                            <p className="text-white/90 text-lg md:text-xl max-w-md">
+                            <p className="text-amber-900 text-lg md:text-xl max-w-md">
                                 Mang ánh sáng ấm áp và hương thơm tinh tế vào không gian sống của bạn
                             </p>
                         </div>

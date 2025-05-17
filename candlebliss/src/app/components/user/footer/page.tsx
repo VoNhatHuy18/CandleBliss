@@ -21,7 +21,7 @@ export default function Footer() {
                   </div>
                   <div className='space-y-2'>
                      <p className='text-[#542700] font-semibold font-mont text-sm md:text-base'>
-                        Khám phá thế giới nến thơm tinh tế tại Candel Bliss. Sẽ mang đến các sản phẩm nến chất lượng cao, 
+                        Khám phá thế giới nến thơm tinh tế tại Candel Bliss. Sẽ mang đến các sản phẩm nến chất lượng cao,
                         an toàn, thân thiện môi trường. Giao hàng toàn quốc - Hỗ trợ 24/7.
                      </p>
                      {/* <p className='text-[#542700] font-semibold font-mont text-sm md:text-base'>
@@ -45,10 +45,10 @@ export default function Footer() {
                   <hr className='w-full border-[#542700] mb-4' />
                   <ul className='space-y-2 text-[#542700] text-sm md:text-base font-medium'>
                      {[
-                        { href: '', text: 'Trang Chủ' },
-                        { href: '', text: 'Sản Phẩm' },
-                        { href: '', text: 'Bài Viết' },
-                        { href: '', text: 'Liên Hệ' }
+                        { href: '/user/home', text: 'Trang Chủ' },
+                        { href: '/user/products', text: 'Sản Phẩm' },
+                        { href: '/user/aboutshop', text: 'Bài Viết' },
+                        { href: 'https://www.facebook.com/vo.huy.5283', text: 'Liên Hệ', target: '_blank' }
                      ].map((item, index) => (
                         <li key={index}>
                            <Link href={item.href} className='hover:text-[#FF9900] transition-colors'>
@@ -92,8 +92,8 @@ export default function Footer() {
                      <p>Email: candlebliss@gmail.com</p>
                      <p>Số điện thoại: 0393877052</p>
                      <p className='break-words'>
-                        Địa chỉ: 12 Nguyễn Văn Bảo, Phường 04, 
-                        Quận Gò Vấp, Thành phố Hồ Chí Minh, 
+                        Địa chỉ: 12 Nguyễn Văn Bảo, Phường 04,
+                        Quận Gò Vấp, Thành phố Hồ Chí Minh,
                         Việt Nam
                      </p>
                   </div>

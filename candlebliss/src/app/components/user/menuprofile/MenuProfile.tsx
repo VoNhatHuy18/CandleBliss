@@ -60,7 +60,7 @@ const MenuProfile: React.FC<MenuProfileProps> = ({ selectedTab }) => {
          path: '/user/order',
       },
       {
-         label: 'Địa chỉ của tôi',  
+         label: 'Địa chỉ của tôi',
          icon: FaAddressBook,
          tab: 'addresses',
          path: '/user/profile/address',
@@ -210,7 +210,7 @@ const MenuProfile: React.FC<MenuProfileProps> = ({ selectedTab }) => {
                </Link>
                <span className='text-gray-400'>|</span>
                <Link
-                  href='/faq'
+                  href='/user/profile/support'
                   target='_blank'
                   className='text-amber-600 hover:text-amber-700 text-sm font-medium'
                >
