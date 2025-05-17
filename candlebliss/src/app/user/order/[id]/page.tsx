@@ -1682,8 +1682,8 @@ export default function OrderDetailPage() {
                            Quay lại danh sách đơn hàng
                         </Link>
 
-                        {/* Nút hủy đơn chỉ hiển thị với các trạng thái cho phép hủy */}
-                        {getValidNextStatuses(order.status).includes('Đã hủy') && (
+                        {/* Nút hủy đơn chỉ hiển thị khi trạng thái là "Đã đặt hàng" */}
+                        {order.status === 'Đã đặt hàng' && (
                            <button
                               onClick={handleCancelOrder}
                               className='block w-full py-2 text-center bg-red-600 rounded text-white hover:bg-red-700'
