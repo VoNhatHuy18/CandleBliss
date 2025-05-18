@@ -107,11 +107,17 @@ export default function ChatBotModal() {
     setIsTyping(true);
 
     try {
-      const response = await fetch(`${window.location.origin}/api/chatbot`, {
+      // Ensure we use a relative path that will work regardless of deployment configuration
+      // This avoids issues with custom domains, subpaths, etc.
+      const response = await fetch('/api/chatbot', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: messageText }),
       });
+
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status} ${response.statusText}`);
+      }
 
       const data = await response.json();
 
@@ -123,7 +129,8 @@ export default function ChatBotModal() {
       };
 
       setMessages((prev) => [...prev, aiMessage]);
-    } catch {
+    } catch (error) {
+      console.error('Chatbot API error:', error);
       // Fallback response if API fails
       const aiMessage: Message = {
         role: 'assistant',
