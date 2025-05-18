@@ -614,13 +614,13 @@ const StockReceiptModal = ({
                            Giá (VNĐ)
                         </label>
                         <input
-                           type='number'
                            value={costPerUnit}
-                           onChange={(e) => setCostPerUnit(Number(e.target.value))}
-                           min={0}
-                           className='w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-amber-500 focus:border-amber-500'
+                           type="text"
+                           className='w-full border border-gray-300 rounded-md px-3 py-2 bg-gray-50 focus:outline-none text-gray-700'
                            disabled={!selectedVariantId}
+                           readOnly
                         />
+
                      </div>
 
                      <div className='flex justify-start items-end'>

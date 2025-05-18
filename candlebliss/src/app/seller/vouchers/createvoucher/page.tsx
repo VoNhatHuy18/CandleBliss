@@ -79,60 +79,121 @@ export default function CreateVoucher() {
       }));
    };
 
+   // Enhanced validation function with better constraints and messages
    const validateForm = () => {
       const newErrors: { [key: string]: string } = {};
+      const today = new Date();
+      today.setHours(0, 0, 0, 0); // Set to beginning of the day for accurate comparison
 
       // Code validation - check if empty and format
       if (!voucherData.code) {
          newErrors.code = 'Vui lòng nhập mã voucher';
+         showToast('Vui lòng nhập mã voucher', 'error');
       } else if (!/^[A-Z0-9_-]{3,15}$/.test(voucherData.code)) {
          newErrors.code = 'Mã voucher chỉ chứa chữ hoa, số, dấu gạch ngang và dài 3-15 ký tự';
+         showToast('Mã voucher không đúng định dạng', 'error');
       }
 
       // Date validation
       if (!voucherData.startDate) {
          newErrors.startDate = 'Vui lòng chọn ngày bắt đầu';
+         showToast('Vui lòng chọn ngày bắt đầu', 'error');
       } else {
          // Check if start date is not in the past
-         const today = new Date();
-         today.setHours(0, 0, 0, 0); // Set to beginning of the day for accurate comparison
          const startDate = new Date(voucherData.startDate);
          if (startDate < today) {
             newErrors.startDate = 'Ngày bắt đầu phải là hôm nay hoặc trong tương lai';
+            showToast('Ngày bắt đầu phải là hôm nay hoặc trong tương lai', 'error');
          }
       }
 
       if (!voucherData.endDate) {
          newErrors.endDate = 'Vui lòng chọn ngày kết thúc';
-      }
-
-      // Check if end date is after start date
-      if (voucherData.startDate && voucherData.endDate) {
+         showToast('Vui lòng chọn ngày kết thúc', 'error');
+      } else if (voucherData.startDate) {
+         // Check if end date is after start date
          const start = new Date(voucherData.startDate);
          const end = new Date(voucherData.endDate);
-         if (start >= end) {
+
+         if (end <= start) {
             newErrors.endDate = 'Ngày kết thúc phải sau ngày bắt đầu';
+            showToast('Ngày kết thúc phải sau ngày bắt đầu', 'error');
+         }
+
+         // Check if voucher duration is reasonable
+         const diffTime = Math.abs(end.getTime() - start.getTime());
+         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+         if (diffDays > 365) {
+            newErrors.endDate = 'Thời hạn voucher không nên vượt quá 1 năm';
+            showToast('Thời hạn voucher không nên vượt quá 1 năm', 'error');
          }
       }
 
       // Discount percent validation
       if (!voucherData.discountPercent) {
          newErrors.discountPercent = 'Vui lòng nhập mức giảm giá';
-      } else if (
-         Number(voucherData.discountPercent) <= 0 ||
-         Number(voucherData.discountPercent) > 100
-      ) {
-         newErrors.discountPercent = 'Mức giảm giá phải từ 1% đến 100%';
+         showToast('Vui lòng nhập mức giảm giá', 'error');
+      } else {
+         const discountValue = Number(voucherData.discountPercent);
+         if (isNaN(discountValue)) {
+            newErrors.discountPercent = 'Mức giảm giá phải là số';
+            showToast('Mức giảm giá phải là số', 'error');
+         } else if (discountValue <= 0) {
+            newErrors.discountPercent = 'Mức giảm giá phải lớn hơn 0%';
+            showToast('Mức giảm giá phải lớn hơn 0%', 'error');
+         } else if (discountValue > 100) {
+            newErrors.discountPercent = 'Mức giảm giá không được vượt quá 100%';
+            showToast('Mức giảm giá không được vượt quá 100%', 'error');
+         }
       }
 
       // Min price validation - optional but must be positive if provided
-      if (voucherData.minPrice && Number(voucherData.minPrice) < 0) {
-         newErrors.minPrice = 'Giá trị đơn hàng tối thiểu không được âm';
+      if (voucherData.minPrice) {
+         const minPriceValue = Number(voucherData.minPrice);
+         if (isNaN(minPriceValue)) {
+            newErrors.minPrice = 'Giá trị đơn hàng tối thiểu phải là số';
+            showToast('Giá trị đơn hàng tối thiểu phải là số', 'error');
+         } else if (minPriceValue < 0) {
+            newErrors.minPrice = 'Giá trị đơn hàng tối thiểu không được âm';
+            showToast('Giá trị đơn hàng tối thiểu không được âm', 'error');
+         }
       }
 
       // Usage limit validation - optional but must be positive if provided
-      if (voucherData.usageLimit && Number(voucherData.usageLimit) <= 0) {
-         newErrors.usageLimit = 'Số lượt sử dụng phải lớn hơn 0';
+      if (voucherData.usageLimit) {
+         const usageLimitValue = Number(voucherData.usageLimit);
+         if (isNaN(usageLimitValue)) {
+            newErrors.usageLimit = 'Số lượt sử dụng phải là số';
+            showToast('Số lượt sử dụng phải là số', 'error');
+         } else if (usageLimitValue <= 0) {
+            newErrors.usageLimit = 'Số lượt sử dụng phải lớn hơn 0';
+            showToast('Số lượt sử dụng phải lớn hơn 0', 'error');
+         }
+      }
+
+      // Max voucher amount validation - optional but must be positive if provided
+      if (voucherData.maxVoucherAmount) {
+         const maxAmountValue = Number(voucherData.maxVoucherAmount);
+         if (isNaN(maxAmountValue)) {
+            newErrors.maxVoucherAmount = 'Giới hạn giảm giá tối đa phải là số';
+            showToast('Giới hạn giảm giá tối đa phải là số', 'error');
+         } else if (maxAmountValue <= 0) {
+            newErrors.maxVoucherAmount = 'Giới hạn giảm giá tối đa phải lớn hơn 0';
+            showToast('Giới hạn giảm giá tối đa phải lớn hơn 0', 'error');
+         }
+      }
+
+      // Usage per customer validation
+      if (!voucherData.usagePerCustomer) {
+         newErrors.usagePerCustomer = 'Vui lòng nhập số lần sử dụng cho mỗi khách';
+         showToast('Vui lòng nhập số lần sử dụng cho mỗi khách', 'error');
+      } else {
+         const usagePerCustomerValue = Number(voucherData.usagePerCustomer);
+         if (isNaN(usagePerCustomerValue) || usagePerCustomerValue < 1) {
+            newErrors.usagePerCustomer = 'Số lần sử dụng cho mỗi khách phải ít nhất là 1';
+            showToast('Số lần sử dụng cho mỗi khách phải ít nhất là 1', 'error');
+         }
       }
 
       setErrors(newErrors);
@@ -395,7 +456,7 @@ export default function CreateVoucher() {
                                  <p className='text-xs text-red-500 mt-1'>{errors.code}</p>
                               )}
                               <p className='text-xs text-gray-500 mt-1'>
-                                 Mã độc nhất để khách hàng nhập khi sử dụng
+                                 Mã độc nhất để khách hàng nhập khi sử dụng. Chỉ sử dụng chữ hoa, số và dấu gạch ngang, dài 3-15 ký tự.
                               </p>
                            </div>
 
@@ -412,11 +473,15 @@ export default function CreateVoucher() {
                                     }`}
                                  value={voucherData.startDate}
                                  onChange={handleChange}
+                                 min={new Date().toISOString().split('T')[0]} // Set min date to today
                                  required
                               />
                               {errors.startDate && (
                                  <p className='text-xs text-red-500 mt-1'>{errors.startDate}</p>
                               )}
+                              <p className='text-xs text-gray-500 mt-1'>
+                                 Ngày bắt đầu áp dụng voucher, phải là hôm nay hoặc trong tương lai
+                              </p>
                            </div>
 
                            <div>
@@ -431,11 +496,15 @@ export default function CreateVoucher() {
                                     }`}
                                  value={voucherData.endDate}
                                  onChange={handleChange}
+                                 min={voucherData.startDate || new Date().toISOString().split('T')[0]}
                                  required
                               />
                               {errors.endDate && (
                                  <p className='text-xs text-red-500 mt-1'>{errors.endDate}</p>
                               )}
+                              <p className='text-xs text-gray-500 mt-1'>
+                                 Ngày kết thúc phải sau ngày bắt đầu, thời hạn tối đa nên dưới 1 năm
+                              </p>
                            </div>
 
                            <div className='col-span-2'>
@@ -457,17 +526,18 @@ export default function CreateVoucher() {
                                     : ''
                                     }`}
                                  placeholder='10'
-                                 min='0'
+                                 min='1'
                                  max='100'
                                  value={voucherData.discountPercent}
                                  onChange={handleChange}
                                  required
                               />
                               {errors.discountPercent && (
-                                 <p className='text-xs text-red-500 mt-1'>
-                                    {errors.discountPercent}
-                                 </p>
+                                 <p className='text-xs text-red-500 mt-1'>{errors.discountPercent}</p>
                               )}
+                              <p className='text-xs text-gray-500 mt-1'>
+                                 Mức giảm giá phải từ 1% đến 100%
+                              </p>
                            </div>
 
                            <div>
@@ -479,7 +549,8 @@ export default function CreateVoucher() {
                                  <input
                                     type='number'
                                     name='minPrice'
-                                    className='w-full p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-amber-300 transition'
+                                    className={`w-full p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-amber-300 transition ${errors.minPrice ? 'border-red-500 ring-1 ring-red-500' : ''
+                                       }`}
                                     placeholder='100000'
                                     min='0'
                                     value={voucherData.minPrice}
@@ -489,6 +560,12 @@ export default function CreateVoucher() {
                                     VNĐ
                                  </span>
                               </div>
+                              {errors.minPrice && (
+                                 <p className='text-xs text-red-500 mt-1'>{errors.minPrice}</p>
+                              )}
+                              <p className='text-xs text-gray-500 mt-1'>
+                                 Giá trị đơn hàng tối thiểu để áp dụng voucher này, phải là số dương
+                              </p>
                            </div>
 
                            <div>
@@ -499,12 +576,19 @@ export default function CreateVoucher() {
                               <input
                                  type='number'
                                  name='usageLimit'
-                                 className='w-full p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-amber-300 transition'
-                                 placeholder='1'
-                                 min='0'
+                                 className={`w-full p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-amber-300 transition ${errors.usageLimit ? 'border-red-500 ring-1 ring-red-500' : ''
+                                    }`}
+                                 placeholder='100'
+                                 min='1'
                                  value={voucherData.usageLimit}
                                  onChange={handleChange}
                               />
+                              {errors.usageLimit && (
+                                 <p className='text-xs text-red-500 mt-1'>{errors.usageLimit}</p>
+                              )}
+                              <p className='text-xs text-gray-500 mt-1'>
+                                 Tổng số lượt có thể sử dụng mã này, để trống nếu không giới hạn
+                              </p>
                            </div>
 
                            {/* Maximum discount amount */}
@@ -517,7 +601,8 @@ export default function CreateVoucher() {
                                  <input
                                     type='number'
                                     name='maxVoucherAmount'
-                                    className='w-full p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-amber-300 transition'
+                                    className={`w-full p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-amber-300 transition ${errors.maxVoucherAmount ? 'border-red-500 ring-1 ring-red-500' : ''
+                                       }`}
                                     placeholder='100000'
                                     min='0'
                                     value={voucherData.maxVoucherAmount}
@@ -527,8 +612,11 @@ export default function CreateVoucher() {
                                     VNĐ
                                  </span>
                               </div>
+                              {errors.maxVoucherAmount && (
+                                 <p className='text-xs text-red-500 mt-1'>{errors.maxVoucherAmount}</p>
+                              )}
                               <p className='text-xs text-gray-500 mt-1'>
-                                 Để trống nếu không giới hạn
+                                 Số tiền giảm giá tối đa cho mỗi đơn hàng, để trống nếu không giới hạn
                               </p>
                            </div>
 
@@ -570,12 +658,20 @@ export default function CreateVoucher() {
                               <input
                                  type='number'
                                  name='usagePerCustomer'
-                                 className='w-full p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-amber-300 transition'
+                                 className={`w-full p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-amber-300 transition ${errors.usagePerCustomer ? 'border-red-500 ring-1 ring-red-500' : ''
+                                    }`}
                                  placeholder='1'
                                  min='1'
                                  value={voucherData.usagePerCustomer}
                                  onChange={handleChange}
+                                 required
                               />
+                              {errors.usagePerCustomer && (
+                                 <p className='text-xs text-red-500 mt-1'>{errors.usagePerCustomer}</p>
+                              )}
+                              <p className='text-xs text-gray-500 mt-1'>
+                                 Số lần mỗi khách hàng được sử dụng voucher này, tối thiểu là 1
+                              </p>
                            </div>
 
                            <div className='col-span-2'>
