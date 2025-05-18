@@ -549,12 +549,25 @@ export default function Step3() {
                                                    // Only update if the value is positive or empty
                                                    if (value === '' || Number(value) >= 0) {
                                                       updateVariantPrice(index, 'basePrice', value);
+                                                   } else {
+                                                      showToast('Giá sản phẩm không được âm', 'error');
                                                    }
                                                 }}
                                                 placeholder='Nhập giá gốc'
                                                 min="0"
+                                                onInvalid={(e) => {
+                                                   const target = e.target as HTMLInputElement;
+                                                   if (Number(target.value) < 0) {
+                                                      target.setCustomValidity('Giá sản phẩm không được âm');
+                                                   } else if (target.value === '') {
+                                                      target.setCustomValidity('Vui lòng nhập giá gốc');
+                                                   } else {
+                                                      target.setCustomValidity('');
+                                                   }
+                                                }}
                                                 required
                                              />
+                                             <p className='text-xs text-gray-500 mt-1'>Giá gốc phải là số dương</p>
                                           </div>
                                           <div>
                                              <label className='block text-sm font-medium mb-1'>
@@ -568,12 +581,27 @@ export default function Step3() {
                                                    const value = e.target.value;
                                                    if (value === '' || (Number(value) >= 0 && Number(value) <= 100)) {
                                                       updateVariantPrice(index, 'discountPrice', value);
+                                                   } else if (Number(value) < 0) {
+                                                      showToast('Phần trăm khuyến mãi không được âm', 'error');
+                                                   } else if (Number(value) > 100) {
+                                                      showToast('Phần trăm khuyến mãi không được vượt quá 100%', 'error');
                                                    }
                                                 }}
                                                 min='0'
                                                 max='100'
                                                 placeholder='Nhập % khuyến mãi (nếu có)'
+                                                onInvalid={(e) => {
+                                                   const target = e.target as HTMLInputElement;
+                                                   if (Number(target.value) < 0) {
+                                                      target.setCustomValidity('Phần trăm khuyến mãi không được âm');
+                                                   } else if (Number(target.value) > 100) {
+                                                      target.setCustomValidity('Phần trăm khuyến mãi không được vượt quá 100%');
+                                                   } else {
+                                                      target.setCustomValidity('');
+                                                   }
+                                                }}
                                              />
+                                             <p className='text-xs text-gray-500 mt-1'>Phần trăm khuyến mãi từ 0% đến 100%</p>
                                           </div>
 
                                           {/* Thêm ngày bắt đầu và kết thúc cho variant */}

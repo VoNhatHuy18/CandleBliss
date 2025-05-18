@@ -7,6 +7,7 @@ import MenuSideBar from '@/app/components/seller/menusidebar/page';
 import { useRouter } from 'next/navigation';
 import { useProductForm } from '@/app/contexts/ProductFormContext';
 import { HOST } from '@/app/constants/api';
+import Toast from '@/app/components/ui/toast/Toast';
 
 // Define the variant interface
 interface Variant {
@@ -46,25 +47,54 @@ export default function Step2() {
    const [isLoading, setIsLoading] = useState(false);
    const [loadingMessage, setLoadingMessage] = useState('Đang xử lý...');
 
-   // Validation rules
+   // Add toast state
+   const [toast, setToast] = useState<{
+      show: boolean;
+      message: string;
+      type: 'success' | 'error' | 'info';
+   }>({
+      show: false,
+      message: '',
+      type: 'info',
+   });
+
+   // Helper function to show toast messages
+   const showToast = (message: string, type: 'success' | 'error' | 'info') => {
+      setToast({
+         show: true,
+         message,
+         type,
+      });
+   };
+
+   // Enhanced validation rules with clearer messages
    const VALIDATION_RULES = {
       type: {
          required: true,
+         message: 'Phân loại sản phẩm không được để trống',
       },
       values: {
          required: true,
+         message: 'Giá trị phân loại không được để trống',
       },
       size: {
          required: true,
+         message: 'Kích thước không được để trống',
       },
       quantity: {
          required: true,
          min: 0,
+         message: 'Số lượng không được để trống và phải lớn hơn hoặc bằng 0',
       },
       images: {
          maxFiles: 5,
          allowedTypes: ['image/jpeg', 'image/png', 'image/gif', 'image/jpg', 'image/webp'],
          maxSize: 5 * 1024 * 1024, // 5MB
+         message: {
+            type: 'Chỉ chấp nhận file ảnh định dạng JPG, PNG, GIF hoặc WEBP',
+            size: 'Kích thước file không được vượt quá 5MB',
+            maxCount: 'Không thể tải lên quá 5 ảnh cho mỗi phiên bản',
+         },
       },
    };
 
@@ -74,33 +104,16 @@ export default function Step2() {
 
       if (!rules) return '';
 
-      // Kiểm tra các trường hợp khác nhau của rules
-      if ('required' in rules && rules.required && !value) {
-         return `${field} không được để trống`;
+      if ('required' in rules && rules.required && (value === '' || value === undefined)) {
+         return rules.message || `${field} không được để trống`;
       }
 
-      if (typeof value === 'string') {
-         if (
-            'minLength' in rules &&
-            typeof rules.minLength === 'number' &&
-            value.length < rules.minLength
-         ) {
-            return `${field} phải có ít nhất ${rules.minLength} ký tự`;
-         }
-         if (
-            'maxLength' in rules &&
-            typeof rules.maxLength === 'number' &&
-            value.length > rules.maxLength
-         ) {
-            return `${field} không được vượt quá ${rules.maxLength} ký tự`;
-         }
-      }
-
-      if (typeof value === 'number') {
-         if ('min' in rules && typeof rules.min === 'number' && value < rules.min) {
+      if (typeof value === 'number' || (typeof value === 'string' && !isNaN(Number(value)))) {
+         const numValue = Number(value);
+         if ('min' in rules && typeof rules.min === 'number' && numValue < rules.min) {
             return `${field} không được nhỏ hơn ${rules.min}`;
          }
-         if ('max' in rules && typeof rules.max === 'number' && value > rules.max) {
+         if ('max' in rules && typeof rules.max === 'number' && numValue > rules.max) {
             return `${field} không được lớn hơn ${rules.max}`;
          }
       }
@@ -117,9 +130,14 @@ export default function Step2() {
       setVariants(variants.filter((_, index) => index !== indexToRemove));
    };
 
-   // Function to handle input changes with type annotations
+   // Enhanced handleVariantChange with toast notification
    const handleVariantChange = (index: number, field: string, value: string) => {
       const error = validateField(field, value);
+
+      if (error) {
+         showToast(error, 'error');
+      }
+
       setErrors({
          ...errors,
          [`${field}_${index}`]: error,
@@ -133,7 +151,14 @@ export default function Step2() {
       } else if (field === 'size') {
          updatedVariants[index].size = value;
       } else if (field === 'quantity') {
-         updatedVariants[index].quantity = parseInt(value) || 0;
+         // Ensure quantity is not negative
+         const qty = parseInt(value) || 0;
+         if (qty < 0) {
+            showToast('Số lượng không được nhỏ hơn 0', 'error');
+            updatedVariants[index].quantity = 0;
+         } else {
+            updatedVariants[index].quantity = qty;
+         }
       }
       setVariants(updatedVariants);
    };
@@ -170,46 +195,38 @@ export default function Step2() {
    // Handle image upload
    const handleImageUpload = (index: number, e: ChangeEvent<HTMLInputElement>) => {
       const files = e.target.files;
-      if (!files) return;
+      if (!files || files.length === 0) return;
 
-      // Validate file type and size
-      const invalidFiles = Array.from(files).filter((file) => {
+      // Check if adding these files would exceed the maximum
+      const currentImgCount = variants[index].images?.length || 0;
+      if (currentImgCount + files.length > VALIDATION_RULES.images.maxFiles) {
+         showToast(VALIDATION_RULES.images.message.maxCount, 'error');
+         return;
+      }
+
+      // Validate each file
+      for (let i = 0; i < files.length; i++) {
+         const file = files[i];
+
+         // Check file type
          if (!VALIDATION_RULES.images.allowedTypes.includes(file.type)) {
-            setErrors({
-               ...errors,
-               [`images_${index}`]: 'Chỉ chấp nhận file ảnh định dạng JPG, PNG hoặc GIF',
-            });
-            return true;
+            showToast(VALIDATION_RULES.images.message.type, 'error');
+            return;
          }
+
+         // Check file size
          if (file.size > VALIDATION_RULES.images.maxSize) {
-            setErrors({
-               ...errors,
-               [`images_${index}`]: 'Kích thước file không được vượt quá 5MB',
-            });
-            return true;
+            showToast(VALIDATION_RULES.images.message.size, 'error');
+            return;
          }
-         return false;
-      });
+      }
 
-      if (invalidFiles.length > 0) return;
-
+      // If all validations pass, proceed with upload
       const updatedVariants = [...variants];
 
       // Initialize images array if it doesn't exist
       if (!updatedVariants[index].images) {
          updatedVariants[index].images = [];
-      }
-
-      // Check maximum number of images
-      if (
-         (updatedVariants[index].images?.length || 0) + files.length >
-         VALIDATION_RULES.images.maxFiles
-      ) {
-         setErrors({
-            ...errors,
-            [`images_${index}`]: `Không thể tải lên quá ${VALIDATION_RULES.images.maxFiles} ảnh`,
-         });
-         return;
       }
 
       // Create URLs for the selected images
@@ -219,6 +236,7 @@ export default function Step2() {
       updatedVariants[index].images = [...(updatedVariants[index].images || []), ...imageUrls];
 
       setVariants(updatedVariants);
+      showToast('Hình ảnh đã được thêm thành công', 'success');
    };
 
    // Remove an image from a variant
@@ -238,6 +256,12 @@ export default function Step2() {
       let hasErrors = false;
       const newErrors: { [key: string]: string } = {};
 
+      // Check if there are any variants
+      if (variants.length === 0) {
+         showToast('Vui lòng thêm ít nhất một phiên bản sản phẩm', 'error');
+         return;
+      }
+
       variants.forEach((variant, index) => {
          ['type', 'values', 'size', 'quantity'].forEach((field) => {
             const value = variant[field as keyof Variant];
@@ -245,11 +269,20 @@ export default function Step2() {
                field,
                typeof value === 'string' || typeof value === 'number' ? value : '',
             );
+
             if (error) {
                newErrors[`${field}_${index}`] = error;
                hasErrors = true;
+               showToast(`Phiên bản ${index + 1}: ${error}`, 'error');
             }
          });
+
+         // Check if images are provided
+         if (!variant.images || variant.images.length === 0) {
+            newErrors[`images_${index}`] = 'Vui lòng thêm ít nhất một hình ảnh cho phiên bản sản phẩm';
+            hasErrors = true;
+            showToast(`Phiên bản ${index + 1}: Vui lòng thêm ít nhất một hình ảnh`, 'error');
+         }
       });
 
       if (hasErrors) {
@@ -497,7 +530,6 @@ export default function Step2() {
                               )}
                            </div>
                         </div>
-
 
                         {/* Chi tiết phiên bản */}
                         <div className='mt-8 mb-4'>
@@ -766,6 +798,16 @@ export default function Step2() {
                </div>
             </main>
          </div>
+
+         {/* Toast component for notifications */}
+         <Toast
+            show={toast.show}
+            message={toast.message}
+            type={toast.type}
+            onClose={() => setToast((prev) => ({ ...prev, show: false }))}
+            duration={3000}
+            position='top-right'
+         />
       </div>
    );
 }

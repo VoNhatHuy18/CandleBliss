@@ -10,6 +10,9 @@ import Header from '@/app/components/seller/header/page';
 import MenuSideBar from '@/app/components/seller/menusidebar/page';
 import { X, ChevronDown, Loader2 } from 'lucide-react';
 
+// Import Toast component
+import Toast from '@/app/components/ui/toast/Toast';
+
 // Interface cho danh mục
 interface Category {
    id: number;
@@ -53,6 +56,17 @@ export default function Step1() {
 
    const [imageUploading, setImageUploading] = useState(false);
    const [imageProcessingCount, setImageProcessingCount] = useState(0);
+
+   // Toast state
+   const [toast, setToast] = useState<{
+      show: boolean;
+      message: string;
+      type: 'success' | 'error' | 'info';
+   }>({
+      show: false,
+      message: '',
+      type: 'info',
+   });
 
    useEffect(() => {
       const token = localStorage.getItem('token') || sessionStorage.getItem('token');
@@ -235,7 +249,73 @@ export default function Step1() {
       }
    };
 
-   // Handle image upload
+   // Helper function to show toast messages
+   const showToast = (message: string, type: 'success' | 'error' | 'info') => {
+      setToast({
+         show: true,
+         message,
+         type,
+      });
+   };
+
+   // Enhanced validation with constraints
+   const validateForm = () => {
+      let isValid = true;
+      const newErrors = {
+         name: '',
+         category: '',
+         description: '',
+         images: '',
+      };
+
+      // Name validation - at least 5 characters, max 120
+      if (!name.trim()) {
+         newErrors.name = 'Vui lòng nhập tên sản phẩm';
+         isValid = false;
+      } else if (name.trim().length < 5) {
+         newErrors.name = 'Tên sản phẩm phải có ít nhất 5 ký tự';
+         isValid = false;
+      } else if (name.trim().length > 120) {
+         newErrors.name = 'Tên sản phẩm không được vượt quá 120 ký tự';
+         isValid = false;
+      }
+
+      if (!selectedCategory) {
+         newErrors.category = 'Vui lòng chọn danh mục';
+         isValid = false;
+      }
+
+      // Description validation - at least 20 characters
+      if (!description.trim()) {
+         newErrors.description = 'Vui lòng nhập mô tả sản phẩm';
+         isValid = false;
+      } else if (description.trim().length < 20) {
+         newErrors.description = 'Mô tả sản phẩm phải có ít nhất 20 ký tự';
+         isValid = false;
+      } else if (description.trim().length > 3000) {
+         newErrors.description = 'Mô tả sản phẩm không được vượt quá 3000 ký tự';
+         isValid = false;
+      }
+
+      if (productImages.length === 0) {
+         newErrors.images = 'Vui lòng tải lên ít nhất 1 hình ảnh';
+         isValid = false;
+      }
+
+      setErrors(newErrors);
+
+      // Show error messages in toast
+      if (!isValid) {
+         const errorMessages = Object.values(newErrors).filter(msg => msg !== '');
+         if (errorMessages.length > 0) {
+            showToast(errorMessages[0], 'error');
+         }
+      }
+
+      return isValid;
+   };
+
+   // Modified handle image upload function with better validation
    const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
       setImageError(null);
       const files = e.target.files;
@@ -244,7 +324,9 @@ export default function Step1() {
 
       // Check if adding these files would exceed the 9 image limit
       if (productImages.length + files.length > 9) {
-         setImageError('Chỉ được phép tải lên tối đa 9 hình ảnh');
+         const message = 'Chỉ được phép tải lên tối đa 9 hình ảnh';
+         setImageError(message);
+         showToast(message, 'error');
          return;
       }
 
@@ -255,18 +337,25 @@ export default function Step1() {
          // Process each file
          const filesToProcess = Array.from(files);
          const processedImages: string[] = [];
+         let hasErrors = false;
 
          for (const file of filesToProcess) {
             try {
                // Validate file type
                if (!['image/jpeg', 'image/png', 'image/webp', 'image/jpg'].includes(file.type)) {
-                  setImageError('Chỉ chấp nhận các định dạng: JPG, JPEG, PNG, WEBP');
+                  const message = 'Chỉ chấp nhận các định dạng: JPG, JPEG, PNG, WEBP';
+                  setImageError(message);
+                  showToast(message, 'error');
+                  hasErrors = true;
                   continue;
                }
 
                // Validate file size (max 5MB)
                if (file.size > 5 * 1024 * 1024) {
-                  setImageError('Kích thước ảnh không được vượt quá 5MB');
+                  const message = 'Kích thước ảnh không được vượt quá 5MB';
+                  setImageError(message);
+                  showToast(message, 'error');
+                  hasErrors = true;
                   continue;
                }
 
@@ -283,11 +372,18 @@ export default function Step1() {
             }
          }
 
-         setProductImages((prev) => [...prev, ...processedImages]);
-         setErrors((prev) => ({ ...prev, images: '' }));
+         // Only update images if we processed some successfully
+         if (processedImages.length > 0) {
+            setProductImages((prev) => [...prev, ...processedImages]);
+            setErrors((prev) => ({ ...prev, images: '' }));
+            if (!hasErrors) {
+               showToast('Hình ảnh đã được tải lên thành công', 'success');
+            }
+         }
       } catch (error) {
          console.error('Error during image upload:', error);
          setImageError('Có lỗi xảy ra khi xử lý hình ảnh.');
+         showToast('Có lỗi xảy ra khi xử lý hình ảnh.', 'error');
       } finally {
          setImageUploading(false);
          setImageProcessingCount(0);
@@ -303,39 +399,6 @@ export default function Step1() {
          URL.revokeObjectURL(prev[indexToRemove]);
          return prev.filter((_, index) => index !== indexToRemove);
       });
-   };
-
-   const validateForm = () => {
-      let isValid = true;
-      const newErrors = {
-         name: '',
-         category: '',
-         description: '',
-         images: '',
-      };
-
-      if (!name.trim()) {
-         newErrors.name = 'Vui lòng nhập tên sản phẩm';
-         isValid = false;
-      }
-
-      if (!selectedCategory) {
-         newErrors.category = 'Vui lòng chọn danh mục';
-         isValid = false;
-      }
-
-      if (!description.trim()) {
-         newErrors.description = 'Vui lòng nhập mô tả sản phẩm';
-         isValid = false;
-      }
-
-      if (productImages.length === 0) {
-         newErrors.images = 'Vui lòng tải lên ít nhất 1 hình ảnh';
-         isValid = false;
-      }
-
-      setErrors(newErrors);
-      return isValid;
    };
 
    const handleNext = async () => {
@@ -595,6 +658,9 @@ export default function Step1() {
                            {errors.name && (
                               <p className='text-red-500 text-xs mt-1'>{errors.name}</p>
                            )}
+                           <p className='text-xs text-gray-500 mt-1'>
+                              Tên sản phẩm phải có ít nhất 5 ký tự và không vượt quá 120 ký tự
+                           </p>
                         </div>
 
                         {/* Category Dropdown */}
@@ -759,6 +825,12 @@ export default function Step1() {
                               <p className='text-red-500 text-xs mt-1'>{errors.images}</p>
                            )}
                            {imageError && <p className='text-red-500 text-xs mt-1'>{imageError}</p>}
+                           <p className='text-xs text-gray-500 mt-1'>
+                              - Yêu cầu: Ít nhất 1 hình ảnh, tối đa 9 hình ảnh<br />
+                              - Định dạng: JPG, JPEG, PNG, WEBP<br />
+                              - Kích thước: Tối đa 5MB/ảnh<br />
+                              - Lưu ý: Hình ảnh rõ nét, không mờ, không chứa logo đối thủ
+                           </p>
                         </div>
 
                         {/* Video URL */}
@@ -797,6 +869,9 @@ export default function Step1() {
                            {errors.description && (
                               <p className='text-red-500 text-xs mt-1'>{errors.description}</p>
                            )}
+                           <p className='text-xs text-gray-500 mt-1'>
+                              Mô tả phải có ít nhất 20 ký tự. Nên bao gồm thông tin chi tiết về chất liệu, kích thước và đặc điểm nổi bật.
+                           </p>
                         </div>
                      </div>
                   </div>
@@ -825,8 +900,85 @@ export default function Step1() {
                      </button>
                   </div>
                </div>
+
+               {/* Toast Notification */}
+               {toast.show && (
+                  <div className={`fixed bottom-4 right-4 mb-4 mr-4 p-4 rounded-md shadow-lg
+                     ${toast.type === 'success' ? 'bg-green-50 border-l-4 border-green-400' : ''}
+                     ${toast.type === 'error' ? 'bg-red-50 border-l-4 border-red-400' : ''}
+                     ${toast.type === 'info' ? 'bg-blue-50 border-l-4 border-blue-400' : ''}`}
+                  >
+                     <div className='flex'>
+                        <div className='flex-shrink-0'>
+                           {toast.type === 'success' && (
+                              <svg
+                                 xmlns='http://www.w3.org/2000/svg'
+                                 className='h-6 w-6 text-green-500'
+                                 fill='none'
+                                 viewBox='0 0 24 24'
+                                 stroke='currentColor'
+                              >
+                                 <path
+                                    strokeLinecap='round'
+                                    strokeLinejoin='round'
+                                    strokeWidth={2}
+                                    d='M9 12l2 2 4-4m2 10a9 9 0 11-18 0 9 9 0 0118 0z'
+                                 />
+                              </svg>
+                           )}
+                           {toast.type === 'error' && (
+                              <svg
+                                 xmlns='http://www.w3.org/2000/svg'
+                                 className='h-6 w-6 text-red-500'
+                                 fill='none'
+                                 viewBox='0 0 24 24'
+                                 stroke='currentColor'
+                              >
+                                 <path
+                                    strokeLinecap='round'
+                                    strokeLinejoin='round'
+                                    strokeWidth={2}
+                                    d='M9 12l2 2 4-4m2 10a9 9 0 11-18 0 9 9 0 0118 0z'
+                                 />
+                              </svg>
+                           )}
+                           {toast.type === 'info' && (
+                              <svg
+                                 xmlns='http://www.w3.org/2000/svg'
+                                 className='h-6 w-6 text-blue-500'
+                                 fill='none'
+                                 viewBox='0 0 24 24'
+                                 stroke='currentColor'
+                              >
+                                 <path
+                                    strokeLinecap='round'
+                                    strokeLinejoin='round'
+                                    strokeWidth={2}
+                                    d='M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z'
+                                 />
+                              </svg>
+                           )}
+                        </div>
+                        <div className='ml-3'>
+                           <p className={`text-sm ${toast.type === 'error' ? 'text-red-700' : 'text-gray-700'}`}>
+                              {toast.message}
+                           </p>
+                        </div>
+                     </div>
+                  </div>
+               )}
             </main>
          </div>
+
+         {/* Toast notification */}
+         <Toast
+            show={toast.show}
+            message={toast.message}
+            type={toast.type}
+            onClose={() => setToast((prev) => ({ ...prev, show: false }))}
+            duration={3000}
+            position='top-right'
+         />
       </div>
    );
 }
