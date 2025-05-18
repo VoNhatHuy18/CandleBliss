@@ -108,7 +108,7 @@ export default function ChatBotModal() {
 
     try {
       // Sử dụng đường dẫn tuyệt đối với window.location.origin
-      const apiUrl = '/api/chatbot';
+      const apiUrl = '/chatbot';
       console.log('Calling chatbot API at:', apiUrl); // Debug log
 
       const response = await fetch(apiUrl, {
