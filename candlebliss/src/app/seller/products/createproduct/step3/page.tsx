@@ -544,8 +544,15 @@ export default function Step3() {
                                                 type='number'
                                                 className='w-full p-2 border rounded-md'
                                                 value={variant.basePrice || ''}
-                                                onChange={(e) => updateVariantPrice(index, 'basePrice', e.target.value)}
+                                                onChange={(e: { target: { value: string; }; }) => {
+                                                   const value = e.target.value;
+                                                   // Only update if the value is positive or empty
+                                                   if (value === '' || Number(value) >= 0) {
+                                                      updateVariantPrice(index, 'basePrice', value);
+                                                   }
+                                                }}
                                                 placeholder='Nhập giá gốc'
+                                                min="0"
                                                 required
                                              />
                                           </div>
@@ -559,7 +566,7 @@ export default function Step3() {
                                                 value={variant.discountPrice || ''}
                                                 onChange={(e) => {
                                                    const value = e.target.value;
-                                                   if (Number(value) >= 0 && Number(value) <= 100) {
+                                                   if (value === '' || (Number(value) >= 0 && Number(value) <= 100)) {
                                                       updateVariantPrice(index, 'discountPrice', value);
                                                    }
                                                 }}
@@ -608,7 +615,7 @@ export default function Step3() {
                                                 <span className='text-sm font-medium'>Giá hiển thị:</span>
                                                 {variant.discountPrice && Number(variant.discountPrice) > 0 ? (
                                                    <div className='text-right'>
-                                                      <span className='font-bold bg-amber-600 '>
+                                                      <span className='font-bold  '>
                                                          {variant.calculatedPrice
                                                             ? `${Number(variant.calculatedPrice).toLocaleString('vi-VN')} VNĐ`
                                                             : '0 VNĐ'}
@@ -625,7 +632,7 @@ export default function Step3() {
                                                       </div>
                                                    </div>
                                                 ) : (
-                                                   <span className='font-bold bg-amber-600'>
+                                                   <span className='font-bold '>
                                                       {variant.basePrice
                                                          ? `${Number(variant.basePrice).toLocaleString('vi-VN')} VNĐ`
                                                          : '0 VNĐ'}
