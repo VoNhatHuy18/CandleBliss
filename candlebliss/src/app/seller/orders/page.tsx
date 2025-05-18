@@ -147,7 +147,7 @@ const orderStatusColors: Record<string, { bg: string; text: string; border: stri
 
 // Danh sách các trạng thái đơn hàng có thể chuyển đến tiếp theo
 const nextPossibleStatuses: Record<string, string[]> = {
-   'Đơn hàng vừa được tạo': ['Đang chờ thanh toán', 'Đã huỷ'],
+   'Đơn hàng vừa được tạo': ['Đang xử lý', 'Đã huỷ'],
    'Đang chờ thanh toán': ['Thanh toán thành công', 'Thanh toán thất bại', 'Đang xử lý', 'Đã huỷ'],
    'Thanh toán thành công': ['Đang xử lý', 'Đã huỷ'],
    'Thanh toán thất bại': [],
@@ -824,7 +824,7 @@ export default function OrdersPage() {
          case 'COD':
             return '/images/logo.png';
          case 'BANKING':
-            return '/images/payment/bank.png';
+            return '/images/vietinbank-logo.png';
          case 'MOMO':
             return '/images/momo-logo.png';
          default:

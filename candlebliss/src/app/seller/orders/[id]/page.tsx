@@ -272,7 +272,7 @@ const generateDefaultStatusTimeline = (order: Order) => {
 
 // Add this right below the existing nextPossibleStatuses object (outside of the component)
 const nextPossibleStatuses: Record<string, string[]> = {
-    'Đơn hàng vừa được tạo': ['Đang chờ thanh toán', 'Đã huỷ'],
+    'Đơn hàng vừa được tạo': ['Đang xử lý', 'Đã huỷ'],
     'Đang chờ thanh toán': ['Thanh toán thành công', 'Thanh toán thất bại', 'Đang xử lý', 'Đã huỷ'],
     'Thanh toán thành công': ['Đang xử lý', 'Đã huỷ'],
     'Thanh toán thất bại': [],
@@ -664,7 +664,7 @@ export default function OrderDetailPage() {
                                                             order.method_payment === 'COD'
                                                                 ? '/images/logo.png'
                                                                 : order.method_payment === 'BANKING'
-                                                                    ? '/images/bank.png'
+                                                                    ? '/images/vietinbank-logo.png'
                                                                     : '/images/momo-logo.png'
                                                         }
                                                         alt={order.method_payment}

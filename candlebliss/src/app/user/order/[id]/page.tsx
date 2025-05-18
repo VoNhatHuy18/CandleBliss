@@ -1240,13 +1240,76 @@ export default function OrderDetailPage() {
          case 'COD':
             return '/images/logo.png';
          case 'BANKING':
-            return '/images/payment/bank.png';
+            return '/images/vietinbank-logo.png';
          case 'MOMO':
             return '/images/momo-logo.png';
          default:
             return '/images/payment/cod.png';
       }
    };
+
+   // Thêm state để theo dõi trạng thái xử lý đơn hàng thanh toán bằng chuyển khoản
+   const [bankingOrderProcessed, setBankingOrderProcessed] = useState(false);
+   const [codOrderProcessed, setCodOrderProcessed] = useState(false);
+
+   // Thêm hàm này để xử lý trạng thái đơn hàng COD
+   const handleCODOrderStatus = useCallback(async () => {
+      if (!order || codOrderProcessed) return;
+
+      // Chỉ xử lý khi đơn hàng có phương thức thanh toán COD và trạng thái "Đơn hàng vừa được tạo"
+      if (order.method_payment === 'COD' && order.status === 'Đơn hàng vừa được tạo') {
+         try {
+            const token = localStorage.getItem('token');
+            if (!token) return;
+
+            // Cập nhật trạng thái sang "Đã đặt hàng"
+            await handleUpdateOrderStatus('Đã đặt hàng');
+
+            // Đánh dấu đã xử lý
+            setCodOrderProcessed(true);
+         } catch (error) {
+            console.error('Error processing COD order:', error);
+         }
+      } else {
+         setCodOrderProcessed(true);
+      }
+   }, [order, codOrderProcessed, handleUpdateOrderStatus]);
+
+   // Thêm hàm này để xử lý trạng thái đơn hàng BANKING
+   const handleBankingOrderStatus = useCallback(async () => {
+      if (!order || bankingOrderProcessed) return;
+
+      // Chỉ xử lý khi đơn hàng có phương thức thanh toán BANKING và trạng thái "Đơn hàng vừa được tạo"
+      if (order.method_payment === 'BANKING' && order.status === 'Đơn hàng vừa được tạo') {
+         try {
+            const token = localStorage.getItem('token');
+            if (!token) return;
+
+            // Cập nhật trạng thái sang "Đang chờ thanh toán"
+            await handleUpdateOrderStatus('Đang chờ thanh toán');
+
+            // Đánh dấu đã xử lý
+            setBankingOrderProcessed(true);
+         } catch (error) {
+            console.error('Error processing BANKING order:', error);
+         }
+      } else {
+         setBankingOrderProcessed(true);
+      }
+   }, [order, bankingOrderProcessed, handleUpdateOrderStatus]);
+
+   // Thêm useEffect để gọi cả hai hàm xử lý phương thức thanh toán
+   useEffect(() => {
+      if (order && !loading) {
+         if (!codOrderProcessed) {
+            handleCODOrderStatus();
+         }
+
+         if (!bankingOrderProcessed) {
+            handleBankingOrderStatus();
+         }
+      }
+   }, [order, loading, codOrderProcessed, bankingOrderProcessed, handleCODOrderStatus, handleBankingOrderStatus]);
 
    if (loading) {
       return (

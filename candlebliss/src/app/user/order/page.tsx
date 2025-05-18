@@ -247,6 +247,7 @@ export default function OrderPage() {
 
    // Add state to track if COD orders have been processed
    const [codOrdersProcessed, setCodOrdersProcessed] = useState(false);
+   const [, setBankingOrdersProcessed] = useState(false);
 
    const [selectedOrderId, setSelectedOrderId] = useState<number | null>(null);
 
@@ -313,6 +314,7 @@ export default function OrderPage() {
             setFetchedProducts({});
             setFetchedDetails({});
             setCodOrdersProcessed(false);
+            setBankingOrdersProcessed(false); // Thêm dòng này
             setCheckedPayments(false);
 
             if (sortedOrders.length === 0) {
@@ -563,7 +565,7 @@ export default function OrderPage() {
          case 'COD':
             return '/images/logo.png';
          case 'BANKING':
-            return '/images/payment/bank.png';
+            return '/images/vietinbank-logo.png';
          case 'MOMO':
             return '/images/momo-logo.png';
          default:
