@@ -97,7 +97,7 @@ const formatPrice = (price: number): string => {
    }).format(price);
 };
 
-// Update the isVoucherValid function to accept userInfo as a parameter
+// Update the isVoucherValid function to check for first orders instead of account creation date
 const isVoucherValid = (
    voucher: Voucher,
    currentSubTotal: number,
@@ -136,22 +136,20 @@ const isVoucherValid = (
       };
    }
 
-   // Kiểm tra điều kiện khách hàng mới
+   // Kiểm tra điều kiện khách hàng mới (đơn hàng đầu tiên)
    if (voucher.new_customers_only) {
       // Check if user info is available
-      if (!userInfo) {
+      if (!userInfo || !userId) {
          return { valid: false, message: 'Không thể xác minh thông tin người dùng' };
       }
 
-      // Check user creation date
-      const userCreatedAt = new Date(userInfo.createdAt);
-      const diffTime = Math.abs(now.getTime() - userCreatedAt.getTime());
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      // Check if user has previous orders
+      const hasPlacedOrders = checkIfUserHasPreviousOrders(userId);
 
-      if (diffDays > 7) {
+      if (hasPlacedOrders) {
          return {
             valid: false,
-            message: 'Mã giảm giá này chỉ áp dụng cho tài khoản được tạo trong vòng 7 ngày'
+            message: 'Mã giảm giá này chỉ áp dụng cho đơn hàng đầu tiên'
          };
       }
    }
@@ -170,6 +168,32 @@ const isVoucherValid = (
    // Voucher hợp lệ
    return { valid: true };
 };
+
+// Add this helper function to check if user has placed orders before
+const checkIfUserHasPreviousOrders = (userId: number): boolean => {
+   // First check localStorage for completed orders
+   const orderHistoryKey = `user_${userId}_orderHistory`;
+   const orderHistory = localStorage.getItem(orderHistoryKey);
+
+   if (orderHistory) {
+      const orders = JSON.parse(orderHistory);
+      // If there are any completed orders, return true
+      return orders.length > 0;
+   }
+
+   // Check local storage for a flag indicating first-time buyer
+   const isFirstTimeKey = `user_${userId}_isFirstTimeBuyer`;
+   const isFirstTime = localStorage.getItem(isFirstTimeKey);
+
+   // If the flag is explicitly set to "false", user has ordered before
+   if (isFirstTime === "false") {
+      return true;
+   }
+
+   // Default: assume this is their first order if we have no contrary evidence
+   return false;
+};
+
 
 // Thêm hàm tính toán số tiền giảm giá
 const calculateDiscountAmount = (voucher: Voucher, currentSubTotal: number): number => {
@@ -587,7 +611,9 @@ export default function CheckoutPage() {
             const validationResult = isVoucherValid(voucherData, subTotal, userId, userInfo);
             if (!validationResult.valid) {
                localStorage.removeItem('appliedVoucher');
-               showToastMessage(validationResult.message || 'Unknown error occurred', 'error');
+               setDiscount(0);
+               setAppliedVoucher(null);
+               showToastMessage(validationResult.message || 'Mã giảm giá không hợp lệ', 'error');
                return;
             }
 
@@ -1377,18 +1403,31 @@ export default function CheckoutPage() {
       }
    };
 
-   // Cập nhật hàm áp dụng voucher
    const applyVoucher = async () => {
+      // Reset error state
+      setVoucherError('');
+
       if (!voucherCode.trim()) {
-         setVoucherError('Vui lòng nhập mã giảm giá');
+         showToastMessage('Vui lòng nhập mã giảm giá', 'error');
+         return;
+      }
+
+      // Validate if user is logged in
+      if (!userId) {
+         showToastMessage('Bạn cần đăng nhập để sử dụng mã giảm giá', 'error');
+         return;
+      }
+
+      // Validate if we have user info
+      if (!userInfo) {
+         showToastMessage('Không thể xác minh thông tin người dùng', 'error');
          return;
       }
 
       try {
          setApplyingVoucher(true);
-         setVoucherError('');
 
-         // Vì bạn có API /api/v1/vouchers/code/{code}, nên dùng nó thay vì lấy toàn bộ vouchers
+         // Fetch the voucher from API
          const voucherResponse = await fetch(`${HOST}/api/v1/vouchers/code/${voucherCode.trim()}`, {
             headers: {
                Authorization: `Bearer ${localStorage.getItem('token') || ''}`,
@@ -1396,27 +1435,100 @@ export default function CheckoutPage() {
          });
 
          if (!voucherResponse.ok) {
-            throw new Error('Mã giảm giá không tồn tại hoặc đã hết hiệu lực');
+            // Handle specific error for new customers only voucher
+            if (voucherResponse.status === 400) {
+               const errorData = await voucherResponse.json();
+               if (errorData.message === "Voucher chỉ áp dụng cho khách hàng mới") {
+                  throw new Error('Mã giảm giá này chỉ áp dụng cho đơn hàng đầu tiên');
+               }
+            }
+
+            if (voucherResponse.status === 404) {
+               throw new Error('Mã giảm giá không tồn tại');
+            } else {
+               throw new Error('Không thể kiểm tra mã giảm giá, vui lòng thử lại sau');
+            }
          }
 
          const voucher = await voucherResponse.json();
 
-         // Kiểm tra tính hợp lệ của voucher, bao gồm số lần sử dụng
-         const validationResult = isVoucherValid(voucher, subTotal, userId, userInfo); // Pass userInfo here
+         // Perform validation checks
 
-         if (!validationResult.valid) {
-            throw new Error(validationResult.message);
+         // 1. Check if voucher is active
+         if (!voucher.isActive || voucher.isDeleted) {
+            showToastMessage('Mã giảm giá không có hiệu lực', 'error');
+            return;
          }
 
-         // Tính toán số tiền giảm giá
+         // 2. Check date validity
+         const now = new Date();
+         const startDate = new Date(voucher.start_date);
+         const endDate = new Date(voucher.end_date);
+
+         if (now < startDate) {
+            showToastMessage(
+               `Mã giảm giá sẽ có hiệu lực từ ngày ${startDate.toLocaleDateString('vi-VN')}`,
+               'error'
+            );
+            return;
+         }
+
+         if (now > endDate) {
+            showToastMessage('Mã giảm giá đã hết hạn', 'error');
+            return;
+         }
+
+         // 3. Check minimum order value
+         const minOrderValue = parseFloat(voucher.min_order_value);
+         if (minOrderValue > subTotal) {
+            showToastMessage(
+               `Đơn hàng tối thiểu ${formatPrice(minOrderValue)} để áp dụng mã này. 
+            Bạn cần thêm ${formatPrice(minOrderValue - subTotal)} nữa.`,
+               'error'
+            );
+            return;
+         }
+
+         // 4. Check if new customers only
+         if (voucher.new_customers_only) {
+            const hasPlacedOrders = checkIfUserHasPreviousOrders(userId);
+
+            if (hasPlacedOrders) {
+               showToastMessage('Mã giảm giá này chỉ áp dụng cho đơn hàng đầu tiên', 'error');
+               return;
+            }
+         }
+
+         // 5. Check usage limits per customer
+         if (voucher.usage_per_customer > 0) {
+            const usageCount = getVoucherUsageCount(voucher.id, userId);
+            if (usageCount >= voucher.usage_per_customer) {
+               showToastMessage(
+                  `Bạn đã sử dụng hết số lần cho phép với mã giảm giá này (tối đa ${voucher.usage_per_customer} lần)`,
+                  'error'
+               );
+               return;
+            }
+         }
+
+         // 6. Check global usage limit
+         if (voucher.usage_limit > 0) {
+            const allUsersUsage = getTotalVoucherUsage(voucher.id);
+            if (allUsersUsage >= voucher.usage_limit) {
+               showToastMessage('Mã giảm giá đã hết lượt sử dụng', 'error');
+               return;
+            }
+         }
+
+         // If all checks passed, calculate the discount amount
          const discountAmount = calculateDiscountAmount(voucher, subTotal);
 
-         // Cập nhật state với voucher và số tiền giảm giá
+         // Apply the voucher
          setAppliedVoucher(voucher);
          setVoucherCode(voucher.code);
          setDiscount(discountAmount);
 
-         // Lưu voucher đã áp dụng vào localStorage để sử dụng ở trang khác
+         // Save the applied voucher to localStorage
          localStorage.setItem(
             'appliedVoucher',
             JSON.stringify({
@@ -1425,20 +1537,45 @@ export default function CheckoutPage() {
             }),
          );
 
-         // Hiển thị thông báo thành công
+         // Show success message
          showToastMessage(`Đã áp dụng mã giảm giá: ${voucher.code}`, 'success');
+
       } catch (error: unknown) {
-         if (error instanceof Error) {
-            console.error('Error applying voucher:', error.message);
-         } else {
-            console.error('Error applying voucher:', error);
-         }
-         setVoucherError(error instanceof Error ? error.message : 'Không thể áp dụng mã giảm giá');
+         const errorMessage = error instanceof Error ? error.message : 'Không thể áp dụng mã giảm giá';
+
+         // Log the error for debugging
+         console.error('Error applying voucher:', errorMessage);
+
+         // Show error in Toast
+         showToastMessage(errorMessage, 'error');
+
+         // Also update error state for inline display (optional)
+         setVoucherError(errorMessage);
+
          setAppliedVoucher(null);
          setDiscount(0);
          localStorage.removeItem('appliedVoucher');
       } finally {
          setApplyingVoucher(false);
+      }
+   };
+
+   const getTotalVoucherUsage = (voucherId: number): number => {
+      try {
+         const history = getVoucherUsageHistory();
+         let totalUsage = 0;
+
+         // Sum up usage across all users
+         Object.keys(history).forEach(userId => {
+            if (history[userId][voucherId]) {
+               totalUsage += history[userId][voucherId];
+            }
+         });
+
+         return totalUsage;
+      } catch (error) {
+         console.error('Error getting total voucher usage:', error);
+         return 0;
       }
    };
 
@@ -1600,6 +1737,23 @@ export default function CheckoutPage() {
             // Thêm: Nếu đặt hàng thành công và có sử dụng voucher, cập nhật lịch sử sử dụng
             if (appliedVoucher && userId) {
                saveVoucherUsage(appliedVoucher.id, userId);
+            }
+
+            // Mark user as no longer a first-time buyer
+            if (userId) {
+               localStorage.setItem(`user_${userId}_isFirstTimeBuyer`, "false");
+
+               // Also update order history if it exists
+               const orderHistoryKey = `user_${userId}_orderHistory`;
+               const existingHistory = localStorage.getItem(orderHistoryKey);
+               const orderHistory = existingHistory ? JSON.parse(existingHistory) : [];
+               orderHistory.push({
+                  id: newOrder.id,
+                  date: new Date().toISOString(),
+                  total: totalPrice,
+                  status: paymentMethod === 'COD' ? 'Đã đặt hàng' : 'Chờ thanh toán'
+               });
+               localStorage.setItem(orderHistoryKey, JSON.stringify(orderHistory));
             }
 
             // Xóa giỏ hàng và voucher sau khi đặt hàng thành công

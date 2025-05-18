@@ -158,7 +158,7 @@ const VoucherTag: React.FC<VoucherTagProps> = ({
                   {/* Conditional new customer badge */}
                   {newCustomersOnly && (
                      <div className='absolute top-0 right-0 bg-blue-500 text-white text-xs px-2 py-1 rounded-bl-lg'>
-                        Khách hàng mới
+                        Đơn hàng đầu tiên
                      </div>
                   )}
 
