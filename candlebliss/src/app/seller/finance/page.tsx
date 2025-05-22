@@ -22,6 +22,7 @@ import {
    CategoryScale,
    LinearScale,
    BarElement,
+   ArcElement,
    Title,
    Tooltip,
    Legend,
@@ -31,6 +32,7 @@ Chart.register(
    CategoryScale,
    LinearScale,
    BarElement,
+   ArcElement,
    Title,
    Tooltip,
    Legend
@@ -48,6 +50,7 @@ interface OrderItem {
    product_detail_id: number;
    quantity: number;
    totalPrice: string;
+   product_id: string;
 }
 
 // Define interface for user
@@ -88,6 +91,7 @@ interface NewCustomer {
 }
 
 export default function FinancePage() {
+
    const [searchTerm, setSearchTerm] = useState('');
    const [currentTab, setCurrentTab] = useState('overview');
    const [animateStats, setAnimateStats] = useState(false);
@@ -160,11 +164,32 @@ export default function FinancePage() {
    const [currentPage, setCurrentPage] = useState(1);
    const [ordersPerPage] = useState(20);
 
+   const [productCategories, setProductCategories] = useState<Record<string, number>>({});
+   const [categoryStats, setCategoryStats] = useState<Array<{
+      id: number;
+      name: string;
+      count: number;
+      totalSales: number;
+   }>>([]);
+   const [categories] = useState<Array<{
+      id: number;
+      name: string;
+      description: string;
+   }>>([]);
+   const [, setCategoryStatsLoading] = useState(true);
+   const [productGroups, setProductGroups] = useState<Record<string, {
+      name: string,
+      count: number,
+      revenue: number,
+      isDeleted?: boolean
+   }>>({});
 
-   // Thêm đoạn này vào sau phần filteredOrders
-   // Tính toán các đơn hàng hiển thị cho trang hiện tại
-
-
+   // Thêm state để lưu trữ thông tin sản phẩm
+   const [productsInfo, setProductsInfo] = useState<Record<string, {
+      name: string;
+      image?: string;
+      isDeleted?: boolean;
+   }>>({});
 
 
    // Component hiển thị điều khiển phân trang
@@ -286,8 +311,154 @@ export default function FinancePage() {
                </button>
             </div>
          </div>
-      );
+      )
    };
+
+
+
+   // Hàm lấy thông tin sản phẩm theo ID
+   const fetchProductDetails = async (productId: string) => {
+      try {
+         // Kiểm tra xem đã có thông tin về danh mục của sản phẩm này chưa
+         if (productCategories[productId]) {
+            return productCategories[productId];
+         }
+
+         // Nếu chưa có, fetch từ API
+         const response = await fetch(`${HOST}/api/products/${productId}`);
+         if (response.ok) {
+            const product = await response.json();
+            return product.category_id;
+         }
+      } catch (error) {
+         console.error(`Error fetching product details for ID ${productId}:`, error);
+      }
+      return null;
+   };
+
+
+   // Hàm phân tích và tạo thống kê danh mục
+   const analyzeCategoryStats = async () => {
+      if (orders.length === 0 || categories.length === 0) return;
+
+      setCategoryStatsLoading(true);
+
+      try {
+         // Chuẩn bị dữ liệu thống kê
+         const stats: Record<number, { count: number, totalSales: number }> = {};
+
+         // Khởi tạo tất cả danh mục với giá trị ban đầu là 0
+         categories.forEach(cat => {
+            stats[cat.id] = { count: 0, totalSales: 0 };
+         });
+
+         // Tạo một map để lưu trữ kết quả đã fetch để tránh fetch lặp lại
+         const productCategoryMap: Record<string, number> = {};
+
+         // Process each order
+         for (const order of orders) {
+            if (!order.item || !Array.isArray(order.item)) continue;
+
+            // Lọc những đơn có trạng thái hoàn thành
+            if (!isRevenueCountableStatus(order.status)) continue;
+
+            // Xử lý từng mục trong đơn hàng
+            for (const item of order.item) {
+               // Bỏ qua nếu không có product_id
+               if (!item.product_id) continue;
+
+               let categoryId;
+
+               // Kiểm tra xem đã có trong map chưa
+               if (productCategoryMap[item.product_id]) {
+                  categoryId = productCategoryMap[item.product_id];
+               } else {
+                  // Chưa có, fetch từ API
+                  categoryId = await fetchProductDetails(item.product_id);
+
+                  // Lưu lại để tái sử dụng
+                  if (categoryId) {
+                     productCategoryMap[item.product_id] = categoryId;
+                  }
+               }
+
+               // Nếu tìm thấy danh mục, cập nhật thống kê
+               if (categoryId && stats[categoryId]) {
+                  stats[categoryId].count += item.quantity;
+                  stats[categoryId].totalSales += parseInt(item.totalPrice);
+               }
+            }
+         }
+
+         // Lưu product-category map để tái sử dụng
+         setProductCategories(productCategoryMap);
+
+         // Chuyển đổi thống kê thành mảng để hiển thị
+         const categoryStatsArray = categories.map(category => ({
+            id: category.id,
+            name: category.name,
+            count: stats[category.id]?.count || 0,
+            totalSales: stats[category.id]?.totalSales || 0
+         })).sort((a, b) => b.count - a.count); // Sắp xếp theo số lượng giảm dần
+
+         setCategoryStats(categoryStatsArray);
+      } catch (error) {
+         console.error('Error analyzing category stats:', error);
+      } finally {
+         setCategoryStatsLoading(false);
+      }
+   };
+
+   // Hàm phân tích sản phẩm trong đơn hàng (sửa lại)
+   const analyzeProductGroups = useCallback(() => {
+      if (orders.length === 0) return;
+
+      // Clone đối tượng productGroups hiện tại để tránh mất dữ liệu
+      const groups: Record<string, {
+         name: string,
+         count: number,
+         revenue: number,
+         isDeleted: boolean
+      }> = {};
+
+      // Trước tiên, đặt isDeleted dựa trên thông tin sản phẩm
+      Object.keys(productsInfo).forEach(productId => {
+         groups[productId] = {
+            name: productsInfo[productId]?.name || `Sản phẩm #${productId}`,
+            count: 0,
+            revenue: 0,
+            isDeleted: productsInfo[productId]?.isDeleted || false
+         };
+      });
+
+      // Duyệt qua tất cả đơn hàng đã hoàn thành
+      orders.forEach(order => {
+         if (!isRevenueCountableStatus(order.status) || !order.item) return;
+
+         order.item.forEach(item => {
+            const productId = item.product_id;
+            if (!productId) return;
+
+            // Nếu sản phẩm chưa có trong groups, khởi tạo
+            if (!groups[productId]) {
+               groups[productId] = {
+                  name: productsInfo[productId]?.name || `Sản phẩm #${productId}`,
+                  count: 0,
+                  revenue: 0,
+                  // Lấy trạng thái isDeleted từ productsInfo nếu có
+                  isDeleted: productsInfo[productId]?.isDeleted || false
+               };
+            }
+
+            groups[productId].count += item.quantity;
+            groups[productId].revenue += parseInt(item.totalPrice);
+         });
+      });
+
+      console.log("Analyzed product groups:", groups); // Log để debug
+
+      setProductGroups(groups);
+   }, [orders, productsInfo]); // Thêm productsInfo vào dependencies
 
    // Thêm hàm này sau fetchStatisticsData
    const fetchPreviousPeriodData = useCallback(async () => {
@@ -524,6 +695,16 @@ export default function FinancePage() {
 
    // Thêm state để kiểm soát fetch new customers
    const [newCustomersFetched, setNewCustomersFetched] = useState(false);
+
+   // Thêm effect này để fetch categories và tính toán thống kê
+   useEffect(() => {
+
+
+      // Thêm dòng này để phân tích dữ liệu sản phẩm
+      if (orders.length > 0) {
+         analyzeProductGroups();
+      }
+   }, [orders, analyzeCategoryStats, analyzeProductGroups]); // Thêm analyzeProductGroups vào dependencies
 
    // Thêm effect này để reset về trang đầu tiên khi tìm kiếm thay đổi
    useEffect(() => {
@@ -1140,7 +1321,55 @@ export default function FinancePage() {
 
       // Xuất file với tên có thương hiệu
       XLSX.writeFile(workbook, `CandleBliss_BaoCaoTaiChinh_${dateStr}.xlsx`);
+
+      // Thêm thông tin danh mục vào hàm exportFinancialOverview
+      // Thêm SHEET 5: THỐNG KÊ THEO DANH MỤC
+      if (categoryStats.length > 0) {
+         // Tạo header cho sheet danh mục
+         const categoryHeader = [
+            ["BÁO CÁO THỐNG KÊ THEO DANH MỤC"], [""],
+            ["Ngày xuất báo cáo:", currentDate],
+            ["Số danh mục:", categoryStats.length.toString()],
+            [""],
+         ];
+
+         // Tạo dữ liệu danh mục
+         const categoryDetails = categoryStats.map((category, index) => ({
+            "STT": index + 1,
+            "Tên danh mục": category.name,
+            "Số lượng sản phẩm": category.count,
+            "Doanh thu": category.totalSales.toLocaleString() + " VND",
+            "Tỉ lệ": Math.round((category.count / categoryStats.reduce((sum, cat) => sum + cat.count, 0)) * 100) + "%"
+         }));
+
+         // Tạo worksheet từ header
+         const categorySheet = XLSX.utils.aoa_to_sheet(categoryHeader);
+
+         // Thêm data chi tiết vào sheet
+         XLSX.utils.sheet_add_json(categorySheet, categoryDetails, {
+            origin: "A" + (categoryHeader.length + 1),
+            skipHeader: false
+         });
+
+         // Thiết lập merge cells cho tiêu đề
+         const categoryMerges = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 4 } }];
+         categorySheet['!merges'] = categoryMerges;
+
+         // Thiết lập độ rộng cột
+         categorySheet['!cols'] = [
+            { width: 5 },   // STT
+            { width: 20 },  // Tên danh mục
+            { width: 15 },  // Số lượng sản phẩm
+            { width: 20 },  // Doanh thu
+            { width: 10 }   // Tỉ lệ
+         ];
+
+         // Thêm sheet vào workbook
+         XLSX.utils.book_append_sheet(workbook, categorySheet, 'Thống kê danh mục');
+      }
    };
+
+
 
    // Hàm thiết lập tùy chọn cho biểu đồ
    const setupChartOptions = () => {
@@ -1537,6 +1766,78 @@ export default function FinancePage() {
       }
    }, [previousPeriodData, chartMode]);
 
+   // Hàm lấy thông tin sản phẩm
+   const fetchProductsInfo = useCallback(async () => {
+      // Lấy danh sách product_id duy nhất từ đơn hàng
+      const uniqueProductIds = new Set<string>();
+      orders.forEach(order => {
+         if (order.item && Array.isArray(order.item)) {
+            order.item.forEach(item => {
+               if (item.product_id) uniqueProductIds.add(item.product_id);
+            });
+         }
+      });
+
+      if (uniqueProductIds.size === 0) return;
+
+      // Chỉ fetch thông tin cho những sản phẩm chưa có trong cache
+      const idsToFetch = [...uniqueProductIds].filter(id => !productsInfo[id]);
+      if (idsToFetch.length === 0) return;
+
+      try {
+         const promises = idsToFetch.map(async (productId) => {
+            try {
+               const response = await fetch(`${HOST}/api/products/${productId}`);
+               if (response.ok) {
+                  const data = await response.json();
+                  console.log(`Product ${productId} data:`, data); // Log để debug
+                  return {
+                     id: productId,
+                     data: {
+                        ...data,
+                        // Đảm bảo isDeleted được hiểu đúng - có thể API trả về kiểu khác boolean
+                        isDeleted: data.isDeleted === true || data.isDeleted === "true" || data.deletedAt !== null
+                     }
+                  };
+               } else {
+                  // Nếu không tìm thấy sản phẩm (404), coi như đã bị xóa
+                  if (response.status === 404) {
+                     return { id: productId, data: { name: `Sản phẩm #${productId}`, isDeleted: true } };
+                  }
+               }
+            } catch (error) {
+               console.error(`Error fetching product ${productId}:`, error);
+            }
+            // Fallback nếu lỗi - coi như không xóa để tránh mất dữ liệu
+            return { id: productId, data: { name: `Sản phẩm #${productId}`, isDeleted: false } };
+         });
+
+         const results = await Promise.all(promises);
+
+         const newProductsInfo = { ...productsInfo };
+         results.forEach(({ id, data }) => {
+            if (data) {
+               newProductsInfo[id] = {
+                  name: data.name || `Sản phẩm #${id}`,
+                  image: data.images && data.images.length > 0 ? data.images[0].path : undefined,
+                  isDeleted: data.isDeleted || false
+               };
+            }
+         });
+
+         setProductsInfo(newProductsInfo);
+      } catch (error) {
+         console.error('Error fetching products info:', error);
+      }
+   }, [orders, productsInfo]);
+
+   // Thêm effect để gọi fetchProductsInfo khi orders thay đổi
+   useEffect(() => {
+      if (orders.length > 0) {
+         fetchProductsInfo();
+      }
+   }, [orders, fetchProductsInfo]);
+
    return (
       <div className='flex h-screen bg-gray-50'>
          {/* Sidebar */}
@@ -1821,49 +2122,208 @@ export default function FinancePage() {
                            </div>
                         </section>
 
-                        {/* New Customers Section */}
+
+
+                        {/* Product Sales Chart Section */}
                         <section className='mb-8 bg-white p-6 rounded-xl shadow-sm'>
                            <div className='flex justify-between items-center mb-6'>
                               <div>
-                                 <h2 className='text-lg font-semibold'>Khách hàng mới</h2>
+                                 <h2 className='text-lg font-semibold'>Biểu đồ sản phẩm đã bán ra</h2>
                                  <p className='text-sm text-gray-600 mt-1'>
-                                    Khách hàng đăng ký trong 7 ngày qua
+                                    Top sản phẩm bán chạy nhất theo số lượng và doanh thu
                                  </p>
                               </div>
-                              <Link
-                                 href='/seller/customers'
-                                 className='text-amber-500 hover:text-amber-600 text-sm font-medium flex items-center'
-                              >
-                                 Xem tất cả <ArrowRight className='ml-1' size={16} />
-                              </Link>
                            </div>
 
-                           <div className='grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-4 gap-6'>
-                              {loading ? (
-                                 <div className="col-span-full flex justify-center py-8">
-                                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-amber-500"></div>
-                                 </div>
-                              ) : newCustomers.length > 0 ? (
-                                 newCustomers.map((customer) => (
-                                    <div
-                                       key={customer.id}
-                                       className='flex items-center p-3 rounded-lg hover:bg-gray-50 transition-all'
-                                    >
-                                       <div className='w-12 h-12 rounded-full overflow-hidden border border-gray-200 bg-amber-50 flex items-center justify-center text-amber-700 font-medium'>
-                                          {customer.firstName?.charAt(0)}{customer.lastName?.charAt(0)}
+                           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                              {/* Biểu đồ 1: Top sản phẩm theo số lượng */}
+                              <div className="bg-gray-50 p-4 rounded-lg">
+                                 <h3 className="text-base font-medium text-gray-700 mb-4">Top sản phẩm theo số lượng</h3>
+                                 <div style={{ height: '300px', position: 'relative' }}>
+                                    {Object.keys(productGroups).length > 0 ? (
+                                       <Bar
+                                          data={{
+                                             labels: Object.entries(productGroups)
+                                                .filter(([, data]) => !data.isDeleted)  // Lọc những sản phẩm chưa bị xóa
+                                                .sort(([, a], [, b]) => b.count - a.count)
+                                                .slice(0, 7)
+                                                .map(([, data]) => data.name),
+                                             datasets: [
+                                                {
+                                                   label: 'Số lượng đã bán',
+                                                   data: Object.entries(productGroups)
+                                                      .filter(([, data]) => !data.isDeleted)  // Lọc những sản phẩm chưa bị xóa
+                                                      .sort(([, a], [, b]) => b.count - a.count)
+                                                      .slice(0, 7)
+                                                      .map(([, data]) => data.count),
+                                                   backgroundColor: 'rgba(245, 158, 11, 0.7)',
+                                                   borderColor: 'rgb(245, 158, 11)',
+                                                   borderWidth: 1,
+                                                }
+                                             ]
+                                          }}
+                                          options={{
+                                             indexAxis: 'y',
+                                             responsive: true,
+                                             maintainAspectRatio: false,
+                                             plugins: {
+                                                legend: {
+                                                   display: false
+                                                },
+                                                tooltip: {
+                                                   callbacks: {
+                                                      label: function (context) {
+                                                         return `Đã bán: ${context.raw} sản phẩm`;
+                                                      }
+                                                   }
+                                                }
+                                             },
+                                             scales: {
+                                                x: {
+                                                   beginAtZero: true,
+                                                   title: {
+                                                      display: true,
+                                                      text: 'Số lượng sản phẩm đã bán'
+                                                   }
+                                                },
+                                                y: {
+                                                   ticks: {
+                                                      callback: function (value) {
+                                                         const label = this.getLabelForValue(value as number);
+                                                         // Rút gọn tên nếu quá dài
+                                                         return label.length > 20 ? label.substring(0, 17) + '...' : label;
+                                                      }
+                                                   }
+                                                }
+                                             }
+                                          }}
+                                       />
+                                    ) : (
+                                       <div className="flex justify-center items-center h-full text-gray-500">
+                                          {Object.entries(productGroups).filter(([, data]) => data.isDeleted === false).length === 0
+                                             ? "Không có sản phẩm hợp lệ để hiển thị (tất cả đã bị xóa)"
+                                             : "Không có dữ liệu sản phẩm để hiển thị"
+                                          }
                                        </div>
-                                       <div className='ml-3'>
-                                          <p className='font-medium text-gray-800'>{customer.firstName} {customer.lastName}</p>
-                                          <p className='text-xs text-gray-500'>{formatTimeAgo(customer.createdAt)}</p>
-                                          <p className='text-xs text-gray-500'>{customer.email}</p>
-                                       </div>
-                                    </div>
-                                 ))
-                              ) : (
-                                 <div className="col-span-full text-center py-8 text-gray-500">
-                                    Không có khách hàng mới trong 7 ngày qua
+                                    )}
                                  </div>
-                              )}
+                              </div>
+
+                              {/* Biểu đồ 2: Top sản phẩm theo doanh thu */}
+                              <div className="bg-gray-50 p-4 rounded-lg">
+                                 <h3 className="text-base font-medium text-gray-700 mb-4">Top sản phẩm theo doanh thu</h3>
+                                 <div style={{ height: '300px', position: 'relative' }}>
+                                    {Object.keys(productGroups).length > 0 ? (
+                                       <Bar
+                                          data={{
+                                             labels: Object.entries(productGroups)
+                                                .filter(([, data]) => !data.isDeleted)  // Lọc những sản phẩm chưa bị xóa
+                                                .sort(([, a], [, b]) => b.revenue - a.revenue)
+                                                .slice(0, 7)
+                                                .map(([, data]) => data.name),
+                                             datasets: [
+                                                {
+                                                   label: 'Doanh thu',
+                                                   data: Object.entries(productGroups)
+                                                      .filter(([, data]) => !data.isDeleted)  // Lọc những sản phẩm chưa bị xóa
+                                                      .sort(([, a], [, b]) => b.revenue - a.revenue)
+                                                      .slice(0, 7)
+                                                      .map(([, data]) => data.revenue),
+                                                   backgroundColor: 'rgba(59, 130, 246, 0.7)',
+                                                   borderColor: 'rgb(59, 130, 246)',
+                                                   borderWidth: 1,
+                                                }
+                                             ]
+                                          }}
+                                          options={{
+                                             indexAxis: 'y',
+                                             responsive: true,
+                                             maintainAspectRatio: false,
+                                             plugins: {
+                                                legend: {
+                                                   display: false
+                                                },
+                                                tooltip: {
+                                                   callbacks: {
+                                                      label: function (context) {
+                                                         const value = Number(context.raw);
+                                                         return `Doanh thu: ${value.toLocaleString()} VND`;
+                                                      }
+                                                   }
+                                                }
+                                             },
+                                             scales: {
+                                                x: {
+                                                   beginAtZero: true,
+                                                   title: {
+                                                      display: true,
+                                                      text: 'Doanh thu (VND)'
+                                                   },
+                                                   ticks: {
+                                                      callback: function (value) {
+                                                         return Number(value).toLocaleString();
+                                                      }
+                                                   }
+                                                },
+                                                y: {
+                                                   ticks: {
+                                                      callback: function (value) {
+                                                         const label = this.getLabelForValue(value as number);
+                                                         // Rút gọn tên nếu quá dài
+                                                         return label.length > 20 ? label.substring(0, 17) + '...' : label;
+                                                      }
+                                                   }
+                                                }
+                                             }
+                                          }}
+                                       />
+                                    ) : (
+                                       <div className="flex justify-center items-center h-full text-gray-500">
+                                          Không có dữ liệu sản phẩm để hiển thị
+                                       </div>
+                                    )}
+                                 </div>
+                              </div>
+                           </div>
+
+                           {/* Bảng thông tin chi tiết sản phẩm đã bán */}
+                           <div className="mt-6">
+                              <h3 className="text-base font-medium text-gray-700 mb-4">Chi tiết sản phẩm đã bán</h3>
+                              <div className="overflow-x-auto">
+                                 <table className="min-w-full bg-white border border-gray-200 rounded-lg">
+                                    <thead>
+                                       <tr className="bg-gray-50">
+                                          <th className="py-2 px-4 text-left text-sm font-medium text-gray-600 border-b">STT</th>
+                                          <th className="py-2 px-4 text-left text-sm font-medium text-gray-600 border-b">Tên sản phẩm</th>
+                                          <th className="py-2 px-4 text-left text-sm font-medium text-gray-600 border-b">Số lượng đã bán</th>
+                                          <th className="py-2 px-4 text-left text-sm font-medium text-gray-600 border-b">Doanh thu</th>
+                                          <th className="py-2 px-4 text-left text-sm font-medium text-gray-600 border-b">Đơn giá trung bình</th>
+                                       </tr>
+                                    </thead>
+                                    {/* Bảng thông tin chi tiết sản phẩm đã bán */}
+                                    <tbody className='divide-y divide-gray-200'>
+                                       {Object.entries(productGroups)
+                                          .filter(([, data]) => !data.isDeleted)  // Lọc những sản phẩm chưa bị xóa
+                                          .sort(([, a], [, b]) => b.revenue - a.revenue)
+                                          .slice(0, 10)
+                                          .map(([productId, data], index) => (
+                                             <tr key={productId} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                                                <td className='py-3 px-4 text-sm text-gray-500'>
+                                                   {index + 1}
+                                                </td>
+                                                <td className='py-3 px-4 text-sm font-medium text-amber-600'>
+                                                   {data.name}
+                                                </td>
+                                                <td className='py-3 px-4 text-sm'>{data.count} sản phẩm</td>
+                                                <td className='py-3 px-4 text-sm font-medium'>{data.revenue.toLocaleString()} VND</td>
+                                                <td className='py-3 px-4 text-sm'>
+                                                   {data.count > 0 ? (data.revenue / data.count).toLocaleString() : 0} VND
+                                                </td>
+                                             </tr>
+                                          ))}
+                                    </tbody>
+                                 </table>
+                              </div>
                            </div>
                         </section>
                      </>
@@ -2010,47 +2470,128 @@ export default function FinancePage() {
                      </>
                   )}
 
-                  {currentTab === 'customers' && (
-                     <>
-                        {/* New Customers Section (full view) */}
-                        <section className='mb-8 bg-white p-6 rounded-xl shadow-sm'>
-                           <div className='flex justify-between items-center mb-6'>
-                              <div>
-                                 <h2 className='text-lg font-semibold'>Khách hàng mới</h2>
-                                 <p className='text-sm text-gray-600 mt-1'>
-                                    {newCustomers.length} khách hàng mới trong tháng này
-                                 </p>
-                              </div>
-                              <Link
-                                 href='/seller/customers'
-                                 className='text-amber-500 hover:text-amber-600 text-sm font-medium flex items-center'
-                              >
-                                 Xem tất cả <ArrowRight className='ml-1' size={16} />
-                              </Link>
-                           </div>
 
-                           <div className='grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-4 gap-6'>
-                              {orders
-                                 .filter(order => order.user && order.user.name)
-                                 .slice(0, 8) // Giới hạn số lượng hiển thị
-                                 .map((order) => (
+                  {/* Product Statistics Section - UPDATED */}
+                  <section className='mb-8 bg-white p-6 rounded-xl shadow-sm'>
+                     <div className='flex justify-between items-center mb-6'>
+                        <div>
+                           <h2 className='text-lg font-semibold'>Thống kê sản phẩm bán chạy</h2>
+                           <p className='text-sm text-gray-600 mt-1'>
+                              Top sản phẩm có doanh thu cao nhất
+                           </p>
+                        </div>
+                     </div>
+
+                     {Object.keys(productGroups).length > 0 ? (
+                        Object.entries(productGroups)
+                           .filter(([, data]) => data && data.isDeleted === false)
+                           .length > 0 ? (
+                           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                              {Object.entries(productGroups)
+                                 .filter(([, data]) => data && data.isDeleted === false) // Lọc chắc chắn với ===
+                                 .sort(([, a], [, b]) => b.revenue - a.revenue)
+                                 .slice(0, 6)
+                                 .map(([productId, data], index) => (
                                     <div
-                                       key={order.user_id}
-                                       className='flex items-center p-3 rounded-lg hover:bg-gray-50 transition-all'
+                                       key={productId}
+                                       className={`p-4 rounded-lg border border-gray-200 hover:shadow-md transition-shadow ${index === 0 ? 'bg-gradient-to-br from-amber-50 to-amber-100 border-amber-200' :
+                                          'bg-gradient-to-br from-gray-50 to-gray-100'
+                                          }`}
                                     >
-                                       <div className='w-12 h-12 rounded-full overflow-hidden border border-gray-200 bg-gray-100 flex items-center justify-center'>
-                                          {order.user?.name.charAt(0).toUpperCase() || 'K'}
+                                       <div className="flex justify-between items-start mb-2">
+                                          <div className="flex items-center">
+                                             {index < 3 && (
+                                                <div className={`w-6 h-6 flex items-center justify-center rounded-full mr-2 ${index === 0 ? 'bg-amber-500 text-white' :
+                                                   index === 1 ? 'bg-gray-400 text-white' :
+                                                      'bg-amber-700 text-white'
+                                                   }`}>
+                                                   {index + 1}
+                                                </div>
+                                             )}
+                                             <h3 className="font-medium text-gray-800">{data.name}</h3>
+                                          </div>
+                                          <span className="px-2 py-1 bg-white text-amber-800 rounded-full text-xs font-medium border border-amber-200">
+                                             {data.count} đã bán
+                                          </span>
                                        </div>
-                                       <div className='ml-3'>
-                                          <p className='font-medium text-gray-800'>{order.user?.name}</p>
-                                          <p className='text-xs text-gray-500'>{order.user?.phone || 'Không có SĐT'}</p>
+                                       <div className="mt-3 flex justify-between">
+                                          <span className="text-sm text-gray-500">Doanh thu:</span>
+                                          <span className="text-sm font-medium">{data.revenue.toLocaleString()} VND</span>
+                                       </div>
+                                       <div className="mt-2 w-full bg-gray-200 rounded-full h-2">
+                                          <div
+                                             className={`${index === 0 ? 'bg-amber-500' : 'bg-blue-500'} h-2 rounded-full`}
+                                             style={{
+                                                width: `${Math.min(100, data.revenue / Math.max(...Object.values(productGroups).map(g => g.revenue)) * 100)}%`
+                                             }}
+                                          ></div>
+                                       </div>
+                                       <div className="mt-3 flex justify-between">
+                                          <span className="text-sm text-gray-500">Đơn giá trung bình:</span>
+                                          <span className="text-sm font-medium">
+                                             {data.count > 0 ? (data.revenue / data.count).toLocaleString() : 0} VND
+                                          </span>
                                        </div>
                                     </div>
                                  ))}
                            </div>
-                        </section>
-                     </>
-                  )}
+                        ) : (
+                           <div className="text-center py-8 text-gray-500">
+                              Không có sản phẩm hợp lệ để hiển thị (tất cả đã bị xóa)
+                           </div>
+                        )
+                     ) : (
+                        <div className="text-center py-8 text-gray-500">
+                           Không có dữ liệu thống kê theo sản phẩm
+                        </div>
+                     )}
+                  </section>
+
+                  {/* New Customers Section */}
+                  <section className='mb-8 bg-white p-6 rounded-xl shadow-sm'>
+                     <div className='flex justify-between items-center mb-6'>
+                        <div>
+                           <h2 className='text-lg font-semibold'>Khách hàng mới</h2>
+                           <p className='text-sm text-gray-600 mt-1'>
+                              Khách hàng đăng ký trong 7 ngày qua
+                           </p>
+                        </div>
+                        <Link
+                           href='/seller/customers'
+                           className='text-amber-500 hover:text-amber-600 text-sm font-medium flex items-center'
+                        >
+                           Xem tất cả <ArrowRight className='ml-1' size={16} />
+                        </Link>
+                     </div>
+
+                     <div className='grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-4 gap-6'>
+                        {loading ? (
+                           <div className="col-span-full flex justify-center py-8">
+                              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-amber-500"></div>
+                           </div>
+                        ) : newCustomers.length > 0 ? (
+                           newCustomers.map((customer) => (
+                              <div
+                                 key={customer.id}
+                                 className='flex items-center p-3 rounded-lg hover:bg-gray-50 transition-all'
+                              >
+                                 <div className='w-12 h-12 rounded-full overflow-hidden border border-gray-200 bg-amber-50 flex items-center justify-center text-amber-700 font-medium'>
+                                    {customer.firstName?.charAt(0)}{customer.lastName?.charAt(0)}
+                                 </div>
+                                 <div className='ml-3'>
+                                    <p className='font-medium text-gray-800'>{customer.firstName} {customer.lastName}</p>
+                                    <p className='text-xs text-gray-500'>{formatTimeAgo(customer.createdAt)}</p>
+                                    <p className='text-xs text-gray-500'>{customer.email}</p>
+                                 </div>
+                              </div>
+                           ))
+                        ) : (
+                           <div className="col-span-full text-center py-8 text-gray-500">
+                              Không có khách hàng mới trong 7 ngày qua
+                           </div>
+                        )}
+                     </div>
+                  </section>
                </div>
             </main>
          </div>
