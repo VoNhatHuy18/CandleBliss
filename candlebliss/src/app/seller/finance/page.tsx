@@ -144,57 +144,63 @@ export default function FinancePage() {
    // Add this state inside your component:
    const [newCustomers, setNewCustomers] = useState<NewCustomer[]>([]);
 
+   // Thêm state để theo dõi lần fetch cuối cùng và cache dữ liệu
+   const [lastFetchTime, setLastFetchTime] = useState(0);
+   const [cachedHistoricalData, setCachedHistoricalData] = useState<Record<string, Array<{
+      timeValue: number;
+      totalRevenue: number;
+      totalOrderValue: number;
+      totalShippingFee: number;
+      totalOrders: number;
+   }>>>({});
+
+   // Thêm state để kiểm soát fetch new customers
+   const [newCustomersFetched, setNewCustomersFetched] = useState(false);
+
    useEffect(() => {
       // Kích hoạt animation khi component mount
       setAnimateStats(true);
-
-      // Fetch orders data (always needed)
-      fetchOrdersData();
-
-      // Setup chart options
       setupChartOptions();
 
-      // Determine what data to fetch/display based on the view
-      if (chartView === 'current') {
-         // For current period view, fetch only current period statistics
-         fetchStatisticsData();
-         updateCurrentPeriodChart();
-      } else {
-         // For historical view, fetch historical data across all periods
-         fetchHistoricalData();
-      }
+      // Gộp fetch dữ liệu vào một hàm và thêm tham số để điều khiển loading state
+      const loadData = async () => {
+         setLoading(true);
 
-      // Always fetch new customers data
-      fetchNewCustomers();
-   }, [timeFilter, timeValue, year, chartView]);
+         // Luôn fetch orders data - chỉ cần fetch một lần
+         await fetchOrdersData();
+
+         if (chartView === 'current') {
+            // Với chế độ xem hiện tại, chỉ cần tính toán từ dữ liệu orders đã có
+            fetchStatisticsData();
+            updateCurrentPeriodChart();
+         } else {
+            // Với chế độ xem lịch sử, fetch dữ liệu lịch sử
+            fetchHistoricalData();
+         }
+
+         // Fetch new customers data nếu chưa có
+         if (newCustomers.length === 0) {
+            fetchNewCustomers();
+         }
+
+         setLoading(false);
+      };
+
+      loadData();
+
+   }, [chartView, timeFilter, timeValue]); // Giảm thiểu dependencies
 
    // Modify the fetchStatisticsData function to properly filter orders
-   const fetchStatisticsData = async () => {
-      setLoading(true);
-      try {
-         // Filter orders with valid statuses for revenue calculation
-         const validOrders = orders.filter(order => isRevenueCountableStatus(order.status));
 
-         // Calculate statistics based on filtered orders
-         const statsData = {
-            totalRevenue: validOrders.reduce((sum, order) => sum + parseInt(order.total_price), 0),
-            totalOrderValue: validOrders.reduce((sum, order) => sum + parseInt(order.total_price), 0),
-            totalShippingFee: validOrders.reduce((sum, order) => sum + parseInt(order.ship_price), 0),
-            totalOrders: validOrders.length
-         };
 
-         setStatsData(statsData);
-
-         // Update chart data
-         updateChartData(statsData);
-      } catch (error) {
-         console.error('Error processing statistics data:', error);
-      } finally {
-         setLoading(false);
-      }
-   };
-
+   // Sửa hàm fetchOrdersData để tránh fetch trùng lặp
    const fetchOrdersData = async () => {
+      const now = Date.now();
+      if (now - lastFetchTime < 60000 && orders.length > 0) {
+         // Nếu đã fetch trong vòng 1 phút gần đây và đã có dữ liệu, không fetch lại
+         return;
+      }
+
       setOrdersLoading(true);
       try {
          const response = await fetch(`${HOST}/api/orders/all`);
@@ -203,6 +209,7 @@ export default function FinancePage() {
          }
          const data = await response.json();
          setOrders(data);
+         setLastFetchTime(now);
       } catch (error) {
          console.error('Error fetching orders data:', error);
       } finally {
@@ -214,104 +221,96 @@ export default function FinancePage() {
       const token = localStorage.getItem('token');
       if (!token) return;
 
+      // Lấy danh sách user_id duy nhất từ các orders
+      const uniqueUserIds = [...new Set(
+         orders
+            .filter(order => !order.user && order.user_id && !fetchedUserIds[order.user_id])
+            .map(order => order.user_id)
+      )];
+
+      if (uniqueUserIds.length === 0) return;
+
       let hasUpdates = false;
       const updatedOrders = [...orders];
+      const newFetchedUserIds = { ...fetchedUserIds };
 
-      for (const order of updatedOrders) {
-         if (!order.user && order.user_id && !fetchedUserIds[order.user_id]) {
-            try {
-               // Mark this user ID as processed even before fetching
-               // This prevents repeated attempts to fetch the same problematic ID
-               setFetchedUserIds((prev) => ({
-                  ...prev,
-                  [order.user_id]: true,
-               }));
+      // Tạo mảng promises cho tất cả API calls
+      const userPromises = uniqueUserIds.map(async (userId) => {
+         try {
+            // Đánh dấu user_id này đã được xử lý
+            newFetchedUserIds[userId] = true;
 
-               const userResponse = await fetch(
-                  `${HOST}/api/v1/users/${order.user_id}`,
-                  {
-                     headers: { Authorization: `Bearer ${token}` },
-                  }
-               );
+            const userResponse = await fetch(
+               `${HOST}/api/v1/users/${userId}`,
+               {
+                  headers: { Authorization: `Bearer ${token}` },
+               }
+            );
 
-               if (userResponse.ok) {
-                  // Check if response has content before trying to parse JSON
-                  const contentType = userResponse.headers.get('content-type');
-                  if (contentType && contentType.includes('application/json')) {
-                     const text = await userResponse.text();
-                     if (text && text.trim()) {
-                        try {
-                           const userData = JSON.parse(text);
-                           order.user = {
-                              id: userData.id,
-                              name:
-                                 userData.firstName && userData.lastName
-                                    ? `${userData.firstName} ${userData.lastName}`
-                                    : userData.firstName || userData.lastName || 'Không có tên',
-                              phone: userData.phone ? userData.phone.toString() : 'Không có SĐT',
-                              email: userData.email || 'Không có email',
-                           };
-                           hasUpdates = true;
-                        } catch (jsonError) {
-                           console.error(`Invalid JSON for user ID ${order.user_id}:`, jsonError);
-                           // Provide a fallback user object when JSON parsing fails
-                           order.user = {
-                              id: order.user_id,
-                              name: `Khách hàng #${order.user_id}`,
-                              phone: 'Không có SĐT',
-                              email: 'Không có email',
-                           };
-                           hasUpdates = true;
-                        }
-                     } else {
-                        console.warn(`Empty response for user ID ${order.user_id}`);
-                        // Provide a fallback for empty responses
-                        order.user = {
-                           id: order.user_id,
-                           name: `Khách hàng #${order.user_id}`,
-                           phone: 'Không có SĐT',
-                           email: 'Không có email',
-                        };
-                        hasUpdates = true;
+            // Xử lý response và return thông tin người dùng
+            if (userResponse.ok) {
+               const contentType = userResponse.headers.get('content-type');
+               if (contentType && contentType.includes('application/json')) {
+                  const text = await userResponse.text();
+                  if (text && text.trim()) {
+                     try {
+                        return { userId, userData: JSON.parse(text) };
+                     } catch (jsonError) {
+                        console.error(`Invalid JSON for user ID ${userId}:`, jsonError);
                      }
-                  } else {
-                     console.warn(`Non-JSON response for user ID ${order.user_id}`);
-                     // Provide a fallback for non-JSON responses
-                     order.user = {
-                        id: order.user_id,
-                        name: `Khách hàng #${order.user_id}`,
-                        phone: 'Không có SĐT',
-                        email: 'Không có email',
-                     };
-                     hasUpdates = true;
                   }
-               } else {
-                  console.warn(`Failed response (${userResponse.status}) for user ID ${order.user_id}`);
-                  // Provide a fallback for failed responses
+               }
+            }
+
+            // Return null nếu có lỗi
+            return { userId, userData: null };
+         } catch (error) {
+            console.error(`Failed to fetch user info for user ID ${userId}:`, error);
+            return { userId, userData: null };
+         }
+      });
+
+      // Đợi tất cả promises hoàn thành
+      const results = await Promise.all(userPromises);
+
+      // Cập nhật thông tin người dùng vào orders
+      results.forEach(({ userId, userData }) => {
+         // Bỏ qua nếu không có userData
+         if (!userData) {
+            // Cung cấp dữ liệu fallback
+            updatedOrders.forEach(order => {
+               if (order.user_id === userId) {
                   order.user = {
-                     id: order.user_id,
-                     name: `Khách hàng #${order.user_id}`,
+                     id: userId,
+                     name: `Khách hàng #${userId}`,
                      phone: 'Không có SĐT',
                      email: 'Không có email',
                   };
                   hasUpdates = true;
                }
-            } catch (error) {
-               console.error(`Failed to fetch user info for user ID ${order.user_id}:`, error);
-               // Provide a fallback for network errors
+            });
+            return;
+         }
+
+         // Cập nhật thông tin user cho tất cả orders phù hợp
+         updatedOrders.forEach(order => {
+            if (order.user_id === userId) {
                order.user = {
-                  id: order.user_id,
-                  name: `Khách hàng #${order.user_id}`,
-                  phone: 'Không có SĐT',
-                  email: 'Không có email',
+                  id: userData.id,
+                  name: userData.firstName && userData.lastName
+                     ? `${userData.firstName} ${userData.lastName}`
+                     : userData.firstName || userData.lastName || 'Không có tên',
+                  phone: userData.phone ? userData.phone.toString() : 'Không có SĐT',
+                  email: userData.email || 'Không có email',
                };
                hasUpdates = true;
             }
-         }
-      }
+         });
+      });
 
       if (hasUpdates) {
          setOrders(updatedOrders);
+         setFetchedUserIds(newFetchedUserIds);
 
          // Filter orders by valid statuses before mapping to completedOrders
          const filtered = updatedOrders.filter(order => isRevenueCountableStatus(order.status));
@@ -754,6 +753,26 @@ export default function FinancePage() {
       });
    };
 
+   const fetchStatisticsData = useCallback(() => {
+      // Không cần async vì không có API call
+
+      // Filter orders with valid statuses for revenue calculation
+      const validOrders = orders.filter(order => isRevenueCountableStatus(order.status));
+
+      // Calculate statistics based on filtered orders
+      const statsData = {
+         totalRevenue: validOrders.reduce((sum, order) => sum + parseInt(order.total_price), 0),
+         totalOrderValue: validOrders.reduce((sum, order) => sum + parseInt(order.total_price), 0),
+         totalShippingFee: validOrders.reduce((sum, order) => sum + parseInt(order.ship_price), 0),
+         totalOrders: validOrders.length
+      };
+
+      setStatsData(statsData);
+
+      // Update chart data
+      updateChartData(statsData);
+   }, [orders, updateChartData]);
+
    // Nếu không có API lịch sử, chúng ta có thể tạo dữ liệu mẫu:
    const generateSampleHistoricalData = () => {
       const sampleData = [];
@@ -953,6 +972,8 @@ export default function FinancePage() {
    };
 
    const fetchNewCustomers = async () => {
+      if (newCustomersFetched) return; // Đã fetch rồi, không fetch nữa
+
       try {
          const token = localStorage.getItem('token');
          if (!token) return;
@@ -1010,6 +1031,8 @@ export default function FinancePage() {
          }
       } catch (error) {
          console.error('Error fetching new customers:', error);
+      } finally {
+         setNewCustomersFetched(true); // Đánh dấu đã fetch
       }
    };
 
@@ -1023,7 +1046,18 @@ export default function FinancePage() {
       }
    };
 
+   // Tối ưu hàm fetchHistoricalData với cơ chế cache
    const fetchHistoricalData = async () => {
+      // Tạo key từ các tham số hiện tại
+      const cacheKey = `${timeFilter}_${year}`;
+
+      // Kiểm tra cache
+      if (cachedHistoricalData[cacheKey]) {
+         setHistoricalData(cachedHistoricalData[cacheKey]);
+         updateHistoricalChart(cachedHistoricalData[cacheKey]);
+         return;
+      }
+
       try {
          setLoading(true);
          let allData = [];
@@ -1090,6 +1124,11 @@ export default function FinancePage() {
 
          if (allData.length > 0) {
             console.log("Historical data processed:", allData);
+            // Lưu vào cache
+            setCachedHistoricalData(prev => ({
+               ...prev,
+               [cacheKey]: allData
+            }));
             setHistoricalData(allData);
             updateHistoricalChart(allData);
          } else {

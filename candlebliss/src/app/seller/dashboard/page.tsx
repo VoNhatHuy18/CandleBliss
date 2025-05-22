@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Package, ShoppingBag, CreditCard, Users } from 'lucide-react';
 import { HOST } from '@/app/constants/api';
 import Header from '@/app/components/seller/header/page';
@@ -91,6 +91,9 @@ const orderStatusColors: Record<string, string> = {
 export default function Dashboard() {
    const [orders, setOrders] = useState<Order[]>([]);
    const [loading, setLoading] = useState<boolean>(true);
+   // Sử dụng useRef thay vì useState để không trigger re-render
+   const fetchedUserIdsRef = useRef<Record<number, boolean>>({});
+   // State này vẫn cần giữ lại để tương thích với code khác
    const [fetchedUserIds, setFetchedUserIds] = useState<Record<number, boolean>>({});
    const [stats, setStats] = useState({
       totalRevenue: '0',
@@ -118,7 +121,7 @@ export default function Dashboard() {
       const updatedOrders = [...orders];
 
       for (const order of updatedOrders) {
-         if (!order.user && order.user_id && !fetchedUserIds[order.user_id]) {
+         if (!order.user && order.user_id && !fetchedUserIdsRef.current[order.user_id]) {
             try {
                const userResponse = await fetch(
                   `${HOST}/api/v1/users/${order.user_id}`,
@@ -140,7 +143,9 @@ export default function Dashboard() {
                   };
                   hasUpdates = true;
 
-                  setFetchedUserIds((prev) => ({
+                  // Cập nhật vào ref và state
+                  fetchedUserIdsRef.current[order.user_id] = true;
+                  setFetchedUserIds(prev => ({
                      ...prev,
                      [order.user_id]: true,
                   }));
@@ -154,10 +159,16 @@ export default function Dashboard() {
       if (hasUpdates) {
          setOrders(updatedOrders);
       }
-   }, [fetchedUserIds]);
+   }, []); // Không phụ thuộc vào fetchedUserIds
+
+   // Thêm ref để đánh dấu đã fetch orders
+   const ordersFetchedRef = useRef(false);
 
    // Fetch data from API
    useEffect(() => {
+      // Kiểm tra nếu đã fetch thì không fetch lại
+      if (ordersFetchedRef.current) return;
+
       const fetchOrders = async () => {
          try {
             setLoading(true);
@@ -167,6 +178,9 @@ export default function Dashboard() {
                console.error('No authentication token found');
                return;
             }
+
+            // Đánh dấu đã fetch orders
+            ordersFetchedRef.current = true;
 
             const response = await fetch(`${HOST}/api/orders/all`, {
                headers: {
@@ -192,6 +206,8 @@ export default function Dashboard() {
             calculateStats(sortedOrders);
          } catch (error) {
             console.error('Error fetching orders:', error);
+            // Reset flag nếu có lỗi để có thể thử lại
+            ordersFetchedRef.current = false;
          } finally {
             setLoading(false);
          }
@@ -200,12 +216,21 @@ export default function Dashboard() {
       fetchOrders();
    }, []);
 
+   // Thêm useRef để đánh dấu đã fetch topRatedProducts
+   const topRatedProductsFetchedRef = useRef(false);
+
    // Thêm useEffect để fetch sản phẩm có rating cao
    useEffect(() => {
+      // Thêm flag để chỉ fetch một lần
+      if (topRatedProductsFetchedRef.current) return;
+
       const fetchTopRatedProducts = async () => {
          try {
             const token = localStorage.getItem('token');
             if (!token) return;
+
+            // Đánh dấu đã bắt đầu fetch
+            topRatedProductsFetchedRef.current = true;
 
             // Fetch tất cả sản phẩm
             const productsResponse = await fetch(`${HOST}/api/products`);
@@ -275,6 +300,8 @@ export default function Dashboard() {
             setTopRatedProducts(topRated);
          } catch (error) {
             console.error('Error fetching top rated products:', error);
+            // Reset flag nếu có lỗi để có thể thử lại
+            topRatedProductsFetchedRef.current = false;
          }
       };
 
@@ -284,9 +311,263 @@ export default function Dashboard() {
    // Fetch user data when orders change
    useEffect(() => {
       if (orders.length > 0) {
-         fetchUserData(orders);
+         // Tạo một biến mới để lưu trữ fetchedUserIds và orders
+         const currentFetchedUserIds = fetchedUserIds;
+         const currentOrders = orders;
+
+         // Kiểm tra xem có order nào cần fetch user không
+         const needsFetch = currentOrders.some(
+            order => !order.user && order.user_id && !currentFetchedUserIds[order.user_id]
+         );
+
+         if (needsFetch) {
+            fetchUserData(currentOrders);
+         }
       }
    }, [orders, fetchUserData]);
+
+   // Thêm một useEffect riêng để fetch tất cả thông tin khách hàng khi trang tải xong
+   useEffect(() => {
+      // Chỉ chạy khi orders đã được tải và không còn loading
+      if (orders.length > 0 && !loading) {
+         const fetchAllUserData = async () => {
+            const token = localStorage.getItem('token');
+            if (!token) return;
+
+            // Lấy danh sách user_id duy nhất từ tất cả orders
+            const uniqueUserIds = [...new Set(
+               orders
+                  .filter(order => order.user_id && !order.user)
+                  .map(order => order.user_id)
+            )];
+
+            if (uniqueUserIds.length === 0) return;
+
+            // Tạo bản sao orders hiện tại
+            const updatedOrders = [...orders];
+            let hasUpdates = false;
+
+            // Fetch thông tin cho từng user_id
+            for (const userId of uniqueUserIds) {
+               // Kiểm tra xem đã fetch thông tin chưa
+               if (fetchedUserIdsRef.current[userId]) continue;
+
+               try {
+                  const userResponse = await fetch(
+                     `${HOST}/api/v1/users/${userId}`,
+                     {
+                        headers: { Authorization: `Bearer ${token}` },
+                     }
+                  );
+
+                  if (userResponse.ok) {
+                     const userData = await userResponse.json();
+
+                     // Tạo dữ liệu người dùng
+                     const userInfo = {
+                        id: userData.id,
+                        name: userData.firstName && userData.lastName
+                           ? `${userData.firstName} ${userData.lastName}`
+                           : userData.firstName || userData.lastName || `Khách hàng #${userId}`,
+                        phone: userData.phone ? userData.phone.toString() : 'Không có SĐT',
+                        email: userData.email || 'Không có email',
+                     };
+
+                     // Cập nhật thông tin user cho tất cả order có user_id tương ứng
+                     updatedOrders.forEach(order => {
+                        if (order.user_id === userId) {
+                           order.user = userInfo;
+                        }
+                     });
+
+                     // Đánh dấu đã fetch thông tin user
+                     fetchedUserIdsRef.current[userId] = true;
+                     hasUpdates = true;
+                  }
+               } catch (error) {
+                  console.error(`Không thể lấy thông tin khách hàng ID ${userId}:`, error);
+               }
+            }
+
+            if (hasUpdates) {
+               setOrders(updatedOrders);
+            }
+         };
+
+         fetchAllUserData();
+      }
+   }, [orders, loading]);
+
+   // Thêm ref để kiểm soát việc fetch user
+   const allUsersFetchingRef = useRef(false);
+   const lastUserFetchTimeRef = useRef(0);
+
+   // Thay thế useEffect hiện tại để fetch user data khi orders change
+   useEffect(() => {
+      // Chỉ chạy khi có orders và không đang loading
+      if (orders.length > 0 && !loading) {
+         // Kiểm tra xem có đang fetch users không
+         if (allUsersFetchingRef.current) return;
+
+         // Giới hạn tần suất fetch (ít nhất 5 giây giữa các lần fetch)
+         const now = Date.now();
+         if (now - lastUserFetchTimeRef.current < 5000) return;
+
+         // Kiểm tra xem có order nào cần fetch thông tin user không
+         const needsFetch = orders.some(
+            order => !order.user && order.user_id && !fetchedUserIdsRef.current[order.user_id]
+         );
+
+         if (needsFetch) {
+            allUsersFetchingRef.current = true;
+            lastUserFetchTimeRef.current = now;
+
+            const fetchAllMissingUsers = async () => {
+               try {
+                  const token = localStorage.getItem('token');
+                  if (!token) return;
+
+                  // Lấy danh sách user_id duy nhất từ tất cả orders chưa có thông tin
+                  const uniqueUserIds = [...new Set(
+                     orders
+                        .filter(order => !order.user && order.user_id && !fetchedUserIdsRef.current[order.user_id])
+                        .map(order => order.user_id)
+                  )];
+
+                  if (uniqueUserIds.length === 0) return;
+
+                  // Tạo bản sao orders hiện tại
+                  const updatedOrders = [...orders];
+                  let hasUpdates = false;
+
+                  // Fetch thông tin cho từng user_id
+                  for (const userId of uniqueUserIds) {
+                     try {
+                        const userResponse = await fetch(
+                           `${HOST}/api/v1/users/${userId}`,
+                           {
+                              headers: { Authorization: `Bearer ${token}` },
+                           }
+                        );
+
+                        if (userResponse.ok) {
+                           const userData = await userResponse.json();
+
+                           // Chuẩn bị dữ liệu người dùng
+                           const userInfo = {
+                              id: userData.id,
+                              name: userData.firstName && userData.lastName
+                                 ? `${userData.firstName} ${userData.lastName}`
+                                 : userData.firstName || userData.lastName || `Khách hàng #${userId}`,
+                              phone: userData.phone ? userData.phone.toString() : 'Không có SĐT',
+                              email: userData.email || 'Không có email',
+                           };
+
+                           // Cập nhật thông tin user cho tất cả order có user_id tương ứng
+                           updatedOrders.forEach(order => {
+                              if (order.user_id === userId) {
+                                 order.user = userInfo;
+                              }
+                           });
+
+                           // Đánh dấu đã fetch thông tin user
+                           fetchedUserIdsRef.current[userId] = true;
+                           hasUpdates = true;
+                        }
+                     } catch (error) {
+                        console.error(`Không thể lấy thông tin khách hàng ID ${userId}:`, error);
+                     }
+                  }
+
+                  if (hasUpdates) {
+                     setOrders(updatedOrders);
+                  }
+               } finally {
+                  allUsersFetchingRef.current = false;
+               }
+            };
+
+            fetchAllMissingUsers();
+         }
+      }
+   }, [orders, loading]);
+
+   // Thêm ref để đánh dấu đã fetch users lần đầu
+   const initialUsersFetchedRef = useRef(false);
+
+   // Thêm useEffect để fetch tất cả user data ngay khi trang tải xong
+   useEffect(() => {
+      // Chỉ chạy một lần sau khi orders đã được tải
+      if (orders.length > 0 && !loading && !initialUsersFetchedRef.current) {
+         initialUsersFetchedRef.current = true;
+
+         const fetchInitialUserData = async () => {
+            const token = localStorage.getItem('token');
+            if (!token) return;
+
+            // Lấy danh sách user_id duy nhất từ tất cả orders
+            const uniqueUserIds = [...new Set(
+               orders
+                  .filter(order => order.user_id)
+                  .map(order => order.user_id)
+            )];
+
+            if (uniqueUserIds.length === 0) return;
+
+            // Tạo bản sao orders hiện tại
+            const updatedOrders = [...orders];
+            let hasUpdates = false;
+
+            // Fetch thông tin cho từng user_id
+            for (const userId of uniqueUserIds) {
+               // Kiểm tra xem đã fetch thông tin chưa
+               if (fetchedUserIdsRef.current[userId]) continue;
+
+               try {
+                  const userResponse = await fetch(
+                     `${HOST}/api/v1/users/${userId}`,
+                     {
+                        headers: { Authorization: `Bearer ${token}` },
+                     }
+                  );
+
+                  if (userResponse.ok) {
+                     const userData = await userResponse.json();
+
+                     // Tạo dữ liệu người dùng
+                     const userInfo = {
+                        id: userData.id,
+                        name: userData.firstName && userData.lastName
+                           ? `${userData.firstName} ${userData.lastName}`
+                           : userData.firstName || userData.lastName || `Khách hàng #${userId}`,
+                        phone: userData.phone ? userData.phone.toString() : 'Không có SĐT',
+                        email: userData.email || 'Không có email',
+                     };
+
+                     // Cập nhật thông tin user cho tất cả order có user_id tương ứng
+                     updatedOrders.forEach(order => {
+                        if (order.user_id === userId) {
+                           order.user = userInfo;
+                        }
+                     });
+
+                     // Đánh dấu đã fetch thông tin user
+                     fetchedUserIdsRef.current[userId] = true;
+                     hasUpdates = true;
+                  }
+               } catch (error) {
+                  console.error(`Không thể lấy thông tin khách hàng ID ${userId}:`, error);
+               }
+            }
+
+            if (hasUpdates) {
+               setOrders(updatedOrders);
+            }
+         };
+
+         fetchInitialUserData();
+      }
+   }, [orders, loading]);
 
    // Calculate dashboard statistics
    const calculateStats = (orders: Order[]) => {
@@ -476,7 +757,28 @@ export default function Dashboard() {
                                        {formatDate(order.createdAt)}
                                     </td>
                                     <td className='px-4 py-3 whitespace-nowrap text-sm text-gray-500'>
-                                       {order.user?.name || `Khách hàng #${order.user_id}`}
+                                       {order.user ? (
+                                          <div className="flex flex-col">
+                                             <span className="text-sm font-medium text-gray-800">
+                                                {order.user.name}
+                                             </span>
+                                             <div className="flex flex-col text-xs text-gray-500">
+                                                {order.user.email && (
+                                                   <span className="truncate max-w-[150px]">{order.user.email}</span>
+                                                )}
+                                                {order.user.phone && (
+                                                   <span>{order.user.phone}</span>
+                                                )}
+                                             </div>
+                                          </div>
+                                       ) : (
+                                          <div className="flex flex-col">
+                                             <span className="text-sm font-medium text-gray-800">
+                                                {order.user_id ? `Khách hàng #${order.user_id}` : "Khách vãng lai"}
+                                             </span>
+                                             <span className="text-xs text-gray-500">Đang tải thông tin...</span>
+                                          </div>
+                                       )}
                                     </td>
                                     <td className='px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900'>
                                        {formatPrice(order.total_price)}
