@@ -157,6 +157,138 @@ export default function FinancePage() {
       ordersChange: 0
    });
 
+   const [currentPage, setCurrentPage] = useState(1);
+   const [ordersPerPage] = useState(20);
+
+
+   // Thêm đoạn này vào sau phần filteredOrders
+   // Tính toán các đơn hàng hiển thị cho trang hiện tại
+
+
+
+
+   // Component hiển thị điều khiển phân trang
+   const Pagination = () => {
+      // Không hiển thị nếu chỉ có 1 trang
+      if (totalPages <= 1) return null;
+
+      // Tạo mảng các số trang hiển thị
+      let pageNumbers = [];
+      const maxPagesToShow = 5; // Số lượng nút trang hiển thị tối đa
+
+      if (totalPages <= maxPagesToShow) {
+         // Hiển thị tất cả các trang nếu ít hơn maxPagesToShow
+         pageNumbers = Array.from({ length: totalPages }, (_, i) => i + 1);
+      } else {
+         // Hiển thị các trang xung quanh trang hiện tại
+         let startPage = Math.max(1, currentPage - Math.floor(maxPagesToShow / 2));
+         let endPage = startPage + maxPagesToShow - 1;
+
+         if (endPage > totalPages) {
+            endPage = totalPages;
+            startPage = Math.max(1, endPage - maxPagesToShow + 1);
+         }
+
+         pageNumbers = Array.from({ length: endPage - startPage + 1 }, (_, i) => startPage + i);
+      }
+
+      return (
+         <div className="flex items-center justify-between px-4 py-3 bg-white border-t border-gray-200 sm:px-6">
+            <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+               <div>
+                  <p className="text-sm text-gray-700">
+                     Đang hiển thị <span className="font-medium">{indexOfFirstOrder + 1}</span> - <span className="font-medium">
+                        {Math.min(indexOfLastOrder, filteredOrders.length)}</span> trong tổng số <span className="font-medium">{filteredOrders.length}</span> đơn hàng
+                  </p>
+               </div>
+               <div>
+                  <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+                     {/* Nút Previous */}
+                     <button
+                        onClick={() => paginate(currentPage - 1)}
+                        disabled={currentPage === 1}
+                        className={`relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium ${currentPage === 1 ? 'text-gray-300 cursor-not-allowed' : 'text-gray-500 hover:bg-gray-50'}`}
+                     >
+                        <span className="sr-only">Trang trước</span>
+                        <svg className="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
+                        </svg>
+                     </button>
+
+                     {/* Hiển thị nút "..." đầu tiên nếu cần */}
+                     {!pageNumbers.includes(1) && (
+                        <>
+                           <button onClick={() => paginate(1)} className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50">
+                              1
+                           </button>
+                           <span className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700">
+                              ...
+                           </span>
+                        </>
+                     )}
+
+                     {/* Hiển thị các nút số trang */}
+                     {pageNumbers.map(number => (
+                        <button
+                           key={number}
+                           onClick={() => paginate(number)}
+                           className={`relative inline-flex items-center px-4 py-2 border ${currentPage === number ? 'bg-amber-50 border-amber-500 text-amber-600 z-10' : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'} text-sm font-medium`}
+                        >
+                           {number}
+                        </button>
+                     ))}
+
+                     {/* Hiển thị nút "..." cuối cùng nếu cần */}
+                     {!pageNumbers.includes(totalPages) && (
+                        <>
+                           <span className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700">
+                              ...
+                           </span>
+                           <button onClick={() => paginate(totalPages)} className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50">
+                              {totalPages}
+                           </button>
+                        </>
+                     )}
+
+                     {/* Nút Next */}
+                     <button
+                        onClick={() => paginate(currentPage + 1)}
+                        disabled={currentPage === totalPages}
+                        className={`relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium ${currentPage === totalPages ? 'text-gray-300 cursor-not-allowed' : 'text-gray-500 hover:bg-gray-50'}`}
+                     >
+                        <span className="sr-only">Trang tiếp</span>
+                        <svg className="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
+                        </svg>
+                     </button>
+                  </nav>
+               </div>
+            </div>
+
+            {/* Hiển thị cho màn hình nhỏ */}
+            <div className="flex items-center justify-between w-full sm:hidden">
+               <button
+                  onClick={() => paginate(currentPage - 1)}
+                  disabled={currentPage === 1}
+                  className={`relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md ${currentPage === 1 ? 'bg-gray-100 text-gray-400' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
+               >
+                  Trước
+               </button>
+               <span className="text-sm text-gray-700">
+                  Trang <span className="font-medium">{currentPage}</span> / <span className="font-medium">{totalPages}</span>
+               </span>
+               <button
+                  onClick={() => paginate(currentPage + 1)}
+                  disabled={currentPage === totalPages}
+                  className={`relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md ${currentPage === totalPages ? 'bg-gray-100 text-gray-400' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
+               >
+                  Tiếp
+               </button>
+            </div>
+         </div>
+      );
+   };
+
    // Thêm hàm này sau fetchStatisticsData
    const fetchPreviousPeriodData = useCallback(async () => {
       try {
@@ -393,7 +525,10 @@ export default function FinancePage() {
    // Thêm state để kiểm soát fetch new customers
    const [newCustomersFetched, setNewCustomersFetched] = useState(false);
 
-
+   // Thêm effect này để reset về trang đầu tiên khi tìm kiếm thay đổi
+   useEffect(() => {
+      setCurrentPage(1);
+   }, [searchTerm]);
    // Cập nhật useEffect sau khi fetch dữ liệu hiện tại xong
    useEffect(() => {
       if (statsData.totalRevenue !== 0 && chartView === 'current') {
@@ -731,10 +866,32 @@ export default function FinancePage() {
       );
    }, [completedOrders, searchTerm]);
 
+   const indexOfLastOrder = currentPage * ordersPerPage;
+   const indexOfFirstOrder = indexOfLastOrder - ordersPerPage;
+   const currentOrders = filteredOrders.slice(indexOfFirstOrder, indexOfLastOrder);
+
+   // Tính tổng số trang
+   const totalPages = Math.ceil(filteredOrders.length / ordersPerPage);
+   // Hàm thay đổi trang
+   const paginate = (pageNumber: number) => {
+      // Đảm bảo số trang hợp lệ
+      if (pageNumber < 1) pageNumber = 1;
+      if (pageNumber > totalPages) pageNumber = totalPages;
+
+      setCurrentPage(pageNumber);
+
+      // Cuộn lên đầu bảng khi chuyển trang
+      const tableElement = document.getElementById('orders-table');
+      if (tableElement) {
+         tableElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+   };
+
    // Hàm xuất danh sách đơn hàng thành công dưới dạng Excel
+   // Sửa lại hàm exportOrdersToExcel để xuất tất cả đơn hàng đã lọc
    const exportOrdersToExcel = () => {
       const worksheet = XLSX.utils.json_to_sheet(
-         completedOrders.map((order, index) => ({
+         filteredOrders.map((order, index) => ({
             STT: index + 1,
             'Mã đơn hàng': order.orderId,
             'Khách hàng': order.customer,
@@ -1791,14 +1948,14 @@ export default function FinancePage() {
                                                 </div>
                                              </td>
                                           </tr>
-                                       ) : filteredOrders.length > 0 ? (
-                                          filteredOrders.map((order, index) => (
+                                       ) : currentOrders.length > 0 ? ( // Thay đổi từ filteredOrders thành currentOrders
+                                          currentOrders.map((order, index) => (  // Thay đổi từ filteredOrders thành currentOrders
                                              <tr
                                                 key={order.id}
                                                 className='hover:bg-gray-50 transition-colors'
                                              >
                                                 <td className='py-3 px-4 text-sm text-gray-500'>
-                                                   {index + 1}
+                                                   {indexOfFirstOrder + index + 1} {/* Sửa lại số thứ tự để hiển thị chính xác */}
                                                 </td>
                                                 <td className='py-3 px-4 text-sm font-medium text-amber-600'>
                                                    {order.orderId}
@@ -1843,9 +2000,11 @@ export default function FinancePage() {
                               </div>
                               {filteredOrders.length > 0 && (
                                  <div className='py-3 px-4 bg-gray-50 text-sm text-gray-500 border-t'>
-                                    Hiển thị {filteredOrders.length} đơn hàng hoàn thành
+                                    Hiển thị {Math.min(indexOfFirstOrder + 1, filteredOrders.length)} - {Math.min(indexOfLastOrder, filteredOrders.length)} trong tổng số {filteredOrders.length} đơn hàng hoàn thành
                                  </div>
                               )}
+                              {filteredOrders.length > 0 && <Pagination />}
+
                            </div>
                         </section>
                      </>
