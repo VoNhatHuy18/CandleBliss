@@ -143,7 +143,204 @@ export default function FinancePage() {
    const [showDateRangePicker, setShowDateRangePicker] = useState(false);
    const [startDate, setStartDate] = useState(new Date());
    const [endDate, setEndDate] = useState(new Date());
+   const [previousPeriodData, setPreviousPeriodData] = useState({
+      totalRevenue: 0,
+      totalOrderValue: 0,
+      totalShippingFee: 0,
+      totalOrders: 0
+   });
 
+   const [comparisonStats, setComparisonStats] = useState({
+      revenueChange: 0,
+      orderValueChange: 0,
+      shippingFeeChange: 0,
+      ordersChange: 0
+   });
+
+   // Thêm hàm này sau fetchStatisticsData
+   const fetchPreviousPeriodData = useCallback(async () => {
+      try {
+         let prevTimeValue;
+         const prevTimeFilter = timeFilter;
+         let prevYear = year;
+
+         // Xác định kỳ trước
+         if (timeFilter === 'month') {
+            // Nếu là tháng 1 thì kỳ trước là tháng 12 năm trước
+            if (timeValue === 1) {
+               prevTimeValue = 12;
+               prevYear = year - 1;
+            } else {
+               prevTimeValue = timeValue - 1;
+            }
+         } else if (timeFilter === 'week') {
+            // Nếu là tuần 1 thì kỳ trước là tuần cuối năm trước
+            if (timeValue === 1) {
+               prevTimeValue = 52;
+               prevYear = year - 1;
+            } else {
+               prevTimeValue = timeValue - 1;
+            }
+         } else if (timeFilter === 'year') {
+            prevTimeValue = year - 1;
+         } else if (timeFilter === 'custom') {
+            // Đối với khoảng thời gian tùy chỉnh, tính khoảng thời gian tương tự trước đó
+            const duration = endDate.getTime() - startDate.getTime();
+            const prevEndDate = new Date(startDate.getTime() - 1);
+            const prevStartDate = new Date(prevEndDate.getTime() - duration);
+
+            // Format dates for API request
+            const formattedPrevStartDate = prevStartDate.toISOString().split('T')[0];
+            const formattedPrevEndDate = prevEndDate.toISOString().split('T')[0];
+
+            const response = await fetch(
+               `${HOST}/api/orders/statistics/date-to-date?startDate=${formattedPrevStartDate}&endDate=${formattedPrevEndDate}`
+            );
+
+            if (response.ok) {
+               const data = await response.json();
+               setPreviousPeriodData({
+                  totalRevenue: data.totalRevenue || 0,
+                  totalOrderValue: data.totalOrderValue || 0,
+                  totalShippingFee: data.totalShippingFee || 0,
+                  totalOrders: data.totalOrders || 0
+               });
+
+               calculateComparison(data);
+               return;
+            }
+         }
+
+         // Gọi API với tham số kỳ trước
+         if (prevTimeFilter && prevTimeValue) {
+            const response = await fetch(
+               `${HOST}/api/orders/statistics?timeFilter=${prevTimeFilter}&timeValue=${prevTimeValue}&year=${prevYear}`
+            );
+
+            if (response.ok) {
+               const data = await response.json();
+               setPreviousPeriodData({
+                  totalRevenue: data.totalRevenue || 0,
+                  totalOrderValue: data.totalOrderValue || 0,
+                  totalShippingFee: data.totalShippingFee || 0,
+                  totalOrders: data.totalOrders || 0
+               });
+
+               calculateComparison(data);
+            }
+         }
+      } catch (error) {
+         console.error('Error fetching previous period data:', error);
+      }
+   }, [timeFilter, timeValue, year, startDate, endDate]);
+
+   // Hàm tính toán phần trăm thay đổi
+   const calculateComparison = (previousData: {
+      totalRevenue?: number;
+      totalOrderValue?: number;
+      totalShippingFee?: number;
+      totalOrders?: number;
+   }) => {
+      const calculatePercentageChange = (current: number, previous: number) => {
+         if (previous === 0) return current > 0 ? 100 : 0;
+         return ((current - previous) / previous) * 100;
+      };
+
+      setComparisonStats({
+         revenueChange: calculatePercentageChange(statsData.totalRevenue, previousData.totalRevenue || 0),
+         orderValueChange: calculatePercentageChange(statsData.totalOrderValue, previousData.totalOrderValue || 0),
+         shippingFeeChange: calculatePercentageChange(statsData.totalShippingFee, previousData.totalShippingFee || 0),
+         ordersChange: calculatePercentageChange(statsData.totalOrders, previousData.totalOrders || 0)
+      });
+   };
+
+   // Thêm hàm để cập nhật chart so sánh với kỳ trước
+   const updateComparisonChart = () => {
+      let timeLabel;
+
+      if (timeFilter === 'custom') {
+         // Format date range for display
+         const formatDateForDisplay = (date: Date) => {
+            return date.toLocaleDateString('vi-VN');
+         };
+         timeLabel = `${formatDateForDisplay(startDate)} - ${formatDateForDisplay(endDate)}`;
+      } else {
+         timeLabel = timeFilter === 'month'
+            ? `Tháng ${timeValue}/${year}`
+            : timeFilter === 'week'
+               ? `Tuần ${timeValue}/${year}`
+               : `Năm ${timeValue}`;
+      }
+
+      // Xác định nhãn kỳ trước
+      let previousLabel;
+      if (timeFilter === 'month') {
+         const prevMonth = timeValue === 1 ? 12 : timeValue - 1;
+         const prevYear = timeValue === 1 ? year - 1 : year;
+         previousLabel = `Tháng ${prevMonth}/${prevYear}`;
+      } else if (timeFilter === 'week') {
+         const prevWeek = timeValue === 1 ? 52 : timeValue - 1;
+         const prevYear = timeValue === 1 ? year - 1 : year;
+         previousLabel = `Tuần ${prevWeek}/${prevYear}`;
+      } else if (timeFilter === 'year') {
+         previousLabel = `Năm ${year - 1}`;
+      } else {
+         previousLabel = 'Kỳ trước';
+      }
+
+      setChartData({
+         labels: ['Doanh thu', 'Giá trị đơn hàng', 'Phí vận chuyển'],
+         datasets: [
+            {
+               label: timeLabel,
+               data: [statsData.totalRevenue, statsData.totalOrderValue, statsData.totalShippingFee],
+               backgroundColor: 'rgba(59, 130, 246, 0.5)',
+               borderColor: 'rgb(59, 130, 246)',
+               borderWidth: 1,
+            },
+            {
+               label: previousLabel,
+               data: [previousPeriodData.totalRevenue, previousPeriodData.totalOrderValue, previousPeriodData.totalShippingFee],
+               backgroundColor: 'rgba(156, 163, 175, 0.5)',
+               borderColor: 'rgb(156, 163, 175)',
+               borderWidth: 1,
+            }
+         ]
+      });
+
+      // Cập nhật options cho biểu đồ so sánh
+      setChartOptions({
+         responsive: true,
+         maintainAspectRatio: false,
+         plugins: {
+            legend: {
+               position: 'top' as const,
+               labels: {
+                  boxWidth: 10,
+                  usePointStyle: true,
+                  pointStyle: 'circle'
+               }
+            },
+            title: {
+               display: true,
+               text: `So sánh tài chính giữa ${timeLabel} và ${previousLabel}`,
+               font: {
+                  size: 16
+               }
+            },
+         },
+         scales: {
+            y: {
+               beginAtZero: true,
+               ticks: {
+                  callback: function (value: number) {
+                     return value.toLocaleString() + ' VND';
+                  }
+               }
+            }
+         },
+      });
+   };
    // Update the fetchDateRangeStatistics function
    const fetchDateRangeStatistics = async () => {
       try {
@@ -197,7 +394,12 @@ export default function FinancePage() {
    const [newCustomersFetched, setNewCustomersFetched] = useState(false);
 
 
-
+   // Cập nhật useEffect sau khi fetch dữ liệu hiện tại xong
+   useEffect(() => {
+      if (statsData.totalRevenue !== 0 && chartView === 'current') {
+         fetchPreviousPeriodData();
+      }
+   }, [statsData, fetchPreviousPeriodData, chartView]);
    // Thêm state để lưu tỷ lệ thay đổi
    useEffect(() => {
       // Kích hoạt animation khi component mount
@@ -469,7 +671,6 @@ export default function FinancePage() {
          // Just update the data with the new filter type
       }
 
-      // The useEffect will handle data fetching due to timeFilter change
    };
 
    const stats = [
@@ -477,34 +678,39 @@ export default function FinancePage() {
          id: 1,
          title: 'Doanh thu',
          value: `${statsData.totalRevenue?.toLocaleString()} VND`,
-         trend: `+${statsData.totalRevenue > 0 ? '37.8%' : '0%'}`,
+         trend: `${comparisonStats.revenueChange >= 0 ? '+' : ''}${comparisonStats.revenueChange.toFixed(1)}%`,
          bg: 'bg-gradient-to-br from-blue-50 to-blue-100',
          icon: <DollarSign className='text-blue-500' size={28} />,
+         trendColor: comparisonStats.revenueChange >= 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
       },
       {
          id: 2,
          title: 'Tổng giá trị đơn hàng',
          value: `${statsData.totalOrderValue?.toLocaleString()} VND`,
-         trend: `+${statsData.totalOrderValue > 0 ? '37.8%' : '0%'}`,
+         trend: `${comparisonStats.orderValueChange >= 0 ? '+' : ''}${comparisonStats.orderValueChange.toFixed(1)}%`,
          bg: 'bg-gradient-to-br from-purple-50 to-purple-100',
          icon: <ShoppingCart className='text-purple-500' size={28} />,
+         trendColor: comparisonStats.orderValueChange >= 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
       },
       {
          id: 3,
          title: 'Tổng phí vận chuyển',
          value: `${statsData.totalShippingFee?.toLocaleString()} VND`,
-         trend: 'Phí vận chuyển',
+         trend: `${comparisonStats.shippingFeeChange >= 0 ? '+' : ''}${comparisonStats.shippingFeeChange.toFixed(1)}%`,
          bg: 'bg-gradient-to-br from-green-50 to-green-100',
-         icon: <Truck className='text-green-500' size={28} />
+         icon: <Truck className='text-green-500' size={28} />,
+         trendColor: comparisonStats.shippingFeeChange >= 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
       },
       {
          id: 4,
          title: 'Đơn hàng',
          value: `${statsData.totalOrders || 0} Đơn hàng`,
-         trend: `+${statsData.totalOrders || 0} đơn hàng`,
+         trend: `${comparisonStats.ordersChange >= 0 ? '+' : ''}${comparisonStats.ordersChange.toFixed(1)}%`,
          bg: 'bg-gradient-to-br from-yellow-50 to-yellow-100',
          icon: <Package className='text-yellow-500' size={28} />,
+         trendColor: comparisonStats.ordersChange >= 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
       },
+      // Giữ nguyên sản phẩm bán chạy nhất
       {
          id: 5,
          title: 'Sản phẩm bán chạy nhất',
@@ -512,6 +718,7 @@ export default function FinancePage() {
          trend: 'Top 5 sản phẩm',
          bg: 'bg-gradient-to-br from-indigo-50 to-indigo-100',
          icon: <Star className='text-indigo-500' size={28} />,
+         trendColor: 'bg-blue-100 text-blue-700'
       },
    ];
 
@@ -1162,6 +1369,17 @@ export default function FinancePage() {
          }, 0);
       }
    };
+
+   // Thêm state cho chế độ xem biểu đồ
+   const [chartMode, setChartMode] = useState<'standard' | 'comparison'>('standard');
+
+   // Cập nhật hàm fetchPreviousPeriodData để gọi updateComparisonChart
+   useEffect(() => {
+      if (previousPeriodData.totalRevenue !== 0 && chartMode === 'comparison') {
+         updateComparisonChart();
+      }
+   }, [previousPeriodData, chartMode]);
+
    return (
       <div className='flex h-screen bg-gray-50'>
          {/* Sidebar */}
@@ -1289,7 +1507,7 @@ export default function FinancePage() {
                                     <div
                                        key={stat.id}
                                        className={`p-5 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-all duration-300 ${stat.bg
-                                          } ${animateStats ? 'animate-fade-in' : 'opacity-0'}`}
+                                          } ${animateStats ? 'animate-fade-in' : 'opacity-0'} relative group`}
                                        style={{ animationDelay: `${index * 100}ms` }}
                                     >
                                        <div className='flex items-center mb-3 justify-between'>
@@ -1297,16 +1515,51 @@ export default function FinancePage() {
                                              {stat.icon}
                                           </div>
                                           <span
-                                             className={`text-xs font-medium px-2 py-1 rounded-full ${stat.trend.includes('+')
-                                                ? 'bg-green-100 text-green-700'
-                                                : 'bg-blue-100 text-blue-700'
-                                                }`}
+                                             className={`text-xs font-medium px-2 py-1 rounded-full ${stat.trendColor || 'bg-blue-100 text-blue-700'}`}
                                           >
                                              {stat.trend}
                                           </span>
                                        </div>
                                        <h3 className='text-sm text-gray-600 mb-1'>{stat.title}</h3>
                                        <p className='text-xl font-bold text-gray-800'>{stat.value}</p>
+
+                                       {/* Tooltip so sánh với kỳ trước chỉ hiển thị khi hover và nếu id < 5 */}
+                                       {stat.id < 5 && (
+                                          <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-64 bg-white shadow-lg rounded-lg p-3 text-sm opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity z-10">
+                                             <div className="font-medium mb-1">So sánh với kỳ trước</div>
+                                             <div className="flex justify-between mb-1">
+                                                <span className="text-gray-500">Kỳ hiện tại:</span>
+                                                <span className="font-medium">{
+                                                   stat.id === 1 ? statsData.totalRevenue.toLocaleString() + ' VND' :
+                                                      stat.id === 2 ? statsData.totalOrderValue.toLocaleString() + ' VND' :
+                                                         stat.id === 3 ? statsData.totalShippingFee.toLocaleString() + ' VND' :
+                                                            statsData.totalOrders + ' đơn'
+                                                }</span>
+                                             </div>
+                                             <div className="flex justify-between mb-1">
+                                                <span className="text-gray-500">Kỳ trước:</span>
+                                                <span className="font-medium">{
+                                                   stat.id === 1 ? previousPeriodData.totalRevenue.toLocaleString() + ' VND' :
+                                                      stat.id === 2 ? previousPeriodData.totalOrderValue.toLocaleString() + ' VND' :
+                                                         stat.id === 3 ? previousPeriodData.totalShippingFee.toLocaleString() + ' VND' :
+                                                            previousPeriodData.totalOrders + ' đơn'
+                                                }</span>
+                                             </div>
+                                             <div className="flex justify-between">
+                                                <span className="text-gray-500">Thay đổi:</span>
+                                                <span className={`font-medium ${(stat.id === 1 && comparisonStats.revenueChange >= 0) ||
+                                                   (stat.id === 2 && comparisonStats.orderValueChange >= 0) ||
+                                                   (stat.id === 3 && comparisonStats.shippingFeeChange >= 0) ||
+                                                   (stat.id === 4 && comparisonStats.ordersChange >= 0)
+                                                   ? 'text-green-600'
+                                                   : 'text-red-600'
+                                                   }`}>
+                                                   {stat.trend}
+                                                </span>
+                                             </div>
+                                             <div className="absolute w-3 h-3 bg-white transform rotate-45 left-1/2 -translate-x-1/2 -bottom-1.5"></div>
+                                          </div>
+                                       )}
                                     </div>
                                  ))}
                               </div>
@@ -1341,6 +1594,40 @@ export default function FinancePage() {
                                        } border border-gray-200 border-l-0`}
                                  >
                                     Lịch sử
+                                 </button>
+                              </div>
+
+                              {/* Thêm nút chuyển đổi chế độ xem vào phần Revenue Chart Section */}
+                              <div className="inline-flex rounded-md shadow-sm ml-4">
+                                 <button
+                                    onClick={() => {
+                                       setChartMode('standard');
+                                       updateCurrentPeriodChart();
+                                    }}
+                                    className={`px-4 py-2 text-xs font-medium rounded-l-lg ${chartMode === 'standard'
+                                       ? 'bg-amber-500 text-white'
+                                       : 'bg-white text-gray-700 hover:bg-gray-50'
+                                       } border border-gray-200`}
+                                 >
+                                    Tiêu chuẩn
+                                 </button>
+                                 <button
+                                    onClick={() => {
+                                       setChartMode('comparison');
+                                       if (previousPeriodData.totalRevenue !== 0) {
+                                          updateComparisonChart();
+                                       } else {
+                                          fetchPreviousPeriodData().then(() => {
+                                             updateComparisonChart();
+                                          });
+                                       }
+                                    }}
+                                    className={`px-4 py-2 text-xs font-medium rounded-r-lg ${chartMode === 'comparison'
+                                       ? 'bg-amber-500 text-white'
+                                       : 'bg-white text-gray-700 hover:bg-gray-50'
+                                       } border border-gray-200 border-l-0`}
+                                 >
+                                    So sánh với kỳ trước
                                  </button>
                               </div>
                            </div>
