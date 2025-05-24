@@ -33,6 +33,7 @@ export default function CreateVoucher() {
       maxVoucherAmount: '', // Max discount amount
       usagePerCustomer: '1', // Default 1
       newCustomersOnly: false,
+      isSvipOnly: false, // Add this new field for VIP-only vouchers
    });
 
    const [isSubmitting, setIsSubmitting] = useState(false);
@@ -247,6 +248,7 @@ export default function CreateVoucher() {
 
             // Additional fields from form
             new_customers_only: voucherData.newCustomersOnly,
+            is_svip_only: voucherData.isSvipOnly, // Add this new field
             isActive: true,
          };
 
@@ -626,26 +628,51 @@ export default function CreateVoucher() {
                                  <FiUsers className='mr-1 text-amber-600' />
                                  Đối tượng khách hàng:
                               </label>
-                              <div className='flex items-center mt-2'>
-                                 <input
-                                    type='checkbox'
-                                    id='newCustomersOnly'
-                                    name='newCustomersOnly'
-                                    className='w-4 h-4 text-amber-600 border-gray-300 rounded focus:ring-amber-500'
-                                    checked={voucherData.newCustomersOnly}
-                                    onChange={(e) =>
-                                       setVoucherData((prev) => ({
-                                          ...prev,
-                                          newCustomersOnly: e.target.checked,
-                                       }))
-                                    }
-                                 />
-                                 <label
-                                    htmlFor='newCustomersOnly'
-                                    className='ml-2 text-sm text-gray-700'
-                                 >
-                                    Chỉ áp dụng cho khách hàng mới
-                                 </label>
+                              <div className='flex flex-col space-y-2 mt-2'>
+                                 <div className='flex items-center'>
+                                    <input
+                                       type='checkbox'
+                                       id='newCustomersOnly'
+                                       name='newCustomersOnly'
+                                       className='w-4 h-4 text-amber-600 border-gray-300 rounded focus:ring-amber-500'
+                                       checked={voucherData.newCustomersOnly}
+                                       onChange={(e) =>
+                                          setVoucherData((prev) => ({
+                                             ...prev,
+                                             newCustomersOnly: e.target.checked,
+                                          }))
+                                       }
+                                    />
+                                    <label
+                                       htmlFor='newCustomersOnly'
+                                       className='ml-2 text-sm text-gray-700'
+                                    >
+                                       Chỉ áp dụng cho khách hàng mới
+                                    </label>
+                                 </div>
+
+                                 {/* Add VIP-only option */}
+                                 <div className='flex items-center'>
+                                    <input
+                                       type='checkbox'
+                                       id='isSvipOnly'
+                                       name='isSvipOnly'
+                                       className='w-4 h-4 text-amber-600 border-gray-300 rounded focus:ring-amber-500'
+                                       checked={voucherData.isSvipOnly}
+                                       onChange={(e) =>
+                                          setVoucherData((prev) => ({
+                                             ...prev,
+                                             isSvipOnly: e.target.checked,
+                                          }))
+                                       }
+                                    />
+                                    <label
+                                       htmlFor='isSvipOnly'
+                                       className='ml-2 text-sm text-gray-700'
+                                    >
+                                       Chỉ áp dụng cho khách hàng VIP
+                                    </label>
+                                 </div>
                               </div>
                            </div>
 
@@ -858,6 +885,14 @@ export default function CreateVoucher() {
                                  <span className='font-medium'>Lượt sử dụng:</span>{' '}
                                  <span className='ml-1'>
                                     {voucherData.usageLimit || 'Không giới hạn'}
+                                 </span>
+                              </div>
+                              <div className='mb-2 flex items-center'>
+                                 <FiUsers className='mr-1 text-amber-500' />
+                                 <span className='font-medium'>Đối tượng:</span>{' '}
+                                 <span className='ml-1'>
+                                    {voucherData.newCustomersOnly ? 'Khách hàng mới' :
+                                       voucherData.isSvipOnly ? 'Khách hàng VIP' : 'Tất cả khách hàng'}
                                  </span>
                               </div>
                               <div className='flex items-center'>

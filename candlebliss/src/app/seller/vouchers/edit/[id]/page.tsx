@@ -24,6 +24,11 @@ interface Voucher {
    description: string;
    applicable_products: string;
    isActive: boolean;
+   // Thêm các trường mới
+   new_customers_only?: boolean;
+   is_svip_only?: boolean;
+   usage_per_customer?: number;
+   max_voucher_amount?: number;
 }
 
 export default function EditVoucher() {
@@ -36,6 +41,10 @@ export default function EditVoucher() {
    const [error, setError] = useState('');
    const [discountType, setDiscountType] = useState<'percent' | 'fixed'>('percent');
    const [hasLimitedUses, setHasLimitedUses] = useState(true);
+   // Thêm state mới cho VIP-only và khách hàng mới
+   const [isNewCustomersOnly, setIsNewCustomersOnly] = useState(false);
+   const [isSvipOnly, setIsSvipOnly] = useState(false);
+   const [usagePerCustomer, setUsagePerCustomer] = useState('1');
 
    // Format date for inputs (YYYY-MM-DD)
    const formatDateForInput = (dateString: string) => {
@@ -83,6 +92,12 @@ export default function EditVoucher() {
             // Set initial form state based on voucher data
             setDiscountType(data.percent_off > 0 ? 'percent' : 'fixed');
             setHasLimitedUses(data.usage_limit !== null);
+
+            // Thêm state cho các tùy chọn mới
+            setIsNewCustomersOnly(!!data.new_customers_only);
+            setIsSvipOnly(!!data.is_svip_only);
+            setUsagePerCustomer(data.usage_per_customer?.toString() || '1');
+
          } catch (err: unknown) {
             if (err instanceof Error) {
                console.error('Failed to fetch voucher:', err.message);
@@ -155,18 +170,32 @@ export default function EditVoucher() {
 
       if (!voucher) return;
 
+      // Kiểm tra xung đột giữa các tùy chọn
+      if (isNewCustomersOnly && isSvipOnly) {
+         setError('Không thể cùng lúc chọn "Chỉ áp dụng cho khách hàng mới" và "Chỉ áp dụng cho khách hàng VIP"');
+         return;
+      }
+
       setSubmitting(true);
+      setError(''); // Reset error
 
       try {
          const token = localStorage.getItem('token') || sessionStorage.getItem('token');
 
-         // Only include fields that have changed in update request
-         const changedFields: Record<string, string | number | boolean | null> = {};
+         // Đảm bảo voucher có các trường mới
+         const updatedVoucher = {
+            ...voucher,
+            new_customers_only: isNewCustomersOnly,
+            is_svip_only: isSvipOnly,
+            usage_per_customer: parseInt(usagePerCustomer)
+         };
 
-         Object.keys(voucher).forEach((key) => {
-            const voucherKey = key as keyof Voucher;
-            if (originalVoucher && voucher[voucherKey] !== originalVoucher[voucherKey]) {
-               changedFields[voucherKey] = voucher[voucherKey];
+         // Only include fields that have changed in update request
+         const changedFields: Record<string, unknown> = {};
+         Object.keys(updatedVoucher).forEach((key) => {
+            const voucherKey = key as keyof typeof updatedVoucher;
+            if (originalVoucher && updatedVoucher[voucherKey] !== originalVoucher[voucherKey]) {
+               changedFields[voucherKey] = updatedVoucher[voucherKey];
             }
          });
 
@@ -308,6 +337,7 @@ export default function EditVoucher() {
       );
    }
 
+   // Form UI
    return (
       <div className='flex min-h-screen bg-[#f8f5f0]'>
          {/* Sidebar cố định bên trái */}
@@ -417,13 +447,68 @@ export default function EditVoucher() {
                               <input
                                  type='text'
                                  name='applicable_products'
-                                 value={voucher.applicable_products || ''}
+                                 value={voucher?.applicable_products || ''}
                                  onChange={handleChange}
                                  className='w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500'
                                  placeholder='Ví dụ: Tất cả sản phẩm, Nến thơm, v.v.'
                               />
                               <p className='text-xs text-gray-500 mt-1'>
                                  Để trống nếu áp dụng cho tất cả sản phẩm.
+                              </p>
+                           </div>
+
+                           {/* Thêm phần đối tượng khách hàng */}
+                           <div className='mb-4'>
+                              <label className='block text-sm font-medium text-gray-700 mb-1'>
+                                 Đối tượng khách hàng
+                              </label>
+                              <div className='mt-2 space-y-2'>
+                                 <div className='flex items-center'>
+                                    <input
+                                       type='checkbox'
+                                       id='newCustomersOnly'
+                                       checked={isNewCustomersOnly}
+                                       onChange={(e) => setIsNewCustomersOnly(e.target.checked)}
+                                       className='h-4 w-4 text-amber-600 focus:ring-amber-500 border-gray-300 rounded'
+                                    />
+                                    <label htmlFor='newCustomersOnly' className='ml-2 block text-sm text-gray-700'>
+                                       Chỉ áp dụng cho khách hàng mới
+                                    </label>
+                                 </div>
+
+                                 <div className='flex items-center'>
+                                    <input
+                                       type='checkbox'
+                                       id='isSvipOnly'
+                                       checked={isSvipOnly}
+                                       onChange={(e) => setIsSvipOnly(e.target.checked)}
+                                       className='h-4 w-4 text-amber-600 focus:ring-amber-500 border-gray-300 rounded'
+                                    />
+                                    <label htmlFor='isSvipOnly' className='ml-2 block text-sm text-gray-700'>
+                                       Chỉ áp dụng cho khách hàng VIP
+                                    </label>
+                                 </div>
+                              </div>
+                              {isNewCustomersOnly && isSvipOnly && (
+                                 <p className='text-xs text-red-500 mt-1'>
+                                    Không thể cùng lúc chọn cả hai tùy chọn này
+                                 </p>
+                              )}
+                           </div>
+
+                           <div className='mb-4'>
+                              <label className='block text-sm font-medium text-gray-700 mb-1'>
+                                 Số lần sử dụng cho mỗi khách
+                              </label>
+                              <input
+                                 type='number'
+                                 min='1'
+                                 value={usagePerCustomer}
+                                 onChange={(e) => setUsagePerCustomer(e.target.value)}
+                                 className='w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500'
+                              />
+                              <p className='text-xs text-gray-500 mt-1'>
+                                 Giới hạn số lần mỗi khách hàng có thể sử dụng voucher này
                               </p>
                            </div>
                         </div>
@@ -604,6 +689,44 @@ export default function EditVoucher() {
                                  </div>
                               )}
                            </div>
+
+
+
+                           {isSvipOnly && (
+                              <div className='mb-4'>
+                                 <label className='block text-sm font-medium text-gray-700 mb-1'>
+                                    Giới hạn giảm giá cho SVIP (VND)
+                                 </label>
+                                 <input
+                                    type='number'
+                                    name='max_voucher_amount'
+                                    value={voucher.max_voucher_amount || ''}
+                                    onChange={handleChange}
+                                    min='0'
+                                    step='1000'
+                                    className='w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500'
+                                    placeholder='Nhập số tiền tối đa cho SVIP'
+                                 />
+                              </div>
+                           )}
+
+                           {isNewCustomersOnly && (
+                              <div className='mb-4'>
+                                 <label className='block text-sm font-medium text-gray-700 mb-1'>
+                                    Giới hạn số lượt sử dụng cho khách hàng mới
+                                 </label>
+                                 <input
+                                    type='number'
+                                    name='usage_per_customer'
+                                    value={usagePerCustomer}
+                                    onChange={(e) => setUsagePerCustomer(e.target.value)}
+                                    min='1'
+                                    step='1'
+                                    className='w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500'
+                                    placeholder='Nhập số lượt tối đa cho khách hàng mới'
+                                 />
+                              </div>
+                           )}
                         </div>
                      </div>
                   </div>

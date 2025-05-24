@@ -49,6 +49,7 @@ interface Voucher {
    end_date: string;
    applicable_categories: string | null; // Danh mục áp dụng
    new_customers_only: boolean;
+   is_svip_only: boolean; // Add this field
    isActive: boolean;
    createdAt: string;
    updatedAt: string;
@@ -98,12 +99,12 @@ const formatPrice = (price: number): string => {
 };
 
 // Update the isVoucherValid function to check for first orders instead of account creation date
-const isVoucherValid = (
+const isVoucherValid = async (
    voucher: Voucher,
    currentSubTotal: number,
    userId: number | null,
-   userInfo: UserInfo | null, // Add userInfo parameter
-): { valid: boolean; message?: string } => {
+   userInfo: UserInfo | null,
+): Promise<{ valid: boolean; message?: string }> => {
    // Kiểm tra voucher có đang hoạt động không
    if (!voucher.isActive || voucher.isDeleted) {
       return { valid: false, message: 'Mã giảm giá không có hiệu lực' };
@@ -130,10 +131,23 @@ const isVoucherValid = (
    if (minOrderValue > currentSubTotal) {
       return {
          valid: false,
-         message: `Đơn hàng tối thiểu ${formatPrice(
-            minOrderValue,
-         )} để áp dụng mã này. Bạn cần thêm ${formatPrice(minOrderValue - currentSubTotal)} nữa.`,
+         message: `Đơn hàng tối thiểu ${formatPrice(minOrderValue)} để áp dụng mã này. Bạn cần thêm ${formatPrice(minOrderValue - currentSubTotal)} nữa.`,
       };
+   }
+
+   // NEW: Check if this is a SVIP-only voucher
+   if (voucher.is_svip_only) {
+      if (!userId) {
+         return { valid: false, message: 'Bạn cần đăng nhập để sử dụng mã giảm giá này' };
+      }
+
+      const isSvip = await checkUserSvipStatus(userId);
+      if (!isSvip) {
+         return {
+            valid: false,
+            message: 'Mã giảm giá này chỉ dành cho khách hàng VIP (đã có từ 20 đơn hàng trở lên)'
+         };
+      }
    }
 
    // Kiểm tra điều kiện khách hàng mới (đơn hàng đầu tiên)
@@ -254,6 +268,52 @@ const getVoucherUsageCount = (voucherId: number, userId: number) => {
    return history[userId]?.[voucherId] || 0;
 };
 
+// Add this function to check if a user qualifies for SVIP status
+const checkUserSvipStatus = async (userId: number): Promise<boolean> => {
+   if (!userId) return false;
+
+   try {
+      // First check if we already know the SVIP status from localStorage
+      const svipStatusKey = `user_${userId}_svip_status`;
+      const cachedStatus = localStorage.getItem(svipStatusKey);
+
+      if (cachedStatus) {
+         return cachedStatus === 'true';
+      }
+
+      // If not in localStorage, check via API
+      const token = localStorage.getItem('token');
+      if (!token) return false;
+
+      const response = await fetch(`${HOST}/api/orders?user_id=${userId}`, {
+         headers: {
+            Authorization: `Bearer ${token}`
+         }
+      });
+
+      if (!response.ok) {
+         console.error('Error fetching user orders:', response.status);
+         return false;
+      }
+
+      const orders = await response.json();
+
+      // Check if user has 20 or more orders
+      const isSvip = Array.isArray(orders) && orders.length >= 20;
+
+      // Cache the result in localStorage for 24 hours
+      localStorage.setItem(svipStatusKey, isSvip.toString());
+      setTimeout(() => {
+         localStorage.removeItem(svipStatusKey);
+      }, 24 * 60 * 60 * 1000); // 24 hours expiry
+
+      return isSvip;
+   } catch (error) {
+      console.error('Error checking SVIP status:', error);
+      return false;
+   }
+};
+
 export default function CheckoutPage() {
    const router = useRouter();
    const [cartItems, setCartItems] = useState<CartItem[]>([]);
@@ -263,6 +323,7 @@ export default function CheckoutPage() {
    const [totalPrice, setTotalPrice] = useState(0);
    const { updateCartBadge } = useCart(); // Thêm dòng này để sử dụng function từ context
    const [userId, setUserId] = useState<number | null>(null);
+   const [isUserSvip] = useState(false); // Move this up here with other state declarations
 
    // Thông tin người dùng
    const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
@@ -484,64 +545,98 @@ export default function CheckoutPage() {
       setWards([]);
    };
 
+   // Cập nhật useEffect khởi tạo ở đầu trang checkout
    useEffect(() => {
       const init = async () => {
-         // Lấy thông tin userId từ localStorage
-         const storedUserId = localStorage.getItem('userId');
-         if (!storedUserId) {
-            // Nếu không có userId, chuyển về trang đăng nhập
-            router.push('/user/signin');
-            return;
-         }
-
-         const userId = parseInt(storedUserId);
-         setUserId(userId);
-
          try {
             setLoading(true);
 
-            // Lấy thông tin người dùng trước
-            await loadUserInfo(userId);
+            // Lấy thông tin userId từ localStorage hoặc guestUserId (0)
+            const storedUserId = localStorage.getItem('userId');
+            const isGuestCheckout = localStorage.getItem('isGuestCheckout') === 'true';
 
-            // Sau đó tải địa chỉ của họ
-            await loadUserAddresses(userId);
+            // Tải giỏ hàng từ localStorage
+            const localCart = JSON.parse(localStorage.getItem('cart') || '[]');
+            if (localCart.length === 0) {
+               router.push('/user/cart');
+               return;
+            }
 
-            // Cuối cùng tải tỉnh thành để chuẩn bị cho form
-            await fetchProvinces();
-         } catch (error) {
-            console.error('Error initializing data:', error);
-            showToastMessage('Có lỗi xảy ra khi tải dữ liệu', 'error');
-         } finally {
+            // Đảm bảo tất cả detailId là số
+            const validatedCart = localCart.map((item: { detailId: number | string; }) => ({
+               ...item,
+               detailId: Number(item.detailId),
+            }));
+
+            setCartItems(validatedCart);
+
+            // Tính toán giá trị đơn hàng
+            const subtotal = validatedCart.reduce(
+               (sum: number, item: { price: number; quantity: number; }) => sum + item.price * item.quantity,
+               0
+            );
+            setSubTotal(subtotal);
+            setTotalPrice(subtotal + shippingFee);
+
+            // Xử lý theo trạng thái đăng nhập
+            if (storedUserId) {
+               // Người dùng đã đăng nhập
+               const userId = parseInt(storedUserId);
+               setUserId(userId);
+
+               try {
+                  // Tải thông tin người dùng và địa chỉ
+                  await loadUserInfo(userId);
+                  await loadUserAddresses(userId);
+               } catch (error) {
+                  console.error('Error loading user data:', error);
+                  showToastMessage('Không thể tải thông tin người dùng', 'error');
+               }
+            } else if (isGuestCheckout) {
+               // Guest checkout với userId = 0
+               setUserId(0);
+
+               // Kiểm tra xem đã có địa chỉ guest trong localStorage chưa
+               const savedGuestAddress = localStorage.getItem('guestAddress');
+               if (savedGuestAddress) {
+                  const guestAddress = JSON.parse(savedGuestAddress);
+                  setAddresses([guestAddress]);
+                  setSelectedAddressId(guestAddress.id);
+                  setShowAddAddressForm(false);
+               } else {
+                  // Nếu chưa có địa chỉ, hiển thị form thêm mới
+                  setShowAddAddressForm(true);
+                  setAddresses([]);
+
+                  // Khởi tạo form địa chỉ trống
+                  setNewAddress({
+                     fullName: '',
+                     phone: '',
+                     province: '',
+                     district: '',
+                     ward: '',
+                     streetAddress: '',
+                     isDefault: true
+                  });
+               }
+
+               // Tải danh sách tỉnh thành để chuẩn bị cho form
+               fetchProvinces();
+            } else {
+               // Không phải guest checkout và không đăng nhập, chuyển về đăng nhập
+               router.push('/user/signin?redirect=/user/checkout');
+               return;
+            }
+
+            setLoading(false);
+         } catch (err) {
+            console.error('Error initializing checkout:', err);
             setLoading(false);
          }
-
-         // Tải giỏ hàng từ localStorage
-         const localCart = JSON.parse(localStorage.getItem('cart') || '[]');
-         if (localCart.length === 0) {
-            // Nếu giỏ hàng trống, chuyển về trang giỏ hàng
-            router.push('/user/cart');
-            return;
-         }
-
-         // Đảm bảo tất cả detailId là số
-         const validatedCart = localCart.map((item: { detailId: number }) => ({
-            ...item,
-            detailId: Number(item.detailId),
-         }));
-
-         setCartItems(validatedCart);
-
-         // Tính toán giá trị đơn hàng
-         const subtotal = validatedCart.reduce(
-            (sum: number, item: CartItem) => sum + item.price * item.quantity,
-            0,
-         );
-         setSubTotal(subtotal);
-         setTotalPrice(subtotal + shippingFee);
       };
 
       init();
-   }, []);
+   }, [router]);
 
    // Thêm vào useEffect để kiểm tra voucher đã áp dụng khi load trang
    useEffect(() => {
@@ -601,27 +696,40 @@ export default function CheckoutPage() {
 
    // Inside your useEffect for validating saved vouchers
    useEffect(() => {
-      // Lấy voucher đã áp dụng từ localStorage nếu có
-      const savedVoucher = localStorage.getItem('appliedVoucher');
-      if (savedVoucher && userId && userInfo) {
-         try {
-            const voucherData = JSON.parse(savedVoucher);
+      const validateSavedVoucher = async () => {
+         // Lấy voucher đã áp dụng từ localStorage nếu có
+         const savedVoucher = localStorage.getItem('appliedVoucher');
+         if (savedVoucher && userId && userInfo) {
+            try {
+               const voucherData = JSON.parse(savedVoucher);
 
-            // You can reuse your validation function here
-            const validationResult = isVoucherValid(voucherData, subTotal, userId, userInfo);
-            if (!validationResult.valid) {
+               // Use the async validation function
+               const validationResult = await isVoucherValid(voucherData, subTotal, userId, userInfo);
+               if (!validationResult.valid) {
+                  localStorage.removeItem('appliedVoucher');
+                  setDiscount(0);
+                  setAppliedVoucher(null);
+                  showToastMessage(validationResult.message || 'Mã giảm giá không hợp lệ', 'error');
+                  return;
+               }
+
+               // Rest of your existing code...
+               // Tính lại số tiền giảm giá dựa trên giá trị đơn hàng hiện tại
+               const recalculatedDiscount = calculateDiscountAmount(voucherData, subTotal);
+
+               // Làm tròn và cập nhật state
+               setAppliedVoucher(voucherData);
+               setVoucherCode(voucherData.code);
+               setDiscount(recalculatedDiscount);
+            } catch (error) {
+               console.error('Error parsing saved voucher:', error);
                localStorage.removeItem('appliedVoucher');
-               setDiscount(0);
-               setAppliedVoucher(null);
-               showToastMessage(validationResult.message || 'Mã giảm giá không hợp lệ', 'error');
-               return;
             }
-
-            // Rest of your existing code...
-         } catch (error) {
-            console.error('Error parsing saved voucher:', error);
-            localStorage.removeItem('appliedVoucher');
          }
+      };
+
+      if (userId && userInfo) {
+         validateSavedVoucher();
       }
    }, [subTotal, userId, userInfo]);
 
@@ -690,6 +798,7 @@ export default function CheckoutPage() {
       const checkMomoPayment = async () => {
          // Check if there's a pending order ID in localStorage
          const pendingOrderId = localStorage.getItem('pendingOrderId');
+         const isGuestOrder = localStorage.getItem('pendingGuestOrder') === 'true';
 
          // Check if there are URL parameters indicating payment return
          const urlParams = new URLSearchParams(window.location.search);
@@ -697,28 +806,46 @@ export default function CheckoutPage() {
 
          if (pendingOrderId && paymentStatus) {
             try {
-               // TODO: Add API call to verify payment status with your backend if needed
+               
 
-               // Clear the pending order ID
+               // Clear the pending order data
                localStorage.removeItem('pendingOrderId');
+               localStorage.removeItem('pendingGuestOrder');
 
                if (paymentStatus === 'success') {
                   showToastMessage('Thanh toán thành công!', 'success');
-                  router.push(`/user/order`);
+
+                  // Xóa giỏ hàng sau khi thanh toán thành công
+                  localStorage.setItem('cart', '[]');
+                  updateCartBadge(0);
+
+                  // Chuyển hướng tới trang thích hợp
+                  if (userId && userId > 0) {
+                     router.push(`/user/order`);
+                  } else {
+                     router.push(`/user/order-success?orderId=${pendingOrderId}`);
+                  }
                } else {
                   showToastMessage(
                      'Thanh toán thất bại. Vui lòng thử lại hoặc chọn phương thức khác',
-                     'error',
+                     'error'
                   );
+
+                  // Với thanh toán thất bại, đưa người dùng quay lại trang checkout
+                  if (isGuestOrder) {
+                     // Đảm bảo flag guest checkout vẫn còn
+                     localStorage.setItem('isGuestCheckout', 'true');
+                  }
                }
             } catch (error) {
                console.error('Error verifying MOMO payment:', error);
+               showToastMessage('Không thể xác minh trạng thái thanh toán', 'error');
             }
          }
       };
 
       checkMomoPayment();
-   }, [router]);
+   }, [router, userId, updateCartBadge]);
 
    // Load thông tin người dùng
    const loadUserInfo = async (userId: number) => {
@@ -1174,109 +1301,6 @@ export default function CheckoutPage() {
       }
    };
 
-   // Cập nhật hàm updateAddress để lưu thông tin đầy đủ về địa chỉ vào localStorage
-   const updateAddress = async (addressData: Address) => {
-      try {
-         const token = localStorage.getItem('token');
-         if (!token) {
-            showToastMessage('Phiên đăng nhập hết hạn, vui lòng đăng nhập lại', 'error');
-            router.push('/user/signin');
-            return null;
-         }
-
-         // Xác định xem đây là cập nhật hay tạo mới
-         const isUpdate = !!addressData.id;
-         const url = isUpdate
-            ? `${HOST}/api/v1/address/${addressData.id}`
-            : `${HOST}/api/v1/address`;
-
-         const method = isUpdate ? 'PATCH' : 'POST';
-
-         // Tạo dữ liệu gửi lên API, chuyển đổi streetAddress thành street
-         const apiAddressData = {
-            ...addressData,
-            street: addressData.streetAddress, // Convert streetAddress to street for API
-            streetAddress: undefined, // Remove this field from API payload
-         };
-
-         const response = await fetch(url, {
-            method: method,
-            headers: {
-               'Content-Type': 'application/json',
-               Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify(apiAddressData),
-         });
-
-         if (response.ok) {
-            const savedAddress = await response.json();
-
-            // Lưu hoặc cập nhật địa chỉ vào localStorage
-            const userIdStr = (addressData.userId ?? '').toString();
-            const addressStorageKey = `user_${userIdStr}_addresses`;
-
-            // Lấy danh sách địa chỉ hiện có từ localStorage
-            const existingAddressesStr = localStorage.getItem(addressStorageKey);
-            const existingAddresses = existingAddressesStr ? JSON.parse(existingAddressesStr) : [];
-
-            // Tạo đối tượng địa chỉ đầy đủ để lưu vào localStorage
-            const fullAddressData = {
-               id: savedAddress.id,
-               fullName: addressData.fullName,
-               phone: addressData.phone,
-               province: addressData.province,
-               district: addressData.district,
-               ward: addressData.ward,
-               streetAddress: addressData.streetAddress,
-               isDefault: addressData.isDefault,
-               userId: addressData.userId,
-            };
-
-            if (isUpdate) {
-               // Nếu là cập nhật, thay thế địa chỉ cũ trong mảng
-               const addressIndex = existingAddresses.findIndex(
-                  (addr: Address) => addr.id === savedAddress.id,
-               );
-               if (addressIndex >= 0) {
-                  existingAddresses[addressIndex] = fullAddressData;
-               } else {
-                  // Trường hợp không tìm thấy trong mảng (hiếm gặp), thêm mới
-                  existingAddresses.push(fullAddressData);
-               }
-            } else {
-               // Nếu là địa chỉ mới, thêm vào mảng
-               existingAddresses.push(fullAddressData);
-            }
-
-            // Lưu danh sách địa chỉ đầy đủ vào localStorage
-            localStorage.setItem(addressStorageKey, JSON.stringify(existingAddresses));
-            console.log(`Saved full address data for ID: ${savedAddress.id} to localStorage`);
-
-            // Vẫn duy trì danh sách IDs để tương thích ngược
-            const idsStorageKey = `user_${userIdStr}_addressIds`;
-            const existingIdsStr = localStorage.getItem(idsStorageKey);
-            const existingIds = existingIdsStr ? JSON.parse(existingIdsStr) : [];
-
-            if (!isUpdate && !existingIds.includes(savedAddress.id)) {
-               existingIds.push(savedAddress.id);
-               localStorage.setItem(idsStorageKey, JSON.stringify(existingIds));
-            }
-
-            return savedAddress;
-         } else {
-            const errorData = await response.json().catch(() => ({}));
-            const errorMessage =
-               errorData.message || `Không thể ${isUpdate ? 'cập nhật' : 'tạo'} địa chỉ`;
-            throw new Error(errorMessage);
-         }
-      } catch (error: unknown) {
-         if (error instanceof Error) {
-            throw error;
-         } else {
-            throw new Error('An unknown error occurred');
-         }
-      }
-   };
 
    // Cập nhật hàm lưu địa chỉ
    const handleSaveAddress = async (e: React.FormEvent) => {
@@ -1295,108 +1319,50 @@ export default function CheckoutPage() {
          return;
       }
 
-      // Chuyển đổi phone thành chuỗi để đảm bảo có thể dùng regex
-      const phoneString = String(newAddress.phone);
-
-      // Validate số điện thoại Việt Nam
+      // Validate số điện thoại
       const phoneRegex = /([3|5|7|8|9])+([0-9]{8})\b/;
-      if (!phoneRegex.test(phoneString)) {
+      if (!phoneRegex.test(String(newAddress.phone))) {
          showToastMessage('Số điện thoại không hợp lệ', 'error');
          return;
       }
 
       try {
-         // Hiển thị loading state
          setLoading(true);
 
-         // Chuẩn bị dữ liệu để gửi lên API
-         const addressData = {
-            id: newAddress.id, // Thêm ID nếu đang cập nhật, undefined nếu là địa chỉ mới
-            fullName: String(newAddress.fullName).trim(), // Đảm bảo tên được cắt khoảng trắng và là chuỗi
-            phone: String(newAddress.phone).trim(), // Đảm bảo số điện thoại là chuỗi và được cắt khoảng trắng
-            province: String(newAddress.province).toLowerCase(), // API lưu tên tỉnh/thành phố viết thường
-            district: String(newAddress.district).toLowerCase(), // API lưu tên quận/huyện viết thường
-            ward: String(newAddress.ward).toLowerCase(), // API lưu tên phường/xã viết thường
-            streetAddress: String(newAddress.streetAddress), // Đổi tên field để phù hợp với Address type
-            userId: userId as number, // Đảm bảo userId là number không phải null
-            isDefault: newAddress.isDefault,
-         };
+         // Nếu là guest user (userId = 0), lưu địa chỉ vào localStorage thay vì gọi API
+         if (!userId || userId === 0) {
+            // Tạo ID giả cho địa chỉ guest
+            const guestAddressId = Date.now();
 
-         console.log('Sending address data:', addressData);
+            const guestAddress = {
+               ...newAddress,
+               id: guestAddressId,
+               isDefault: true,
+               userId: 0
+            };
 
-         const savedAddress = await updateAddress(addressData);
+            // Lưu địa chỉ guest vào localStorage
+            localStorage.setItem('guestAddress', JSON.stringify(guestAddress));
 
-         if (!savedAddress) {
-            throw new Error('Không nhận được phản hồi từ server');
+            // Cập nhật state
+            setAddresses([guestAddress]);
+            setSelectedAddressId(guestAddressId);
+            setShowAddAddressForm(false);
+
+            showToastMessage('Địa chỉ đã được lưu thành công', 'success');
+            setLoading(false);
+            return;
          }
 
-         console.log('Saved address from API:', savedAddress);
+      
 
-         // Chuyển đổi dữ liệu trả về để phù hợp với interface Address
-         const formattedAddress: Address = {
-            id: savedAddress.id,
-            fullName: newAddress.fullName,
-            phone: newAddress.phone,
-            province: savedAddress.province,
-            district: savedAddress.district,
-            ward: savedAddress.ward,
-            streetAddress: savedAddress.street, // Chuyển đổi street thành streetAddress
-            isDefault: savedAddress.isDefault,
-            userId: userId as number,
-         };
+       
 
-         // Cập nhật danh sách địa chỉ
-         if (newAddress.id) {
-            // Nếu là cập nhật, thay thế địa chỉ cũ
-            setAddresses((prev) =>
-               prev.map((addr) => (addr.id === newAddress.id ? formattedAddress : addr)),
-            );
-            showToastMessage('Địa chỉ đã được cập nhật thành công', 'success');
-         } else {
-            // Nếu là thêm mới, thêm vào danh sách
-            setAddresses((prev) => [...prev, formattedAddress]);
-            showToastMessage('Địa chỉ mới đã được thêm thành công', 'success');
-         }
-
-         // Chọn địa chỉ vừa tạo/cập nhật
-         setSelectedAddressId(formattedAddress.id ?? null);
-
-         // Phí vận chuyển luôn là 30000
-         setShippingFee(30000);
-         setTotalPrice(subTotal + 30000 - discount);
-
-         // Ẩn form thêm địa chỉ
-         setShowAddAddressForm(false);
-
-         // Nếu đây là địa chỉ mặc định mới, cập nhật toàn bộ danh sách
-         if (formattedAddress.isDefault) {
-            // Cập nhật các địa chỉ khác thành không mặc định trong state
-            setAddresses((prev) =>
-               prev.map((addr) =>
-                  addr.id !== formattedAddress.id ? { ...addr, isDefault: false } : addr,
-               ),
-            );
-         }
-
-         // Làm mới form địa chỉ cho lần thêm mới tiếp theo
-         setNewAddress({
-            fullName: userInfo?.firstName + ' ' + userInfo?.lastName || '',
-            phone: userInfo?.phone?.toString() || '',
-            province: '',
-            district: '',
-            ward: '',
-            streetAddress: '',
-            isDefault: addresses.length === 0,
-         });
-      } catch (error: unknown) {
-         if (error instanceof Error) {
-            console.error('Error saving address:', error.message);
-         } else {
-            console.error('Error saving address:', error);
-         }
+      } catch (error) {
+         console.error('Error saving address:', error);
          showToastMessage(
             error instanceof Error ? error.message : 'Không thể lưu địa chỉ',
-            'error',
+            'error'
          );
       } finally {
          setLoading(false);
@@ -1435,7 +1401,7 @@ export default function CheckoutPage() {
          });
 
          if (!voucherResponse.ok) {
-            // Handle specific error for new customers only voucher
+            // Handle specific error for new customers only
             if (voucherResponse.status === 400) {
                const errorData = await voucherResponse.json();
                if (errorData.message === "Voucher chỉ áp dụng cho khách hàng mới") {
@@ -1452,75 +1418,15 @@ export default function CheckoutPage() {
 
          const voucher = await voucherResponse.json();
 
-         // Perform validation checks
+         // Use the async validation function
+         const validationResult = await isVoucherValid(voucher, subTotal, userId, userInfo);
 
-         // 1. Check if voucher is active
-         if (!voucher.isActive || voucher.isDeleted) {
-            showToastMessage('Mã giảm giá không có hiệu lực', 'error');
+         if (!validationResult.valid) {
+            showToastMessage(validationResult.message || 'Mã giảm giá không hợp lệ', 'error');
             return;
          }
 
-         // 2. Check date validity
-         const now = new Date();
-         const startDate = new Date(voucher.start_date);
-         const endDate = new Date(voucher.end_date);
-
-         if (now < startDate) {
-            showToastMessage(
-               `Mã giảm giá sẽ có hiệu lực từ ngày ${startDate.toLocaleDateString('vi-VN')}`,
-               'error'
-            );
-            return;
-         }
-
-         if (now > endDate) {
-            showToastMessage('Mã giảm giá đã hết hạn', 'error');
-            return;
-         }
-
-         // 3. Check minimum order value
-         const minOrderValue = parseFloat(voucher.min_order_value);
-         if (minOrderValue > subTotal) {
-            showToastMessage(
-               `Đơn hàng tối thiểu ${formatPrice(minOrderValue)} để áp dụng mã này. 
-            Bạn cần thêm ${formatPrice(minOrderValue - subTotal)} nữa.`,
-               'error'
-            );
-            return;
-         }
-
-         // 4. Check if new customers only
-         if (voucher.new_customers_only) {
-            const hasPlacedOrders = checkIfUserHasPreviousOrders(userId);
-
-            if (hasPlacedOrders) {
-               showToastMessage('Mã giảm giá này chỉ áp dụng cho đơn hàng đầu tiên', 'error');
-               return;
-            }
-         }
-
-         // 5. Check usage limits per customer
-         if (voucher.usage_per_customer > 0) {
-            const usageCount = getVoucherUsageCount(voucher.id, userId);
-            if (usageCount >= voucher.usage_per_customer) {
-               showToastMessage(
-                  `Bạn đã sử dụng hết số lần cho phép với mã giảm giá này (tối đa ${voucher.usage_per_customer} lần)`,
-                  'error'
-               );
-               return;
-            }
-         }
-
-         // 6. Check global usage limit
-         if (voucher.usage_limit > 0) {
-            const allUsersUsage = getTotalVoucherUsage(voucher.id);
-            if (allUsersUsage >= voucher.usage_limit) {
-               showToastMessage('Mã giảm giá đã hết lượt sử dụng', 'error');
-               return;
-            }
-         }
-
-         // If all checks passed, calculate the discount amount
+         // If valid, calculate and apply the discount as before
          const discountAmount = calculateDiscountAmount(voucher, subTotal);
 
          // Apply the voucher
@@ -1542,16 +1448,9 @@ export default function CheckoutPage() {
 
       } catch (error: unknown) {
          const errorMessage = error instanceof Error ? error.message : 'Không thể áp dụng mã giảm giá';
-
-         // Log the error for debugging
          console.error('Error applying voucher:', errorMessage);
-
-         // Show error in Toast
          showToastMessage(errorMessage, 'error');
-
-         // Also update error state for inline display (optional)
          setVoucherError(errorMessage);
-
          setAppliedVoucher(null);
          setDiscount(0);
          localStorage.removeItem('appliedVoucher');
@@ -1560,24 +1459,7 @@ export default function CheckoutPage() {
       }
    };
 
-   const getTotalVoucherUsage = (voucherId: number): number => {
-      try {
-         const history = getVoucherUsageHistory();
-         let totalUsage = 0;
-
-         // Sum up usage across all users
-         Object.keys(history).forEach(userId => {
-            if (history[userId][voucherId]) {
-               totalUsage += history[userId][voucherId];
-            }
-         });
-
-         return totalUsage;
-      } catch (error) {
-         console.error('Error getting total voucher usage:', error);
-         return 0;
-      }
-   };
+  
 
    // Hàm xóa voucher đã áp dụng
    const removeVoucher = () => {
@@ -1593,11 +1475,15 @@ export default function CheckoutPage() {
       try {
          setProcessingPayment(true);
 
+         // Tham số bổ sung cho guest users
+         const guestParams = (!userId || userId === 0) ? '&isGuest=true' : '';
+
          // Call API to create MOMO payment with orderId as query parameter
-         const momoResponse = await fetch(`${HOST}/api/payments/create?orderId=${orderId}`, {
+         const momoResponse = await fetch(`${HOST}/api/payments/create?orderId=${orderId}${guestParams}`, {
             method: 'GET',
             headers: {
-               Authorization: `Bearer ${localStorage.getItem('token') || ''}`,
+               // Chỉ thêm token cho người dùng đã đăng nhập
+               ...(userId && userId > 0 ? { Authorization: `Bearer ${localStorage.getItem('token') || ''}` } : {})
             },
          });
 
@@ -1608,31 +1494,37 @@ export default function CheckoutPage() {
          const momoData = await momoResponse.json();
 
          if (momoData.resultCode === 0 && momoData.payUrl) {
-            // Save order reference in localStorage to verify after payment
+            // Lưu ID đơn hàng vào localStorage để kiểm tra sau khi thanh toán
             localStorage.setItem('pendingOrderId', orderId);
 
-            // Redirect to MOMO payment page using payUrl instead of shortLink
+            // Lưu thông tin guest để xác thực sau khi thanh toán
+            if (!userId || userId === 0) {
+               localStorage.setItem('pendingGuestOrder', 'true');
+            }
+
+            // Chuyển đến trang thanh toán MOMO
             window.location.href = momoData.payUrl;
          } else {
             throw new Error(momoData.message || 'Không thể tạo thanh toán MoMo');
          }
       } catch (error: unknown) {
+         // Xử lý lỗi - giữ nguyên code hiện tại
          if (error instanceof Error) {
             console.error('Error creating MOMO payment:', error.message);
          } else {
             console.error('Error creating MOMO payment:', error);
          }
-         if (error instanceof Error) {
-            showToastMessage(error.message || 'Không thể tạo thanh toán MoMo', 'error');
-         } else {
-            showToastMessage('Không thể tạo thanh toán MoMo', 'error');
-         }
+
+         showToastMessage(
+            error instanceof Error ? error.message : 'Không thể tạo thanh toán MoMo',
+            'error'
+         );
+
          setProcessingPayment(false);
       }
    };
 
-   // Update the handlePlaceOrder function to set the appropriate status for COD orders
-
+   // Cập nhật hàm handlePlaceOrder
    const handlePlaceOrder = async () => {
       // Nếu chưa xác nhận, hiện modal xác nhận
       if (!confirmOrder) {
@@ -1643,40 +1535,50 @@ export default function CheckoutPage() {
       // Reset trạng thái xác nhận
       setConfirmOrder(false);
 
-      // Tiếp tục code đặt hàng hiện tại của bạn...
-      if (!selectedAddressId && !showAddAddressForm) {
-         showToastMessage('Vui lòng chọn địa chỉ giao hàng', 'error');
-         return;
-      }
-
-      if (showAddAddressForm) {
-         showToastMessage('Vui lòng lưu địa chỉ giao hàng trước khi đặt hàng', 'error');
-         return;
-      }
-
       try {
          setLoading(true);
 
-         // Lấy thông tin địa chỉ đã chọn
-         const selectedAddress = addresses.find((addr) => addr.id === selectedAddressId);
-         if (!selectedAddress) {
-            throw new Error('Không tìm thấy địa chỉ giao hàng');
+         // Lấy thông tin địa chỉ dựa trên loại user
+         let addressToUse;
+
+         if (!userId || userId === 0) {
+            // Guest user - lấy địa chỉ từ localStorage hoặc form hiện tại
+            if (showAddAddressForm) {
+               // Kiểm tra lại nếu form đang mở
+               if (!newAddress.fullName || !newAddress.phone || !newAddress.province ||
+                  !newAddress.district || !newAddress.ward || !newAddress.streetAddress) {
+                  showToastMessage('Vui lòng điền đầy đủ thông tin địa chỉ giao hàng', 'error');
+                  setLoading(false);
+                  return;
+               }
+
+               addressToUse = newAddress;
+            } else {
+               // Lấy từ localStorage
+               const savedGuestAddress = localStorage.getItem('guestAddress');
+               if (!savedGuestAddress) {
+                  throw new Error('Không tìm thấy địa chỉ giao hàng');
+               }
+               addressToUse = JSON.parse(savedGuestAddress);
+            }
+         } else {
+            // Registered user - dùng logic hiện tại
+            addressToUse = addresses.find((addr) => addr.id === selectedAddressId);
+            if (!addressToUse) {
+               throw new Error('Không tìm thấy địa chỉ giao hàng');
+            }
          }
 
-         // Format địa chỉ thành chuỗi theo định dạng mới
-         const formattedAddress = `${selectedAddress.streetAddress}, ${selectedAddress.ward}, ${selectedAddress.district}, ${selectedAddress.province}`;
+         // Format địa chỉ thành chuỗi
+         const formattedAddress = `${addressToUse.streetAddress}, ${addressToUse.ward}, ${addressToUse.district}, ${addressToUse.province}`;
 
-         // Chuyển đổi định dạng item theo yêu cầu API mới
+         // Chuẩn bị dữ liệu đơn hàng
          const formattedItems = cartItems.map((item) => {
-            // Đảm bảo product_detail_id là số
             let productDetailId = Number(item.detailId);
-
-            // Kiểm tra nếu chuyển đổi không thành công (NaN)
             if (isNaN(productDetailId)) {
                console.error(`Invalid product_detail_id: ${item.detailId}`);
                productDetailId = 0;
             }
-
             return {
                quantity: item.quantity,
                product_detail_id: productDetailId,
@@ -1685,106 +1587,115 @@ export default function CheckoutPage() {
 
          // Tạo dữ liệu đơn hàng mới
          const newOrderData = {
-            user_id: Number(userId),
+            user_id: userId || 0, // Đảm bảo guest users có user_id = 0
             address: formattedAddress,
+            recipient_name: addressToUse.fullName,
+            recipient_phone: addressToUse.phone,
             voucher_code: appliedVoucher?.code || undefined,
             item: formattedItems,
-            // Remove payment_method from initial order creation to use the update endpoint later
-            // instead set default status for COD
-            status: paymentMethod === 'COD' ? 'Đã đặt hàng' : undefined,
-            // Thêm thông tin hóa đơn nếu cần
-            invoice: needInvoice
-               ? {
-                  type: invoiceInfo.type,
-                  name: invoiceInfo.name,
-                  address: invoiceInfo.address,
-                  email: invoiceInfo.email,
-                  companyName:
-                     invoiceInfo.type === 'company' ? invoiceInfo.companyName : undefined,
-                  taxCode: invoiceInfo.type === 'company' ? invoiceInfo.taxCode : undefined,
-               }
-               : undefined,
+            status: paymentMethod === 'COD' ? 'Đã đặt hàng' : 'Chờ thanh toán',
+            payment_method: paymentMethod,
+            is_guest: !userId || userId === 0 // Flag cho guest users
          };
 
          console.log('Đang tạo đơn hàng mới:', newOrderData);
 
-         // Gọi API để tạo đơn hàng mới
+         // Gọi API để tạo đơn hàng
          const response = await fetch(`${HOST}/api/orders`, {
             method: 'POST',
             headers: {
                'Content-Type': 'application/json',
-               Authorization: `Bearer ${localStorage.getItem('token') || ''}`,
+               // Chỉ thêm token cho người dùng đã đăng nhập
+               ...(userId && userId > 0 ? { Authorization: `Bearer ${localStorage.getItem('token') || ''}` } : {})
             },
             body: JSON.stringify(newOrderData),
          });
 
-         if (!response) {
-            throw new Error('Không thể kết nối đến máy chủ.');
+         if (!response || !response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Không thể tạo đơn hàng: ${errorText}`);
          }
 
-         if (response.ok) {
-            const newOrder = await response.json();
-            console.log('Đơn hàng mới đã được tạo:', newOrder);
+         const newOrder = await response.json();
+         console.log('Đơn hàng mới đã được tạo:', newOrder);
 
-            // Now update the payment method
-            try {
-               await updateOrderPaymentMethod(newOrder.id, paymentMethod);
-               console.log(`Đã cập nhật phương thức thanh toán: ${paymentMethod}`);
-            } catch (error) {
-               console.error('Lỗi khi cập nhật phương thức thanh toán:', error);
-            }
+         // Now update the payment method
+         try {
+            await updateOrderPaymentMethod(newOrder.id, paymentMethod);
+            console.log(`Đã cập nhật phương thức thanh toán: ${paymentMethod}`);
+         } catch (error) {
+            console.error('Lỗi khi cập nhật phương thức thanh toán:', error);
+         }
 
-            // Thêm: Nếu đặt hàng thành công và có sử dụng voucher, cập nhật lịch sử sử dụng
-            if (appliedVoucher && userId) {
-               saveVoucherUsage(appliedVoucher.id, userId);
-            }
+         // Lưu lịch sử sử dụng voucher - chỉ cho người dùng đã đăng nhập
+         if (appliedVoucher && userId && userId > 0) {
+            saveVoucherUsage(appliedVoucher.id, userId);
+         }
 
-            // Mark user as no longer a first-time buyer
-            if (userId) {
-               localStorage.setItem(`user_${userId}_isFirstTimeBuyer`, "false");
+         // Cập nhật trạng thái cho người dùng đã đăng nhập
+         if (userId && userId > 0) {
+            localStorage.setItem(`user_${userId}_isFirstTimeBuyer`, "false");
 
-               // Also update order history if it exists
-               const orderHistoryKey = `user_${userId}_orderHistory`;
-               const existingHistory = localStorage.getItem(orderHistoryKey);
-               const orderHistory = existingHistory ? JSON.parse(existingHistory) : [];
-               orderHistory.push({
-                  id: newOrder.id,
-                  date: new Date().toISOString(),
-                  total: totalPrice,
-                  status: paymentMethod === 'COD' ? 'Đã đặt hàng' : 'Chờ thanh toán'
-               });
-               localStorage.setItem(orderHistoryKey, JSON.stringify(orderHistory));
-            }
+            // Cập nhật lịch sử đặt hàng
+            const orderHistoryKey = `user_${userId}_orderHistory`;
+            const existingHistory = localStorage.getItem(orderHistoryKey);
+            const orderHistory = existingHistory ? JSON.parse(existingHistory) : [];
+            orderHistory.push({
+               id: newOrder.id,
+               date: new Date().toISOString(),
+               total: totalPrice,
+               status: paymentMethod === 'COD' ? 'Đã đặt hàng' : 'Chờ thanh toán'
+            });
+            localStorage.setItem(orderHistoryKey, JSON.stringify(orderHistory));
+         }
 
-            // Xóa giỏ hàng và voucher sau khi đặt hàng thành công
-            localStorage.setItem('cart', '[]');
-            localStorage.removeItem('appliedVoucher');
+         // Lưu thông tin đơn hàng cho khách không đăng nhập
+         if (!userId || userId === 0) {
+            const guestOrdersKey = 'guestOrders';
+            const existingOrders = localStorage.getItem(guestOrdersKey);
+            const guestOrders = existingOrders ? JSON.parse(existingOrders) : [];
+            guestOrders.push({
+               id: newOrder.id,
+               date: new Date().toISOString(),
+               total: totalPrice,
+               status: paymentMethod === 'COD' ? 'Đã đặt hàng' : 'Chờ thanh toán',
+               recipientName: addressToUse.fullName,
+               recipientPhone: addressToUse.phone
+            });
+            localStorage.setItem(guestOrdersKey, JSON.stringify(guestOrders));
+         }
 
-            // Reset cart badge to 0
-            updateCartBadge(0);
-            localStorage.removeItem('cartBadge');
+         // Xóa giỏ hàng và voucher sau khi đặt hàng thành công
+         localStorage.setItem('cart', '[]');
+         localStorage.removeItem('appliedVoucher');
+         localStorage.removeItem('isGuestCheckout');
+         localStorage.removeItem('guestUserId');
 
-            if (paymentMethod === 'MOMO') {
-               // Nếu chọn thanh toán MOMO, chuyển hướng tới trang thanh toán
-               await handleMomoPayment(newOrder.id.toString());
-            } else {
-               // Nếu là các phương thức khác, hiển thị thông báo và chuyển hướng như cũ
-               const successMessage =
-                  paymentMethod === 'COD'
-                     ? 'Đặt hàng thành công! Đơn hàng của bạn đang được xử lý.'
-                     : 'Đặt hàng thành công!';
+         // Reset cart badge to 0
+         updateCartBadge(0);
+         localStorage.removeItem('cartBadge');
 
-               showToastMessage(successMessage, 'success');
-
-               // Chuyển hướng đến trang chi tiết đơn hàng
-               setTimeout(() => {
-                  router.push(`/user/order`);
-               }, 2000);
-            }
+         if (paymentMethod === 'MOMO') {
+            // Xử lý thanh toán MOMO
+            await handleMomoPayment(newOrder.id.toString());
          } else {
-            // Handle error responses as before
-            // ...existing error handling code...
+            // Xử lý các phương thức khác
+            const successMessage = paymentMethod === 'COD'
+               ? 'Đặt hàng thành công! Đơn hàng của bạn đang được xử lý.'
+               : 'Đặt hàng thành công!';
+
+            showToastMessage(successMessage, 'success');
+
+            // Chuyển hướng đến trang phù hợp
+            setTimeout(() => {
+               if (userId && userId > 0) {
+                  router.push(`/user/order`);
+               } else {
+                  router.push(`/user/order-success?orderId=${newOrder.id}`);
+               }
+            }, 2000);
          }
+
       } catch (error: unknown) {
          console.error('Error creating new order:', error);
          if (error instanceof Error) {
@@ -1793,7 +1704,6 @@ export default function CheckoutPage() {
             showToastMessage('Đặt hàng thất bại. Vui lòng thử lại', 'error');
          }
       } finally {
-         // Only set loading to false if we're not processing MOMO payment
          if (paymentMethod !== 'MOMO') {
             setLoading(false);
          }
@@ -1802,25 +1712,61 @@ export default function CheckoutPage() {
 
    // Thêm hàm này trước hàm handlePlaceOrder
    const showOrderConfirmation = () => {
-      if (!selectedAddressId && !showAddAddressForm) {
-         showToastMessage('Vui lòng chọn địa chỉ giao hàng', 'error');
-         return;
-      }
+      // Xác định địa chỉ dựa trên loại user
+      let selectedAddress;
+      let formattedAddress;
 
-      if (showAddAddressForm) {
-         showToastMessage('Vui lòng lưu địa chỉ giao hàng trước khi đặt hàng', 'error');
-         return;
-      }
+      if (!userId || userId === 0) {
+         // Guest user - lấy địa chỉ từ localStorage hoặc form mới
+         if (showAddAddressForm) {
+            // Validate địa chỉ nếu form đang hiển thị
+            if (!newAddress.fullName || !newAddress.phone || !newAddress.province ||
+               !newAddress.district || !newAddress.ward || !newAddress.streetAddress) {
+               showToastMessage('Vui lòng điền đầy đủ thông tin địa chỉ giao hàng', 'error');
+               return;
+            }
 
-      // Lấy thông tin địa chỉ đã chọn
-      const selectedAddress = addresses.find((addr) => addr.id === selectedAddressId);
-      if (!selectedAddress) {
-         showToastMessage('Không tìm thấy địa chỉ giao hàng', 'error');
-         return;
-      }
+            // Validate số điện thoại
+            const phoneRegex = /([3|5|7|8|9])+([0-9]{8})\b/;
+            if (!phoneRegex.test(String(newAddress.phone))) {
+               showToastMessage('Số điện thoại không hợp lệ', 'error');
+               return;
+            }
 
-      // Format địa chỉ thành chuỗi theo định dạng mới
-      const formattedAddress = `${selectedAddress.streetAddress}, ${selectedAddress.ward}, ${selectedAddress.district}, ${selectedAddress.province}`;
+            selectedAddress = newAddress;
+         } else {
+            // Lấy địa chỉ đã lưu trong localStorage
+            const savedGuestAddress = localStorage.getItem('guestAddress');
+            if (!savedGuestAddress) {
+               showToastMessage('Không tìm thấy địa chỉ giao hàng', 'error');
+               return;
+            }
+
+            selectedAddress = JSON.parse(savedGuestAddress);
+         }
+
+         formattedAddress = `${selectedAddress.fullName}, ${selectedAddress.phone}, ${selectedAddress.streetAddress}, ${selectedAddress.ward}, ${selectedAddress.district}, ${selectedAddress.province}`;
+      } else {
+         // Registered user - dùng logic hiện tại
+         if (!selectedAddressId && !showAddAddressForm) {
+            showToastMessage('Vui lòng chọn địa chỉ giao hàng', 'error');
+            return;
+         }
+
+         if (showAddAddressForm) {
+            showToastMessage('Vui lòng lưu địa chỉ giao hàng trước khi đặt hàng', 'error');
+            return;
+         }
+
+         // Lấy thông tin địa chỉ đã chọn
+         selectedAddress = addresses.find((addr) => addr.id === selectedAddressId);
+         if (!selectedAddress) {
+            showToastMessage('Không tìm thấy địa chỉ giao hàng', 'error');
+            return;
+         }
+
+         formattedAddress = `${selectedAddress.fullName}, ${selectedAddress.phone}, ${selectedAddress.streetAddress}, ${selectedAddress.ward}, ${selectedAddress.district}, ${selectedAddress.province}`;
+      }
 
       // Chuẩn bị thông tin tóm tắt đơn hàng
       setOrderSummary({
@@ -2429,13 +2375,13 @@ export default function CheckoutPage() {
                                  placeholder='Nhập mã giảm giá'
                                  value={voucherCode}
                                  onChange={(e) => setVoucherCode(e.target.value)}
-                                 disabled={!!appliedVoucher || applyingVoucher}
-                                 className='flex-1 border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500'
+                                 disabled={!!appliedVoucher || applyingVoucher || (!userId || userId === 0)}
+                                 className='flex-1 border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 disabled:bg-gray-100'
                               />
                               {!appliedVoucher ? (
                                  <button
                                     onClick={applyVoucher}
-                                    disabled={applyingVoucher}
+                                    disabled={applyingVoucher || (!userId || userId === 0)}
                                     className='bg-orange-600 text-white px-3 py-2 rounded text-sm font-medium hover:bg-orange-700 disabled:bg-gray-400'
                                  >
                                     {applyingVoucher ? '...' : 'Áp dụng'}
@@ -2449,6 +2395,16 @@ export default function CheckoutPage() {
                                  </button>
                               )}
                            </div>
+
+                           {/* Hiển thị thông báo cho khách không đăng nhập */}
+                           {(!userId || userId === 0) && (
+                              <div className="text-gray-500 text-xs mt-1">
+                                 Đăng nhập để sử dụng mã giảm giá
+                                 <Link href="/user/signin?redirect=/user/checkout" className="text-orange-600 ml-1 hover:underline">
+                                    Đăng nhập
+                                 </Link>
+                              </div>
+                           )}
 
                            {/* Hiển thị lỗi */}
                            {voucherError && (
@@ -2507,6 +2463,14 @@ export default function CheckoutPage() {
                                        )}
                                     </p>
                                  </div>
+                              </div>
+                           )}
+
+                           {/* Add VIP badge and message for SVIP users */}
+                           {isUserSvip && (
+                              <div className="mt-2 mb-1 flex items-center">
+                                 <span className="bg-gradient-to-r from-amber-600 to-amber-400 text-white text-xs font-bold px-2 py-1 rounded-full">VIP</span>
+                                 <span className="text-xs text-gray-600 ml-2">Bạn có thể sử dụng các mã giảm giá đặc biệt cho khách VIP</span>
                               </div>
                            )}
                         </div>
@@ -2578,332 +2542,336 @@ export default function CheckoutPage() {
                   </div>
                </div>
             </div>
-         </div>
+         </div >
 
          <Footer />
 
          {/* Modal nhập thông tin hóa đơn */}
-         {showInvoiceModal && (
-            <div
-               className='fixed inset-0 z-50 overflow-y-auto'
-               aria-labelledby='invoice-modal-title'
-               role='dialog'
-               aria-modal='true'
-            >
-               <div className='flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0'>
-                  {/* Overlay */}
-                  <div
-                     className='fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity'
-                     onClick={() => setShowInvoiceModal(false)}
-                  ></div>
+         {
+            showInvoiceModal && (
+               <div
+                  className='fixed inset-0 z-50 overflow-y-auto'
+                  aria-labelledby='invoice-modal-title'
+                  role='dialog'
+                  aria-modal='true'
+               >
+                  <div className='flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0'>
+                     {/* Overlay */}
+                     <div
+                        className='fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity'
+                        onClick={() => setShowInvoiceModal(false)}
+                     ></div>
 
-                  {/* Modal */}
-                  <div className='inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full'>
-                     <div className='bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4'>
-                        <h3
-                           className='text-lg font-medium leading-6 text-gray-900 mb-4'
-                           id='invoice-modal-title'
-                        >
-                           Thông tin xuất hóa đơn
-                        </h3>
+                     {/* Modal */}
+                     <div className='inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full'>
+                        <div className='bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4'>
+                           <h3
+                              className='text-lg font-medium leading-6 text-gray-900 mb-4'
+                              id='invoice-modal-title'
+                           >
+                              Thông tin xuất hóa đơn
+                           </h3>
 
-                        <div className='space-y-4'>
-                           {/* Loại hóa đơn */}
-                           <div className='flex space-x-6'>
-                              <div className='flex items-center'>
-                                 <input
-                                    id='invoice-personal'
-                                    name='invoice-type'
-                                    type='radio'
-                                    checked={invoiceInfo.type === 'personal'}
-                                    onChange={() =>
-                                       setInvoiceInfo({ ...invoiceInfo, type: 'personal' })
-                                    }
-                                    className='h-4 w-4 text-orange-600 focus:ring-orange-500 border-gray-300'
-                                 />
-                                 <label
-                                    htmlFor='invoice-personal'
-                                    className='ml-2 block text-sm font-medium text-gray-700'
-                                 >
-                                    Cá nhân
-                                 </label>
-                              </div>
-
-                              <div className='flex items-center'>
-                                 <input
-                                    id='invoice-company'
-                                    name='invoice-type'
-                                    type='radio'
-                                    checked={invoiceInfo.type === 'company'}
-                                    onChange={() =>
-                                       setInvoiceInfo({ ...invoiceInfo, type: 'company' })
-                                    }
-                                    className='h-4 w-4 text-orange-600 focus:ring-orange-500 border-gray-300'
-                                 />
-                                 <label
-                                    htmlFor='invoice-company'
-                                    className='ml-2 block text-sm font-medium text-gray-700'
-                                 >
-                                    Công ty
-                                 </label>
-                              </div>
-                           </div>
-
-                           {/* Trường thông tin công ty nếu chọn loại hóa đơn công ty */}
-                           {invoiceInfo.type === 'company' && (
-                              <>
-                                 <div>
-                                    <label
-                                       htmlFor='company-name'
-                                       className='block text-sm font-medium text-gray-700'
-                                    >
-                                       Tên công ty <span className='text-red-500'>*</span>
-                                    </label>
+                           <div className='space-y-4'>
+                              {/* Loại hóa đơn */}
+                              <div className='flex space-x-6'>
+                                 <div className='flex items-center'>
                                     <input
-                                       type='text'
-                                       id='company-name'
-                                       value={invoiceInfo.companyName || ''}
-                                       onChange={(e) =>
-                                          setInvoiceInfo({
-                                             ...invoiceInfo,
-                                             companyName: e.target.value,
-                                          })
+                                       id='invoice-personal'
+                                       name='invoice-type'
+                                       type='radio'
+                                       checked={invoiceInfo.type === 'personal'}
+                                       onChange={() =>
+                                          setInvoiceInfo({ ...invoiceInfo, type: 'personal' })
                                        }
-                                       className='mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-orange-500 focus:border-orange-500 sm:text-sm'
+                                       className='h-4 w-4 text-orange-600 focus:ring-orange-500 border-gray-300'
                                     />
+                                    <label
+                                       htmlFor='invoice-personal'
+                                       className='ml-2 block text-sm font-medium text-gray-700'
+                                    >
+                                       Cá nhân
+                                    </label>
                                  </div>
 
-                                 <div>
-                                    <label
-                                       htmlFor='tax-code'
-                                       className='block text-sm font-medium text-gray-700'
-                                    >
-                                       Mã số thuế <span className='text-red-500'>*</span>
-                                    </label>
+                                 <div className='flex items-center'>
                                     <input
-                                       type='text'
-                                       id='tax-code'
-                                       value={invoiceInfo.taxCode || ''}
-                                       onChange={(e) =>
-                                          setInvoiceInfo({
-                                             ...invoiceInfo,
-                                             taxCode: e.target.value,
-                                          })
+                                       id='invoice-company'
+                                       name='invoice-type'
+                                       type='radio'
+                                       checked={invoiceInfo.type === 'company'}
+                                       onChange={() =>
+                                          setInvoiceInfo({ ...invoiceInfo, type: 'company' })
                                        }
-                                       className='mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-orange-500 focus:border-orange-500 sm:text-sm'
+                                       className='h-4 w-4 text-orange-600 focus:ring-orange-500 border-gray-300'
                                     />
+                                    <label
+                                       htmlFor='invoice-company'
+                                       className='ml-2 block text-sm font-medium text-gray-700'
+                                    >
+                                       Công ty
+                                    </label>
                                  </div>
-                              </>
-                           )}
+                              </div>
 
-                           {/* Các trường thông tin chung */}
-                           <div>
-                              <label
-                                 htmlFor='invoice-name'
-                                 className='block text-sm font-medium text-gray-700'
-                              >
-                                 Tên người nhận <span className='text-red-500'>*</span>
-                              </label>
-                              <input
-                                 type='text'
-                                 id='invoice-name'
-                                 value={invoiceInfo.name}
-                                 onChange={(e) =>
-                                    setInvoiceInfo({ ...invoiceInfo, name: e.target.value })
-                                 }
-                                 className='mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-orange-500 focus:border-orange-500 sm:text-sm'
-                              />
+                              {/* Trường thông tin công ty nếu chọn loại hóa đơn công ty */}
+                              {invoiceInfo.type === 'company' && (
+                                 <>
+                                    <div>
+                                       <label
+                                          htmlFor='company-name'
+                                          className='block text-sm font-medium text-gray-700'
+                                       >
+                                          Tên công ty <span className='text-red-500'>*</span>
+                                       </label>
+                                       <input
+                                          type='text'
+                                          id='company-name'
+                                          value={invoiceInfo.companyName || ''}
+                                          onChange={(e) =>
+                                             setInvoiceInfo({
+                                                ...invoiceInfo,
+                                                companyName: e.target.value,
+                                             })
+                                          }
+                                          className='mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-orange-500 focus:border-orange-500 sm:text-sm'
+                                       />
+                                    </div>
+
+                                    <div>
+                                       <label
+                                          htmlFor='tax-code'
+                                          className='block text-sm font-medium text-gray-700'
+                                       >
+                                          Mã số thuế <span className='text-red-500'>*</span>
+                                       </label>
+                                       <input
+                                          type='text'
+                                          id='tax-code'
+                                          value={invoiceInfo.taxCode || ''}
+                                          onChange={(e) =>
+                                             setInvoiceInfo({
+                                                ...invoiceInfo,
+                                                taxCode: e.target.value,
+                                             })
+                                          }
+                                          className='mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-orange-500 focus:border-orange-500 sm:text-sm'
+                                       />
+                                    </div>
+                                 </>
+                              )}
+
+                              {/* Các trường thông tin chung */}
+                              <div>
+                                 <label
+                                    htmlFor='invoice-name'
+                                    className='block text-sm font-medium text-gray-700'
+                                 >
+                                    Tên người nhận <span className='text-red-500'>*</span>
+                                 </label>
+                                 <input
+                                    type='text'
+                                    id='invoice-name'
+                                    value={invoiceInfo.name}
+                                    onChange={(e) =>
+                                       setInvoiceInfo({ ...invoiceInfo, name: e.target.value })
+                                    }
+                                    className='mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-orange-500 focus:border-orange-500 sm:text-sm'
+                                 />
+                              </div>
+
+                              <div>
+                                 <label
+                                    htmlFor='invoice-address'
+                                    className='block text-sm font-medium text-gray-700'
+                                 >
+                                    Địa chỉ <span className='text-red-500'>*</span>
+                                 </label>
+                                 <input
+                                    id='invoice-address'
+                                    value={invoiceInfo.address}
+                                    onChange={(e) =>
+                                       setInvoiceInfo({ ...invoiceInfo, address: e.target.value })
+                                    }
+                                    className='mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-orange-500 focus:border-orange-500 sm:text-sm'
+                                 />
+                              </div>
+
+                              <div>
+                                 <label
+                                    htmlFor='invoice-email'
+                                    className='block text-sm font-medium text-gray-700'
+                                 >
+                                    Email nhận hóa đơn <span className='text-red-500'>*</span>
+                                 </label>
+                                 <input
+                                    type='email'
+                                    id='invoice-email'
+                                    value={invoiceInfo.email}
+                                    onChange={(e) =>
+                                       setInvoiceInfo({ ...invoiceInfo, email: e.target.value })
+                                    }
+                                    className='mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-orange-500 focus:border-orange-500 sm:text-sm'
+                                 />
+                              </div>
+
+
                            </div>
-
-                           <div>
-                              <label
-                                 htmlFor='invoice-address'
-                                 className='block text-sm font-medium text-gray-700'
-                              >
-                                 Địa chỉ <span className='text-red-500'>*</span>
-                              </label>
-                              <input
-                                 id='invoice-address'
-                                 value={invoiceInfo.address}
-                                 onChange={(e) =>
-                                    setInvoiceInfo({ ...invoiceInfo, address: e.target.value })
-                                 }
-                                 className='mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-orange-500 focus:border-orange-500 sm:text-sm'
-                              />
-                           </div>
-
-                           <div>
-                              <label
-                                 htmlFor='invoice-email'
-                                 className='block text-sm font-medium text-gray-700'
-                              >
-                                 Email nhận hóa đơn <span className='text-red-500'>*</span>
-                              </label>
-                              <input
-                                 type='email'
-                                 id='invoice-email'
-                                 value={invoiceInfo.email}
-                                 onChange={(e) =>
-                                    setInvoiceInfo({ ...invoiceInfo, email: e.target.value })
-                                 }
-                                 className='mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-orange-500 focus:border-orange-500 sm:text-sm'
-                              />
-                           </div>
-
-
                         </div>
-                     </div>
 
-                     <div className='bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse'>
-                        <button
-                           type='button'
-                           className='w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-orange-600 text-base font-medium text-white hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 sm:ml-3 sm:w-auto sm:text-sm'
-                           onClick={() => {
-                              // Validate
-                              if (
-                                 invoiceInfo.type === 'company' &&
-                                 (!invoiceInfo.companyName || !invoiceInfo.taxCode)
-                              ) {
-                                 showToastMessage(
-                                    'Vui lòng nhập đầy đủ thông tin công ty và mã số thuế',
-                                    'error',
-                                 );
-                                 return;
-                              }
+                        <div className='bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse'>
+                           <button
+                              type='button'
+                              className='w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-orange-600 text-base font-medium text-white hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 sm:ml-3 sm:w-auto sm:text-sm'
+                              onClick={() => {
+                                 // Validate
+                                 if (
+                                    invoiceInfo.type === 'company' &&
+                                    (!invoiceInfo.companyName || !invoiceInfo.taxCode)
+                                 ) {
+                                    showToastMessage(
+                                       'Vui lòng nhập đầy đủ thông tin công ty và mã số thuế',
+                                       'error',
+                                    );
+                                    return;
+                                 }
 
-                              if (!invoiceInfo.name || !invoiceInfo.address || !invoiceInfo.email) {
-                                 showToastMessage(
-                                    'Vui lòng nhập đầy đủ thông tin xuất hóa đơn',
-                                    'error',
-                                 );
-                                 return;
-                              }
+                                 if (!invoiceInfo.name || !invoiceInfo.address || !invoiceInfo.email) {
+                                    showToastMessage(
+                                       'Vui lòng nhập đầy đủ thông tin xuất hóa đơn',
+                                       'error',
+                                    );
+                                    return;
+                                 }
 
-                              // Validate email
-                              const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-                              if (!emailRegex.test(invoiceInfo.email)) {
-                                 showToastMessage('Email không hợp lệ', 'error');
-                                 return;
-                              }
+                                 // Validate email
+                                 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                                 if (!emailRegex.test(invoiceInfo.email)) {
+                                    showToastMessage('Email không hợp lệ', 'error');
+                                    return;
+                                 }
 
-                              setShowInvoiceModal(false);
-                              showToastMessage('Đã lưu thông tin xuất hóa đơn', 'success');
-                           }}
-                        >
-                           Xác nhận
-                        </button>
-                        <button
-                           type='button'
-                           className='mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm'
-                           onClick={() => setShowInvoiceModal(false)}
-                        >
-                           Hủy
-                        </button>
+                                 setShowInvoiceModal(false);
+                                 showToastMessage('Đã lưu thông tin xuất hóa đơn', 'success');
+                              }}
+                           >
+                              Xác nhận
+                           </button>
+                           <button
+                              type='button'
+                              className='mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm'
+                              onClick={() => setShowInvoiceModal(false)}
+                           >
+                              Hủy
+                           </button>
+                        </div>
                      </div>
                   </div>
                </div>
-            </div>
-         )}
+            )
+         }
 
          {/* Modal xác nhận đặt hàng */}
-         {showConfirmOrderModal && (
-            <div
-               className="fixed inset-0 z-50 overflow-y-auto"
-               aria-labelledby="confirm-order-modal"
-               role="dialog"
-               aria-modal="true"
-            >
-               <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-                  {/* Overlay */}
-                  <div
-                     className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"
-                     onClick={() => setShowConfirmOrderModal(false)}
-                  ></div>
+         {
+            showConfirmOrderModal && (
+               <div
+                  className="fixed inset-0 z-50 overflow-y-auto"
+                  aria-labelledby="confirm-order-modal"
+                  role="dialog"
+                  aria-modal="true"
+               >
+                  <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+                     {/* Overlay */}
+                     <div
+                        className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"
+                        onClick={() => setShowConfirmOrderModal(false)}
+                     ></div>
 
-                  {/* Modal */}
-                  <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
-                     <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-                        <div className="sm:flex sm:items-start">
-                           <div className="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-orange-100 sm:mx-0 sm:h-10 sm:w-10">
-                              <svg className="h-6 w-6 text-orange-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                              </svg>
-                           </div>
-                           <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
-                              <h3 className="text-lg leading-6 font-medium text-gray-900" id="confirm-order-modal">
-                                 Xác nhận đặt hàng
-                              </h3>
-                              <div className="mt-4 space-y-4">
-                                 <div className="border-t border-b border-gray-200 py-4 space-y-3">
-                                    <p className="text-sm text-gray-700"><span className="font-medium">Địa chỉ:</span> {orderSummary.address}</p>
+                     {/* Modal */}
+                     <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+                        <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                           <div className="sm:flex sm:items-start">
+                              <div className="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-orange-100 sm:mx-0 sm:h-10 sm:w-10">
+                                 <svg className="h-6 w-6 text-orange-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                 </svg>
+                              </div>
+                              <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
+                                 <h3 className="text-lg leading-6 font-medium text-gray-900" id="confirm-order-modal">
+                                    Xác nhận đặt hàng
+                                 </h3>
+                                 <div className="mt-4 space-y-4">
+                                    <div className="border-t border-b border-gray-200 py-4 space-y-3">
+                                       <p className="text-sm text-gray-700"><span className="font-medium">Địa chỉ:</span> {orderSummary.address}</p>
 
-                                    <p className="text-sm text-gray-700">
-                                       <span className="font-medium">Phương thức thanh toán:</span> {
-                                          orderSummary.paymentMethod === 'COD' ? 'Thanh toán khi nhận hàng' :
-                                             orderSummary.paymentMethod === 'BANKING' ? 'Chuyển khoản ngân hàng' : 'MoMo'
-                                       }
-                                    </p>
+                                       <p className="text-sm text-gray-700">
+                                          <span className="font-medium">Phương thức thanh toán:</span> {
+                                             orderSummary.paymentMethod === 'COD' ? 'Thanh toán khi nhận hàng' :
+                                                orderSummary.paymentMethod === 'BANKING' ? 'Chuyển khoản ngân hàng' : 'MoMo'
+                                          }
+                                       </p>
 
-                                    {needInvoice && (
-                                       <div className="bg-orange-50 p-2 rounded">
-                                          <p className="text-sm text-orange-700 font-medium">Yêu cầu xuất hóa đơn cho đơn hàng này</p>
-                                       </div>
-                                    )}
-
-                                    <div className="pt-2 space-y-1">
-                                       <div className="flex justify-between text-sm">
-                                          <span className="text-gray-600">Tạm tính ({cartItems.length} sản phẩm):</span>
-                                          <span>{formatPrice(orderSummary.subtotal)}</span>
-                                       </div>
-                                       <div className="flex justify-between text-sm">
-                                          <span className="text-gray-600">Phí vận chuyển:</span>
-                                          <span>{formatPrice(orderSummary.shipping)}</span>
-                                       </div>
-                                       {orderSummary.discount > 0 && (
-                                          <div className="flex justify-between text-sm">
-                                             <span className="text-green-600">Giảm giá:</span>
-                                             <span className="text-green-600">-{formatPrice(orderSummary.discount)}</span>
+                                       {needInvoice && (
+                                          <div className="bg-orange-50 p-2 rounded">
+                                             <p className="text-sm text-orange-700 font-medium">Yêu cầu xuất hóa đơn cho đơn hàng này</p>
                                           </div>
                                        )}
-                                       <div className="flex justify-between pt-2 border-t border-gray-200 text-base font-medium">
-                                          <span>Tổng tiền:</span>
-                                          <span className="text-orange-600">{formatPrice(orderSummary.total)}</span>
+
+                                       <div className="pt-2 space-y-1">
+                                          <div className="flex justify-between text-sm">
+                                             <span className="text-gray-600">Tạm tính ({cartItems.length} sản phẩm):</span>
+                                             <span>{formatPrice(orderSummary.subtotal)}</span>
+                                          </div>
+                                          <div className="flex justify-between text-sm">
+                                             <span className="text-gray-600">Phí vận chuyển:</span>
+                                             <span>{formatPrice(orderSummary.shipping)}</span>
+                                          </div>
+                                          {orderSummary.discount > 0 && (
+                                             <div className="flex justify-between text-sm">
+                                                <span className="text-green-600">Giảm giá:</span>
+                                                <span className="text-green-600">-{formatPrice(orderSummary.discount)}</span>
+                                             </div>
+                                          )}
+                                          <div className="flex justify-between pt-2 border-t border-gray-200 text-base font-medium">
+                                             <span>Tổng tiền:</span>
+                                             <span className="text-orange-600">{formatPrice(orderSummary.total)}</span>
+                                          </div>
                                        </div>
                                     </div>
-                                 </div>
 
-                                 <div className="text-sm text-gray-500">
-                                    <p>Khi nhấn Xác nhận đặt hàng, bạn đồng ý tuân theo <Link href="/user/terms" className="text-orange-600 hover:underline">Điều khoản dịch vụ</Link> và <Link href="/user/return-policy" className="text-orange-600 hover:underline">Chính sách đổi trả</Link> của chúng tôi.</p>
+                                    <div className="text-sm text-gray-500">
+                                       <p>Khi nhấn Xác nhận đặt hàng, bạn đồng ý tuân theo <Link href="/user/terms" className="text-orange-600 hover:underline">Điều khoản dịch vụ</Link> và <Link href="/user/return-policy" className="text-orange-600 hover:underline">Chính sách đổi trả</Link> của chúng tôi.</p>
+                                    </div>
                                  </div>
                               </div>
                            </div>
                         </div>
-                     </div>
-                     <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
-                        <button
-                           type="button"
-                           className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-orange-600 text-base font-medium text-white hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 sm:ml-3 sm:w-auto sm:text-sm"
-                           onClick={() => {
-                              setShowConfirmOrderModal(false);
-                              setConfirmOrder(true);
-                              // Gọi hàm đặt hàng sau khi đã xác nhận
-                              setTimeout(() => handlePlaceOrder(), 0);
-                           }}
-                        >
-                           Xác nhận đặt hàng
-                        </button>
-                        <button
-                           type="button"
-                           className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
-                           onClick={() => setShowConfirmOrderModal(false)}
-                        >
-                           Hủy
-                        </button>
+                        <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                           <button
+                              type="button"
+                              className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-orange-600 text-base font-medium text-white hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 sm:ml-3 sm:w-auto sm:text-sm"
+                              onClick={() => {
+                                 setShowConfirmOrderModal(false);
+                                 setConfirmOrder(true);
+                                 // Gọi hàm đặt hàng sau khi đã xác nhận
+                                 setTimeout(() => handlePlaceOrder(), 0);
+                              }}
+                           >
+                              Xác nhận đặt hàng
+                           </button>
+                           <button
+                              type="button"
+                              className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
+                              onClick={() => setShowConfirmOrderModal(false)}
+                           >
+                              Hủy
+                           </button>
+                        </div>
                      </div>
                   </div>
                </div>
-            </div>
-         )}
-      </div>
+            )
+         }
+      </div >
    );
 }

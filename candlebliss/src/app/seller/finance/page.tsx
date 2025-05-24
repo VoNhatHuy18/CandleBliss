@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import Header from '@/app/components/seller/header/page';
 import Sidebar from '@/app/components/seller/menusidebar/page';
-import { useEffect, useState, SetStateAction, useCallback, useMemo } from 'react';
+import { useEffect, useState, SetStateAction, useCallback, useMemo, useRef } from 'react';
 import {
    Search,
    DollarSign,
@@ -91,7 +91,11 @@ interface NewCustomer {
 }
 
 export default function FinancePage() {
+   // Add this with your other refs at the top level of your component
 
+   const needsRefresh = useRef(true); // Move this here, outside of useEffect
+
+   // Your existing state declarations
    const [searchTerm, setSearchTerm] = useState('');
    const [currentTab, setCurrentTab] = useState('overview');
    const [animateStats, setAnimateStats] = useState(false);
@@ -106,7 +110,7 @@ export default function FinancePage() {
    });
    const [orders, setOrders] = useState<Order[]>([]);
    const [loading, setLoading] = useState(true);
-   const [ordersLoading, setOrdersLoading] = useState(true);
+   const [ordersLoading] = useState(true);
    const [chartData, setChartData] = useState<{
       labels: string[];
       datasets: { label: string; data: number[]; backgroundColor: string; borderColor: string; borderWidth: number; }[];
@@ -684,7 +688,7 @@ export default function FinancePage() {
    };
 
    // Thêm state để theo dõi lần fetch cuối cùng và cache dữ liệu
-   const [lastFetchTime, setLastFetchTime] = useState(0);
+   const [, setLastFetchTime] = useState(0);
    const [cachedHistoricalData, setCachedHistoricalData] = useState<Record<string, Array<{
       timeValue: number;
       totalRevenue: number;
@@ -721,55 +725,74 @@ export default function FinancePage() {
       // Kích hoạt animation khi component mount
       setAnimateStats(true);
       setupChartOptions();
+   }, []);  // Empty dependency array = run once
 
-      // Gộp fetch dữ liệu vào một hàm và thêm tham số để điều khiển loading state
+   // For data loading - use a ref to track if it needs to reload
+   useEffect(() => {
+      // Use the ref, but don't declare it here
+
       const loadData = async () => {
+         if (!needsRefresh.current && orders.length > 0) {
+            return;
+         }
+
+         needsRefresh.current = false;
          setLoading(true);
 
-         // Luôn fetch orders data - chỉ cần fetch một lần
-         await fetchOrdersData();
+         try {
+            if (orders.length === 0) {
+               const controller = new AbortController();
+               await fetchOrdersData(controller.signal);
+            }
 
-         // Handle different data fetching based on time filter
-         if (timeFilter === 'custom' && showDateRangePicker) {
-            // For custom date range, we'll fetch on button click instead
-            // So we don't need to do anything here
-         } else if (chartView === 'current') {
-            // Với chế độ xem hiện tại, fetch từ API thay vì tính từ orders
-            fetchStatisticsData();
-         } else {
-            // Với chế độ xem lịch sử, fetch dữ liệu lịch sử
-            fetchHistoricalData();
+            if (chartView === 'current') {
+               await fetchStatisticsData(null);
+            } else {
+               await fetchHistoricalData();
+            }
+
+            if (newCustomers.length === 0 && !newCustomersFetched) {
+               await fetchNewCustomers();
+            }
+         } catch (error) {
+            console.error("Error loading data:", error);
+         } finally {
+            setLoading(false);
          }
-
-         // Fetch new customers data nếu chưa có
-         if (newCustomers.length === 0) {
-            fetchNewCustomers();
-         }
-
-         setLoading(false);
       };
 
       loadData();
 
-   }, [chartView, timeFilter, timeValue, year]); // Thêm year vào dependencies
+      // Reset needsRefresh when key params change
+      return () => {
+         needsRefresh.current = true;
+      };
+   }, [chartView, timeFilter, timeValue, year]);
 
-   // Thay thế hàm fetchStatisticsData hiện tại bằng hàm này
-   const fetchStatisticsData = useCallback(async () => {
+   // Sửa hàm fetchStatisticsData để tránh fetch không cần thiết
+   const fetchStatisticsData = useCallback(async (signal?: AbortSignal | null) => {
+      // Tránh fetch nếu đang fetch dữ liệu khác
+      if (loading) return;
+
       try {
          setLoading(true);
 
          // Use different endpoint for custom date ranges
          let response;
+         const fetchOptions = signal ? { signal } : undefined;
+
          if (timeFilter === 'custom') {
             const formattedStartDate = startDate.toISOString().split('T')[0];
             const formattedEndDate = endDate.toISOString().split('T')[0];
             response = await fetch(
-               `${HOST}/api/orders/statistics/date-to-date?startDate=${formattedStartDate}&endDate=${formattedEndDate}`
+               `${HOST}/api/orders/statistics/date-to-date?startDate=${formattedStartDate}&endDate=${formattedEndDate}`,
+               fetchOptions
             );
          } else {
             // Use the regular endpoint for standard time filters
             response = await fetch(
-               `${HOST}/api/orders/statistics?timeFilter=${timeFilter}&timeValue=${timeValue}&year=${year}`
+               `${HOST}/api/orders/statistics?timeFilter=${timeFilter}&timeValue=${timeValue}&year=${year}`,
+               fetchOptions
             );
          }
 
@@ -799,27 +822,15 @@ export default function FinancePage() {
    }, [timeFilter, timeValue, year, startDate, endDate]);
 
    // Sửa hàm fetchOrdersData để tránh fetch trùng lặp
-   const fetchOrdersData = async () => {
-      const now = Date.now();
-      if (now - lastFetchTime < 60000 && orders.length > 0) {
-         // Nếu đã fetch trong vòng 1 phút gần đây và đã có dữ liệu, không fetch lại
-         return;
+   const fetchOrdersData = async (signal: AbortSignal) => {
+      // Sử dụng signal để cancel fetch khi cần thiết
+      const response = await fetch(`${HOST}/api/orders/all`, { signal });
+      if (!response.ok) {
+         throw new Error('Failed to fetch orders data');
       }
-
-      setOrdersLoading(true);
-      try {
-         const response = await fetch(`${HOST}/api/orders/all`);
-         if (!response.ok) {
-            throw new Error('Failed to fetch orders data');
-         }
-         const data = await response.json();
-         setOrders(data);
-         setLastFetchTime(now);
-      } catch (error) {
-         console.error('Error fetching orders data:', error);
-      } finally {
-         setOrdersLoading(false);
-      }
+      const data = await response.json();
+      setOrders(data);
+      setLastFetchTime(Date.now());
    };
 
    const fetchUserData = useCallback(async (orders: Order[]) => {
@@ -942,16 +953,13 @@ export default function FinancePage() {
       }
    }, [fetchedUserIds]);
 
-   useEffect(() => {
-      if (orders.length > 0) {
-         fetchUserData(orders);
-      }
-   }, [orders, fetchUserData]);
+   // Thêm một biến ref để theo dõi xem đã gọi chưa
+   const hasProcessedOrders = useRef(false);
 
-   // Add this useEffect to recalculate statistics when orders change
    useEffect(() => {
-      if (orders.length > 0) {
-         fetchStatisticsData();
+      if (orders.length > 0 && !hasProcessedOrders.current) {
+         hasProcessedOrders.current = true;
+         fetchStatisticsData(null);
       }
    }, [orders]);
 
@@ -1424,7 +1432,8 @@ export default function FinancePage() {
    };
 
 
-   const updateCurrentPeriodChart = (data = statsData) => {
+   // For updateCurrentPeriodChart, memoize it with useMemo
+   const updateCurrentPeriodChart = useCallback((data = statsData) => {
       if (!data) return;
 
       let timeLabel;
@@ -1469,7 +1478,8 @@ export default function FinancePage() {
             }
          ]
       });
-   };
+   }, [statsData, timeFilter, timeValue, year, startDate, endDate]);
+
    // Add this function for updating historical chart
    const updateHistoricalChart = (data?: Array<{
       timeValue: number;
@@ -1746,7 +1756,7 @@ export default function FinancePage() {
 
          // Khi chuyển sang tab hiện tại, gọi API để lấy dữ liệu cho kỳ hiện tại
          setTimeout(() => {
-            fetchStatisticsData();
+            fetchStatisticsData(null);
          }, 0);
       } else {
          // Khi chuyển sang tab lịch sử, fetch dữ liệu lịch sử
@@ -1837,6 +1847,60 @@ export default function FinancePage() {
          fetchProductsInfo();
       }
    }, [orders, fetchProductsInfo]);
+
+   const [userDataProcessed, setUserDataProcessed] = useState(false);
+   const [productsInfoProcessed, setProductsInfoProcessed] = useState(false);
+
+   useEffect(() => {
+      if (orders.length > 0 && !userDataProcessed) {
+         fetchUserData(orders);
+         setUserDataProcessed(true);
+      }
+   }, [orders, fetchUserData, userDataProcessed]);
+
+   useEffect(() => {
+      if (orders.length > 0 && !productsInfoProcessed) {
+         fetchProductsInfo();
+         setProductsInfoProcessed(true);
+      }
+   }, [orders, fetchProductsInfo, productsInfoProcessed]);
+   const productsProcessedRef = useRef(false);
+
+   useEffect(() => {
+      if (orders.length > 0 && !productsProcessedRef.current) {
+         productsProcessedRef.current = true;
+         fetchProductsInfo();
+      }
+   }, [orders.length, fetchProductsInfo]);
+
+   useEffect(() => {
+      if (Object.keys(productsInfo).length > 0 && orders.length > 0) {
+         analyzeProductGroups();
+      }
+   }, [productsInfo, orders.length, analyzeProductGroups]);
+
+   // Add this at the component top level
+   const prevPeriodFetchedRef = useRef(false);
+
+   // Replace with this
+   useEffect(() => {
+      if (statsData.totalRevenue !== 0 &&
+         chartView === 'current' &&
+         !prevPeriodFetchedRef.current) {
+         prevPeriodFetchedRef.current = true;
+         fetchPreviousPeriodData();
+      }
+   }, [statsData.totalRevenue, chartView, fetchPreviousPeriodData]);
+
+   // Reset the prevention flag when key inputs change
+   useEffect(() => {
+      prevPeriodFetchedRef.current = false;
+   }, [timeFilter, timeValue, year]);
+
+   // Dedicated effect for chart options
+   useEffect(() => {
+      setupChartOptions();
+   }, [chartView, timeFilter, timeValue, year]);
 
    return (
       <div className='flex h-screen bg-gray-50'>
@@ -2469,7 +2533,6 @@ export default function FinancePage() {
                         </section>
                      </>
                   )}
-
 
                   {/* Product Statistics Section - UPDATED */}
                   <section className='mb-8 bg-white p-6 rounded-xl shadow-sm'>

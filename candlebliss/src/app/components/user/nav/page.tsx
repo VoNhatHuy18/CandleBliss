@@ -321,11 +321,25 @@ function NavBarContent() {
 
                if (createCartResponse.ok) {
                   console.log('New cart created successfully');
+                  // Khởi tạo badge là 0 nếu tạo mới giỏ hàng
+                  updateCartBadge(0);
                } else {
                   console.error('Failed to create cart:', await createCartResponse.text());
                }
             } else {
-               console.log('User cart found');
+               // Nếu giỏ hàng tồn tại, cập nhật badge từ API
+               try {
+                  const cartData = await response.json();
+                  if (cartData && cartData.items) {
+                     const count = cartData.items.reduce(
+                        (total: number, item: CartItem) => total + (item.quantity || 0),
+                        0
+                     );
+                     updateCartBadge(count);
+                  }
+               } catch (err) {
+                  console.error('Error parsing cart data:', err);
+               }
             }
 
             router.push('/user/cart');
@@ -334,7 +348,9 @@ function NavBarContent() {
             router.push('/user/cart');
          }
       } else {
-         router.push('/user/signin?redirect=/user/cart');
+         // Cho người dùng chưa đăng nhập, truy cập trực tiếp trang giỏ hàng
+         // thay vì chuyển đến trang đăng nhập
+         router.push('/user/cart');
       }
    };
 
@@ -761,6 +777,48 @@ function NavBarContent() {
       }
    };
 
+   useEffect(() => {
+      // Đồng bộ localCartBadge từ localStorage khi component mount
+      const syncBadgeFromLocalStorage = () => {
+         // Nếu người dùng đã đăng nhập, đã xử lý ở useEffect khác
+         if (isLoggedIn) return;
+
+         // Cho người dùng chưa đăng nhập, đọc giỏ hàng từ localStorage
+         try {
+            const localCart = JSON.parse(localStorage.getItem('cart') || '[]');
+            if (localCart.length > 0) {
+               const localCount = localCart.reduce(
+                  (total: number, item: { quantity?: number }) => total + (item.quantity || 0),
+                  0
+               );
+               setLocalCartBadge(localCount);
+               localStorage.setItem('cartBadge', localCount.toString());
+            } else {
+               setLocalCartBadge(0);
+               localStorage.removeItem('cartBadge');
+            }
+         } catch (error) {
+            console.error('Error syncing cart badge from localStorage:', error);
+            setLocalCartBadge(0);
+         }
+      };
+
+      // Gọi ngay khi component mount
+      syncBadgeFromLocalStorage();
+
+      // Cũng lắng nghe sự kiện storage để cập nhật khi localStorage thay đổi từ tab khác
+      const handleStorageChange = (event: StorageEvent) => {
+         if (event.key === 'cart') {
+            syncBadgeFromLocalStorage();
+         }
+      };
+
+      window.addEventListener('storage', handleStorageChange);
+      return () => {
+         window.removeEventListener('storage', handleStorageChange);
+      };
+   }, [isLoggedIn, setLocalCartBadge]);
+
    return (
       <>
          {/* This is where we'll use the Suspense component to handle searchParams */}
@@ -793,14 +851,12 @@ function NavBarContent() {
                </button>
                <button onClick={handleCartClick} className='text-[#553C26] relative'>
                   <ShoppingBagIcon className='size-5' />
-                  {isLoggedIn && (
-                     // Đơn giản hóa điều kiện hiển thị, ưu tiên hiển thị badge sản phẩm chi tiết, nếu không có thì hiển thị badge tổng
-                     <span className='absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center'>
-                        {currentProductDetailId && getProductDetailCount(currentProductDetailId) > 0
-                           ? getProductDetailCount(currentProductDetailId)
-                           : localCartBadge > 0 ? localCartBadge : cartItemCount > 0 ? cartItemCount : null}
-                     </span>
-                  )}
+                  {/* Hiển thị badge cho cả người dùng đã đăng nhập và chưa đăng nhập */}
+                  <span className='absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center'>
+                     {currentProductDetailId && getProductDetailCount(currentProductDetailId) > 0
+                        ? getProductDetailCount(currentProductDetailId)
+                        : localCartBadge > 0 ? localCartBadge : cartItemCount > 0 ? cartItemCount : null}
+                  </span>
                </button>
                <button onClick={toggleMobileMenu} className='text-[#553C26]'>
                   {mobileMenuOpen ? (
@@ -1013,14 +1069,12 @@ function NavBarContent() {
                </div>
                <button onClick={handleCartClick} className='text-[#553C26] relative'>
                   <ShoppingBagIcon className='size-5' />
-                  {isLoggedIn && (
-                     // Đơn giản hóa điều kiện hiển thị, ưu tiên hiển thị badge sản phẩm chi tiết, nếu không có thì hiển thị badge tổng
-                     <span className='absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center'>
-                        {currentProductDetailId && getProductDetailCount(currentProductDetailId) > 0
-                           ? getProductDetailCount(currentProductDetailId)
-                           : localCartBadge > 0 ? localCartBadge : cartItemCount > 0 ? cartItemCount : null}
-                     </span>
-                  )}
+                  {/* Hiển thị badge cho cả người dùng đã đăng nhập và chưa đăng nhập */}
+                  <span className='absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center'>
+                     {currentProductDetailId && getProductDetailCount(currentProductDetailId) > 0
+                        ? getProductDetailCount(currentProductDetailId)
+                        : localCartBadge > 0 ? localCartBadge : cartItemCount > 0 ? cartItemCount : null}
+                  </span>
                </button>
 
                <div className='relative'>

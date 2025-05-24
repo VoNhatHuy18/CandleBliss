@@ -171,11 +171,19 @@ export default function CartPage() {
 
    // Then declare syncCartWithApi
    const syncCartWithApi = useCallback(async () => {
-      if (!userId || orderCompleted) return;
+      // Get either real userId or guest ID
 
       try {
          setSyncing(true);
          setSyncMessage('Đang đồng bộ giỏ hàng...');
+
+         // For guests, we only use local storage cart
+         if (!userId) {
+            // Skip API interaction and just use local cart
+            setSyncing(false);
+            setSyncMessage('');
+            return;
+         }
 
          // Fetch user's cart from API
          let response;
@@ -561,18 +569,39 @@ export default function CartPage() {
          return;
       }
 
+      // Check if any items are out of stock
+      const outOfStockItems = cartItems.filter(item => {
+         const productDetail = item.detailId ? productDetails[item.detailId] : undefined;
+         return productDetail && productDetail.stock <= 0;
+      });
+
+      if (outOfStockItems.length > 0) {
+         alert(`Một số sản phẩm trong giỏ hàng của bạn đã hết hàng. Vui lòng xóa các sản phẩm này trước khi tiếp tục.`);
+         return;
+      }
+
       // Check for both userId and token
       const token = localStorage.getItem('token');
       const storedUserId = localStorage.getItem('userId');
 
-      console.log('Checkout initiated', { token: !!token, userId: storedUserId });
+      console.log('Checkout initiated', { token: !!token, userId: storedUserId || 0 });
 
+      // New behavior: Allow guest checkout with userId = 0
       if (!storedUserId || !token) {
-         // Redirect to login page with return URL
-         router.push('/user/signin?redirect=/user/cart');
+         // Save cart to localStorage before redirecting
+         localStorage.setItem('cart', JSON.stringify(cartItems));
+
+
+         // Set a flag to indicate this is a guest checkout with userId = 0
+         localStorage.setItem('isGuestCheckout', 'true');
+         localStorage.setItem('guestUserId', '0'); // Explicitly store guest userId as 0
+
+         // Redirect directly to checkout page
+         router.push('/user/checkout');
          return;
       }
 
+      // Existing flow for logged-in users
       // If no API cart but user is logged in, create one
       if (!apiCart && storedUserId) {
          try {
@@ -631,6 +660,7 @@ export default function CartPage() {
          router.push('/user/checkout');
       }
    };
+
 
    if (loading) {
       return (
@@ -928,15 +958,17 @@ export default function CartPage() {
                            onClick={handleCheckout}
                            disabled={syncing}
                         >
-                           {syncing ? 'Đang xử lý...' : 'Tiến hành đặt hàng'}
+                           {syncing ? 'Đang xử lý...' : userId ? 'Tiến hành đặt hàng' : 'Đặt hàng không cần đăng nhập'}
                         </button>
 
-                        <Link
-                           href='/user/products'
-                           className='block text-center mt-4 text-orange-700 hover:underline'
-                        >
-                           Tiếp tục mua sắm
-                        </Link>
+                        {!userId && (
+                           <div className="mt-3 text-center text-sm text-gray-600">
+                              <p>Hoặc</p>
+                              <Link href='/user/signin?redirect=/user/cart' className="text-orange-700 hover:underline font-medium">
+                                 Đăng nhập để đặt hàng
+                              </Link>
+                           </div>
+                        )}
                      </div>
                   </div>
                </div>

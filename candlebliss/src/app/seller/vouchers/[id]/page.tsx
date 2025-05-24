@@ -32,6 +32,11 @@ interface Voucher {
    description: string;
    applicable_products: string;
    isActive: boolean;
+   // Thêm hai trường mới
+   new_customers_only?: boolean;
+   is_svip_only?: boolean;
+   usage_per_customer?: number;
+   max_voucher_amount?: number;
 }
 
 export default function VoucherDetail() {
@@ -610,6 +615,34 @@ export default function VoucherDetail() {
                               readOnly
                            />
                         </div>
+
+                        <div className='mb-4'>
+                           <label className='text-sm font-medium text-gray-700 mb-1 flex items-center'>
+                              <FiUsers className='mr-1 text-amber-600' />
+                              Đối tượng khách hàng:
+                           </label>
+                           <div className='flex flex-wrap gap-2 mt-2'>
+                              <div className={`px-3 py-1 rounded-full text-sm ${voucher.new_customers_only ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500'}`}>
+                                 {voucher.new_customers_only ? 'Khách hàng mới ✓' : 'Khách hàng mới ✗'}
+                              </div>
+                              <div className={`px-3 py-1 rounded-full text-sm ${voucher.is_svip_only ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-500'}`}>
+                                 {voucher.is_svip_only ? 'Khách hàng VIP ✓' : 'Khách hàng VIP ✗'}
+                              </div>
+                           </div>
+                        </div>
+
+                        <div className='mb-4'>
+                           <label className='text-sm font-medium text-gray-700 mb-1 flex items-center'>
+                              <FiUsers className='mr-1 text-amber-600' />
+                              Số lần sử dụng cho mỗi khách:
+                           </label>
+                           <input
+                              type='text'
+                              value={voucher.usage_per_customer || 1}
+                              className='block w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm'
+                              readOnly
+                           />
+                        </div>
                      </div>
 
                      <div className='w-full md:w-1/3'>
@@ -698,8 +731,17 @@ export default function VoucherDetail() {
                                     <FiUsers className='mr-1 text-amber-500' />
                                     <span className='font-medium'>Lượt sử dụng:</span>{' '}
                                     <span className='ml-1'>
-
                                        {voucher.usage_limit === null ? '∞' : voucher.usage_limit}
+                                    </span>
+                                 </div>
+                                 {/* Thêm đối tượng khách hàng */}
+                                 <div className='mb-2 flex items-center'>
+                                    <FiUsers className='mr-1 text-amber-500' />
+                                    <span className='font-medium'>Đối tượng:</span>{' '}
+                                    <span className='ml-1'>
+                                       {voucher.is_svip_only ? 'Khách hàng VIP' :
+                                          voucher.new_customers_only ? 'Khách hàng mới' :
+                                             'Tất cả khách hàng'}
                                     </span>
                                  </div>
                                  <div className='flex items-center'>
