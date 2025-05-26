@@ -22,7 +22,10 @@ interface Voucher {
     new_customers_only: boolean;
     isActive: boolean;
     applicable_categories: string | null;
+    is_svip_only?: boolean; // Add SVIP flag
 }
+
+
 
 export default function VouchersPage() {
     const [searchTerm, setSearchTerm] = useState('');
@@ -33,6 +36,58 @@ export default function VouchersPage() {
     const [filterOptions, setFilterOptions] = useState({
         status: 'active', // Mặc định chỉ hiển thị voucher còn hiệu lực
     });
+    const [activeTab, setActiveTab] = useState<'all' | 'vip'>('all');
+    const [isSvip, setIsSvip] = useState(false);
+
+    // Check user SVIP status
+    useEffect(() => {
+        const checkSvipStatus = async () => {
+            const userId = localStorage.getItem('userId');
+            if (!userId) return;
+
+            try {
+                // First check if we already know the SVIP status from localStorage
+                const svipStatusKey = `user_${userId}_svip_status`;
+                const cachedStatus = localStorage.getItem(svipStatusKey);
+
+                if (cachedStatus) {
+                    setIsSvip(cachedStatus === 'true');
+                    return;
+                }
+
+                // If not in localStorage, check via API
+                const token = localStorage.getItem('token');
+                if (!token) return;
+
+                const response = await fetch(`${HOST}/api/orders?user_id=${userId}`, {
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                    },
+                });
+
+                if (!response.ok) {
+                    console.error('Error fetching user orders:', response.status);
+                    return;
+                }
+
+                const orders = await response.json();
+
+                // Check if user has 20 or more orders
+                const userIsSvip = Array.isArray(orders) && orders.length >= 20;
+                setIsSvip(userIsSvip);
+
+                // Cache the result in localStorage for 24 hours
+                localStorage.setItem(svipStatusKey, userIsSvip.toString());
+                setTimeout(() => {
+                    localStorage.removeItem(svipStatusKey);
+                }, 24 * 60 * 60 * 1000); // 24 hours expiry
+            } catch (error) {
+                console.error('Error checking SVIP status:', error);
+            }
+        };
+
+        checkSvipStatus();
+    }, []);
 
     // Fetch vouchers when component mounts
     useEffect(() => {
@@ -82,10 +137,16 @@ export default function VouchersPage() {
         return 'Còn hiệu lực';
     };
 
-    // Filter vouchers based on search and filters
+    // Filter vouchers based on search, filters, and active tab
     const getFilteredVouchers = () => {
         return vouchers.filter((voucher) => {
-            // First filter by search term (code)
+            // First filter by tab
+            let tabMatch = true;
+            if (activeTab === 'vip') {
+                tabMatch = !!voucher.is_svip_only;
+            }
+
+            // Then filter by search term (code)
             const searchMatch =
                 searchTerm.trim() === '' ||
                 voucher.code.toLowerCase().includes(searchTerm.toLowerCase().trim()) ||
@@ -100,9 +161,14 @@ export default function VouchersPage() {
             } else if (filterOptions.status === 'expired') {
                 statusMatch = status !== 'còn hiệu lực';
             }
-            // Nếu filterOptions.status === 'all' thì statusMatch vẫn là true
 
-            return searchMatch && statusMatch;
+            // Filter out VIP-only vouchers if user is not SVIP in the "all" tab
+            // but show them in the VIP tab even if user is not SVIP (they'll see them as locked)
+            if (activeTab === 'all' && !isSvip && voucher.is_svip_only) {
+                return false;
+            }
+
+            return tabMatch && searchMatch && statusMatch;
         });
     };
 
@@ -179,8 +245,6 @@ export default function VouchersPage() {
                                     </button>
                                 )}
                             </div>
-
-
                         </div>
 
                         {/* Filter options */}
@@ -211,9 +275,43 @@ export default function VouchersPage() {
 
                     {/* Vouchers content container */}
                     <div className="bg-white rounded-lg shadow-sm p-6">
+                        {/* Tabs */}
+                        <div className="flex border-b mb-6">
+                            <button
+                                className={`py-3 px-6 font-medium text-sm transition-all ${activeTab === 'all'
+                                        ? 'text-amber-600 border-b-2 border-amber-600'
+                                        : 'text-gray-500 hover:text-amber-500'
+                                    }`}
+                                onClick={() => setActiveTab('all')}
+                            >
+                                Tất cả voucher
+                            </button>
+                            <button
+                                className={`py-3 px-6 font-medium text-sm flex items-center transition-all ${activeTab === 'vip'
+                                        ? 'text-amber-600 border-b-2 border-amber-600'
+                                        : 'text-gray-500 hover:text-amber-500'
+                                    }`}
+                                onClick={() => setActiveTab('vip')}
+                            >
+                                <span className="mr-1">Voucher VIP</span>
+                                <span className="inline-flex items-center justify-center w-5 h-5">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 text-amber-600">
+                                        <path d="M11.645 20.91l-.007-.003-.022-.012a15.247 15.247 0 01-.383-.218 25.18 25.18 0 01-4.244-3.17C4.688 15.36 2.25 12.174 2.25 8.25 2.25 5.322 4.714 3 7.688 3A5.5 5.5 0 0112 5.052 5.5 5.5 0 0116.313 3c2.973 0 5.437 2.322 5.437 5.25 0 3.925-2.438 7.111-4.739 9.256a25.175 25.175 0 01-4.244 3.17 15.247 15.247 0 01-.383.219l-.022.012-.007.004-.003.001a.752.752 0 01-.704 0l-.003-.001z" />
+                                    </svg>
+                                </span>
+                            </button>
+                        </div>
+
                         {/* Title section with counter */}
                         <div className="flex items-center justify-between border-b pb-4 mb-6">
-                            <h2 className="text-xl font-semibold text-gray-800">Mã Giảm Giá</h2>
+                            <h2 className="text-xl font-semibold text-gray-800">
+                                {activeTab === 'all' ? 'Mã Giảm Giá' : 'Mã Giảm Giá VIP'}
+                                {activeTab === 'vip' && !isSvip && (
+                                    <span className="ml-2 text-sm text-gray-500 font-normal">
+                                        (Cần 20+ đơn hàng để kích hoạt)
+                                    </span>
+                                )}
+                            </h2>
                             <span className="bg-amber-100 text-amber-800 text-sm font-medium px-3 py-1 rounded-full">
                                 {filteredVouchers.length} mã
                             </span>
@@ -248,6 +346,25 @@ export default function VouchersPage() {
                             </div>
                         )}
 
+                        {/* VIP-only message when on VIP tab and not SVIP */}
+                        {!loading && !error && activeTab === 'vip' && !isSvip && (
+                            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6">
+                                <div className="flex items-start">
+                                    <div className="flex-shrink-0 mt-0.5">
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-amber-600" viewBox="0 0 20 20" fill="currentColor">
+                                            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                                        </svg>
+                                    </div>
+                                    <div className="ml-3">
+                                        <h3 className="text-sm font-medium text-amber-800">Trở thành Khách hàng VIP để mở khóa voucher đặc biệt</h3>
+                                        <div className="mt-2 text-sm text-amber-700">
+                                            <p>Để đạt được VIP status, bạn cần hoàn thành 20 đơn hàng. Những voucher này có thể xem nhưng chỉ khách hàng VIP mới sử dụng được.</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
                         {/* Empty state - no results found */}
                         {!loading && !error && filteredVouchers.length === 0 && (
                             <div className="flex flex-col items-center justify-center py-12 text-center">
@@ -266,12 +383,16 @@ export default function VouchersPage() {
                                     />
                                 </svg>
                                 <h3 className="text-lg font-medium text-gray-600 mb-1">
-                                    {searchTerm ? 'Không tìm thấy mã voucher' : 'Không có mã giảm giá nào'}
+                                    {activeTab === 'vip' ? 'Không có mã giảm giá VIP nào' :
+                                        searchTerm ? 'Không tìm thấy mã voucher' :
+                                            'Không có mã giảm giá nào'}
                                 </h3>
                                 <p className="text-gray-500 max-w-md">
                                     {searchTerm
                                         ? `Không tìm thấy mã voucher phù hợp với "${searchTerm}". Vui lòng thử lại với từ khóa khác.`
-                                        : 'Hiện tại không có mã giảm giá nào khả dụng. Vui lòng quay lại sau.'}
+                                        : activeTab === 'vip'
+                                            ? 'Hiện tại không có mã giảm giá đặc biệt nào dành cho khách hàng VIP. Vui lòng quay lại sau.'
+                                            : 'Hiện tại không có mã giảm giá nào khả dụng. Vui lòng quay lại sau.'}
                                 </p>
                             </div>
                         )}
@@ -294,6 +415,8 @@ export default function VouchersPage() {
                                         endDate={formatDate(voucher.end_date)}
                                         status={getVoucherStatus(voucher)}
                                         newCustomersOnly={voucher.new_customers_only}
+                                        isVipOnly={voucher.is_svip_only}
+                                        isUserVip={isSvip}
                                     />
                                 ))}
                             </div>
@@ -308,6 +431,9 @@ export default function VouchersPage() {
                                     <li>Mỗi mã giảm giá chỉ được sử dụng một lần</li>
                                     <li>Chú ý điều kiện và thời hạn sử dụng của từng mã</li>
                                     <li>Một số mã giảm giá có giá trị đơn hàng tối thiểu để áp dụng</li>
+                                    {activeTab === 'vip' && (
+                                        <li className="font-medium text-amber-700">Voucher VIP chỉ có thể sử dụng khi tài khoản đạt cấp độ VIP (20+ đơn hàng)</li>
+                                    )}
                                 </ul>
                             </div>
                         )}

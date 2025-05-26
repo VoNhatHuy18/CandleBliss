@@ -20,6 +20,8 @@ interface VoucherTagProps {
    newCustomersOnly: boolean;
    newCustomerText?: string | null; // Add this new prop
    isEligible?: boolean; // Add this new prop
+   isVipOnly?: boolean; // Add new prop for VIP-only vouchers
+   isUserVip?: boolean; // Add new prop to know if current user is VIP
 }
 
 const VoucherTag: React.FC<VoucherTagProps> = ({
@@ -146,8 +148,8 @@ const VoucherTag: React.FC<VoucherTagProps> = ({
                      <div className='flex items-center'>
                         <span
                            className={`py-1 px-2 rounded-full text-xs font-medium ${status === 'Còn hiệu lực'
-                                 ? 'bg-green-100 text-green-700'
-                                 : 'bg-red-100 text-red-600'
+                              ? 'bg-green-100 text-green-700'
+                              : 'bg-red-100 text-red-600'
                               }`}
                         >
                            {status}

@@ -2,14 +2,16 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { FaSpinner, FaExclamationTriangle } from 'react-icons/fa';
+import { FaSpinner, FaExclamationTriangle, FaCrown } from 'react-icons/fa';
 
 import Header from '@/app/components/user/nav/page';
 import Footer from '@/app/components/user/footer/page';
 import ViewedCarousel from '@/app/components/user/viewedcarousel/page';
 import MenuProfile from '@/app/components/user/menuprofile/MenuProfile';
 import { fetchUserProfile } from '@/app/utils/api';
+import { HOST } from '@/app/constants/api';
 import type { User } from './types';
+
 
 // Profile content component with API integration
 const ProfileContent: React.FC = () => {
@@ -17,6 +19,8 @@ const ProfileContent: React.FC = () => {
    const [isLoading, setIsLoading] = useState(true);
    const [error, setError] = useState<string | null>(null);
    const [isSaving, setIsSaving] = useState(false);
+   const [isSvip, setIsSvip] = useState(false); // SVIP status state
+   const [orderCount, setOrderCount] = useState<number>(0); // Add state for order count
    const [formData, setFormData] = useState({
       firstName: '',
       lastName: '',
@@ -34,6 +38,9 @@ const ProfileContent: React.FC = () => {
 
             if (userData.id) {
                localStorage.setItem('userId', userData.id.toString());
+
+               // Fetch order count and SVIP status
+               await fetchOrderCount(userData.id);
             }
 
             setFormData({
@@ -56,6 +63,46 @@ const ProfileContent: React.FC = () => {
 
       getUserData();
    }, [router]);
+
+   // Add function to fetch order count
+   const fetchOrderCount = async (userId: number) => {
+      try {
+         // Get token from localStorage
+         const token = localStorage.getItem('token');
+         if (!token) return;
+
+         // Fetch orders from API
+         const response = await fetch(`${HOST}/api/orders?user_id=${userId}`, {
+            headers: {
+               Authorization: `Bearer ${token}`,
+            },
+         });
+
+         if (!response.ok) {
+            console.error('Error fetching user orders:', response.status);
+            return;
+         }
+
+         const orders = await response.json();
+
+         // Set order count
+         const count = Array.isArray(orders) ? orders.length : 0;
+         setOrderCount(count);
+
+         // Set SVIP status based on order count
+         const svipStatus = count >= 20;
+         setIsSvip(svipStatus);
+
+         // Cache SVIP status
+         const svipStatusKey = `user_${userId}_svip_status`;
+         localStorage.setItem(svipStatusKey, svipStatus.toString());
+         setTimeout(() => {
+            localStorage.removeItem(svipStatusKey);
+         }, 24 * 60 * 60 * 1000); // 24 hours expiry
+      } catch (error) {
+         console.error('Error fetching order count:', error);
+      }
+   };
 
    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       const { name, value } = e.target;
@@ -175,10 +222,45 @@ const ProfileContent: React.FC = () => {
             <div className='w-full md:w-1/3 flex flex-col items-center justify-center'>
                <h3 className='text-xl font-semibold'>{fullName}</h3>
                <p className='text-gray-500'>Thành viên từ {formatDate(user.createdAt)}</p>
+
+               {/* Order count with progress indicator */}
+               <div className='mt-3 w-full max-w-[200px]'>
+                  <div className='flex justify-between text-xs mb-1'>
+                     <span className='text-gray-600'>Đơn hàng đã thực hiện</span>
+                     <span className='font-medium'>{orderCount}/20</span>
+                  </div>
+                  <div className='h-2 w-full bg-gray-200 rounded-full overflow-hidden'>
+                     <div
+                        className='h-full bg-amber-500'
+                        style={{ width: `${Math.min((orderCount / 20) * 100, 100)}%` }}
+                     ></div>
+                  </div>
+               </div>
+
                <div className='mt-2 flex gap-2'>
                   <div className='px-3 py-1 bg-amber-100 text-amber-800 rounded-full text-sm'>
                      {user.role.name}
                   </div>
+
+                  {/* SVIP badge */}
+                  {isSvip && (
+                     <div className='px-3 py-1 bg-gradient-to-r from-amber-600 to-amber-400 text-white rounded-full text-sm flex items-center'>
+                        <FaCrown className='mr-1' /> SVIP
+                     </div>
+                  )}
+               </div>
+
+               {/* SVIP information */}
+               <div className='mt-2 text-center'>
+                  {isSvip ? (
+                     <p className='text-xs text-amber-600'>
+                        Khách hàng thân thiết với {orderCount}+ đơn hàng
+                     </p>
+                  ) : (
+                     <p className='text-xs text-gray-500'>
+                        Còn {20 - orderCount} đơn hàng nữa để đạt cấp VIP
+                     </p>
+                  )}
                </div>
             </div>
 

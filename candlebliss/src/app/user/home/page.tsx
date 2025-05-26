@@ -1,5 +1,5 @@
 'use client';
-import React, { Suspense } from 'react'; // Add Suspense import
+import React, { Suspense, useEffect, useState, useRef } from 'react';
 import { ChevronRightIcon } from '@heroicons/react/24/outline';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -10,6 +10,8 @@ import RotatingImages from '@/app/components/user/rotatingimages/page';
 import NavBar from '@/app/components/user/nav/page';
 import Footer from '@/app/components/user/footer/page';
 import ChatBot from '@/app/components/user/chatbot/ChatBot';
+import { HOST } from '@/app/constants/api';
+import Toast from '@/app/components/ui/toast/Toast'; // Import your custom Toast component
 
 // Fallback loading components
 const LoadingSpinner = () => (
@@ -18,14 +20,138 @@ const LoadingSpinner = () => (
    </div>
 );
 
+// Function to check SVIP status
+const checkUserSvipStatus = async (userId: number): Promise<boolean> => {
+   if (!userId) return false;
+
+   try {
+      // First check if we already know the SVIP status from localStorage
+      const svipStatusKey = `user_${userId}_svip_status`;
+      const cachedStatus = localStorage.getItem(svipStatusKey);
+
+      if (cachedStatus) {
+         return cachedStatus === 'true';
+      }
+
+      // If not in localStorage, check via API
+      const token = localStorage.getItem('token');
+      if (!token) return false;
+
+      const response = await fetch(`${HOST}/api/orders?user_id=${userId}`, {
+         headers: {
+            Authorization: `Bearer ${token}`,
+         },
+      });
+
+      if (!response.ok) {
+         console.error('Error fetching user orders:', response.status);
+         return false;
+      }
+
+      const orders = await response.json();
+
+      // Check if user has 20 or more orders
+      const isSvip = Array.isArray(orders) && orders.length >= 20;
+
+      // Cache the result in localStorage for 24 hours
+      localStorage.setItem(svipStatusKey, isSvip.toString());
+      setTimeout(() => {
+         localStorage.removeItem(svipStatusKey);
+      }, 24 * 60 * 60 * 1000); // 24 hours expiry
+
+      return isSvip;
+   } catch (error) {
+      console.error('Error checking SVIP status:', error);
+      return false;
+   }
+};
+
 export default function HomePage() {
+   const [, setUserId] = useState<number | null>(null);
+   const svipToastShown = useRef(false);
+   // Add state for custom Toast component
+   const [toastState, setToastState] = useState({
+      show: false,
+      message: '',
+      type: 'info' as 'success' | 'error' | 'info',
+      actions: [] as Array<{
+         label: string;
+         onClick: () => void;
+         variant?: 'primary' | 'secondary';
+      }>
+   });
+
+   useEffect(() => {
+      // Check if user is logged in
+      const token = localStorage.getItem('token');
+      if (!token) return;
+
+      try {
+         // Get user ID from local storage
+         const storedUserId = localStorage.getItem('userId');
+         if (storedUserId) {
+            const userIdNum = parseInt(storedUserId);
+            setUserId(userIdNum);
+
+            // Check SVIP status and show toast if applicable
+            const checkSvipAndNotify = async () => {
+               // Only check if we haven't shown the toast yet
+               if (!svipToastShown.current) {
+                  const isSvip = await checkUserSvipStatus(userIdNum);
+                  if (isSvip) {
+                     // Show VIP toast notification using custom Toast
+                     setToastState({
+                        show: true,
+                        message: 'Xin chào Khách Hàng VIP! Bạn có các ưu đãi đặc biệt đang chờ đợi.',
+                        actions: [
+                           {
+                              label: 'Xem Voucher Độc Quyền',
+                              onClick: () => {
+                                 // Navigate to vouchers page
+                                 window.location.href = '/user/vouchers';
+                              },
+                              variant: 'primary'
+                           }
+                        ],
+                        type: 'info',
+
+                     });
+                     svipToastShown.current = true;
+                  }
+               }
+            };
+
+            checkSvipAndNotify();
+         }
+      } catch (error) {
+         console.error('Error checking authentication status:', error);
+      }
+   }, []);
+
+   // Function to close toast
+   const handleCloseToast = () => {
+      setToastState(prev => ({ ...prev, show: false }));
+   };
+
    return (
       <>
          <div className='bg-[#F1EEE9] min-h-screen'>
+            {/* Custom Toast component */}
+            <Toast
+               show={toastState.show}
+               message={toastState.message}
+               type={toastState.type}
+               onClose={handleCloseToast}
+               duration={7000}
+               position="top-right"
+               actions={toastState.actions}
+            />
+
             {/* Chatbot */}
             <div className='fixed bottom-4 right-4 z-50'>
                <ChatBot />
             </div>
+
             {/* Wrap NavBar in Suspense in case it's using useSearchParams */}
             <Suspense fallback={<LoadingSpinner />}>
                <NavBar />
