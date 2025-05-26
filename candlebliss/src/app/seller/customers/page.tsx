@@ -31,6 +31,8 @@ interface Customer {
     };
     createdAt: string;
     updatedAt: string;
+    isSvip?: boolean; // Add this new property
+    orderCount?: number; // Add this property to store order count
 }
 
 interface Pagination {
@@ -146,8 +148,7 @@ export default function CustomerPage() {
 
             // Update the API endpoint to use /v1/users without query parameters
             const response = await fetch(`${HOST}/api/v1/users`, {
-                headers:
-                {
+                headers: {
                     'Authorization': `Bearer ${token}`
                 }
             });
@@ -158,54 +159,71 @@ export default function CustomerPage() {
 
             const data = await response.json();
 
+            let userCustomers: Customer[] = [];
+
             // Handle the case where the API returns an array directly
             if (Array.isArray(data)) {
                 // Filter users with role 'User'
-                const userCustomers = data.filter(user =>
+                userCustomers = data.filter(user =>
                     user.role && user.role.name === 'User'
                 );
-
-                setCustomers(userCustomers);
-
-                // Since we have all data at once, implement client-side pagination
-                setPagination({
-                    currentPage: page,
-                    totalPages: Math.ceil((userCustomers.length || 1) / pagination.limit),
-                    total: userCustomers.length || 0,
-                    limit: pagination.limit,
-                    hasNextPage: page < Math.ceil((userCustomers.length || 1) / pagination.limit)
-                });
             }
             // Handle the original format where data is inside data.data
             else if (data && data.data) {
-                const userCustomers = data.data.filter((user: Customer) =>
+                userCustomers = data.data.filter((user: Customer) =>
                     user.role && user.role.name === 'User'
                 );
-
-                setCustomers(userCustomers);
-
-                if (data.pagination) {
-                    setPagination({
-                        currentPage: data.pagination.currentPage || 1,
-                        totalPages: data.pagination.totalPages || 1,
-                        total: data.pagination.total || 0,
-                        limit: data.pagination.limit || 10,
-                        hasNextPage: !!data.pagination.hasNextPage
-                    });
-                } else {
-                    setPagination({
-                        currentPage: page,
-                        totalPages: Math.ceil((userCustomers.length || 1) / pagination.limit),
-                        total: userCustomers.length || 0,
-                        limit: pagination.limit,
-                        hasNextPage: false
-                    });
-                }
             } else {
                 console.error('Invalid response format:', data);
                 setLoading(false);
                 return;
             }
+
+            // Check SVIP status for each customer by fetching their orders
+            const customersWithSvipStatus = await Promise.all(
+                userCustomers.map(async (customer) => {
+                    try {
+                        const ordersResponse = await fetch(`${HOST}/api/orders?user_id=${customer.id}`, {
+                            headers: {
+                                'Authorization': `Bearer ${token}`
+                            }
+                        });
+
+                        if (ordersResponse.ok) {
+                            const ordersData = await ordersResponse.json();
+                            const orders = Array.isArray(ordersData) ? ordersData : [];
+                            const orderCount = orders.length;
+                            const isSvip = orderCount >= 20;
+
+                            return {
+                                ...customer,
+                                isSvip,
+                                orderCount
+                            };
+                        }
+
+                        return customer;
+                    } catch (error) {
+                        console.error(`Error checking SVIP status for customer ${customer.id}:`, error);
+                        return customer;
+                    }
+                })
+            );
+
+            setCustomers(customersWithSvipStatus);
+
+            // Update pagination with a limit of 10 users per page
+            const limit = 10;
+            const total = customersWithSvipStatus.length;
+            const totalPages = Math.ceil(total / limit);
+
+            setPagination({
+                currentPage: page,
+                totalPages: totalPages,
+                total: total,
+                limit: limit,
+                hasNextPage: page < totalPages
+            });
 
         } catch (error) {
             console.error('Error fetching customers:', error);
@@ -474,8 +492,7 @@ export default function CustomerPage() {
 
     const getSortedCustomers = () => {
         const filtered = getFilteredCustomers();
-
-        return [...filtered].sort((a, b) => {
+        const sorted = [...filtered].sort((a, b) => {
             switch (sortBy) {
                 case 'newest':
                     return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
@@ -489,6 +506,13 @@ export default function CustomerPage() {
                     return 0;
             }
         });
+
+        // Calculate the starting and ending indices for the current page
+        const startIndex = (pagination.currentPage - 1) * 10;
+        const endIndex = startIndex + 10;
+
+        // Return only the customers for the current page
+        return sorted.slice(startIndex, endIndex);
     };
 
     // Export customers to CSV
@@ -640,6 +664,9 @@ export default function CustomerPage() {
                                                 Trạng thái
                                             </th>
                                             <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
+                                                Đơn hàng
+                                            </th>
+                                            <th className='px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider'>
                                                 Ngày tham gia
                                             </th>
                                             <th className='px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider'>
@@ -650,7 +677,7 @@ export default function CustomerPage() {
                                     <tbody className='bg-white divide-y divide-gray-200'>
                                         {loading ? (
                                             <tr>
-                                                <td colSpan={6} className='px-6 py-12 text-center'>
+                                                <td colSpan={7} className='px-6 py-12 text-center'>
                                                     <div className='flex justify-center'>
                                                         <div className='animate-spin rounded-full h-10 w-10 border-b-2 border-amber-500'></div>
                                                     </div>
@@ -662,12 +689,33 @@ export default function CustomerPage() {
                                                 <tr key={customer.id} className='hover:bg-gray-50'>
                                                     <td className='px-6 py-4 whitespace-nowrap'>
                                                         <div className='flex items-center'>
-                                                            <div className='h-10 w-10 rounded-full overflow-hidden border border-gray-200 bg-amber-50 flex items-center justify-center text-amber-700 font-medium'>
+                                                            <div className={`h-10 w-10 rounded-full overflow-hidden border border-gray-200 ${customer.isSvip ? 'bg-amber-100' : 'bg-gray-50'} flex items-center justify-center text-amber-700 font-medium`}>
                                                                 {customer.firstName?.charAt(0)}{customer.lastName?.charAt(0)}
                                                             </div>
                                                             <div className='ml-4'>
-                                                                <div className='text-sm font-medium text-gray-900'>
-                                                                    {customer.firstName} {customer.lastName}
+                                                                <div className='flex items-center gap-2'>
+                                                                    <span className='text-sm font-medium text-gray-900'>
+                                                                        {customer.firstName} {customer.lastName}
+                                                                    </span>
+                                                                    {customer.isSvip && (
+                                                                        <span className='inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gradient-to-r from-amber-600 to-amber-400 text-white'>
+                                                                            <svg
+                                                                                xmlns="http://www.w3.org/2000/svg"
+                                                                                className="h-3 w-3 mr-1"
+                                                                                fill="none"
+                                                                                viewBox="0 0 24 24"
+                                                                                stroke="currentColor"
+                                                                            >
+                                                                                <path
+                                                                                    strokeLinecap="round"
+                                                                                    strokeLinejoin="round"
+                                                                                    strokeWidth={2}
+                                                                                    d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
+                                                                                />
+                                                                            </svg>
+                                                                            SVIP
+                                                                        </span>
+                                                                    )}
                                                                 </div>
                                                             </div>
                                                         </div>
@@ -681,12 +729,22 @@ export default function CustomerPage() {
                                                     <td className='px-6 py-4 whitespace-nowrap'>
                                                         <span
                                                             className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
-                              ${customer.status.name === 'Active'
+                                    ${customer.status.name === 'Active'
                                                                     ? 'bg-green-100 text-green-800'
                                                                     : 'bg-red-100 text-red-800'}`}
                                                         >
                                                             {customer.status.name === 'Active' ? 'Hoạt động' : 'Không hoạt động'}
                                                         </span>
+                                                    </td>
+                                                    <td className='px-6 py-4 whitespace-nowrap'>
+                                                        <div className='flex items-center'>
+                                                            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${(customer.orderCount ?? 0) >= 20
+                                                                ? 'bg-amber-100 text-amber-800'
+                                                                : 'bg-gray-100 text-gray-600'
+                                                                }`}>
+                                                                {customer.orderCount || 0} đơn
+                                                            </span>
+                                                        </div>
                                                     </td>
                                                     <td className='px-6 py-4 whitespace-nowrap text-sm text-gray-500'>
                                                         {format(new Date(customer.createdAt), 'dd/MM/yyyy', { locale: vi })}
@@ -714,7 +772,7 @@ export default function CustomerPage() {
                                             ))
                                         ) : (
                                             <tr>
-                                                <td colSpan={6} className='px-6 py-12 text-center'>
+                                                <td colSpan={7} className='px-6 py-12 text-center'>
                                                     <p className='text-gray-500'>Không tìm thấy khách hàng nào</p>
                                                 </td>
                                             </tr>
@@ -724,36 +782,90 @@ export default function CustomerPage() {
                             </div>
 
                             {/* Pagination */}
-                            <div className='px-6 py-4 border-t border-gray-100 flex items-center justify-between'>
-                                <div className='text-sm text-gray-500'>
-                                    Hiển thị {customers?.length || 0} khách hàng
-                                    (Trang {pagination?.currentPage || 1}/{pagination?.totalPages || 1},
-                                    Tổng {pagination?.total || 0} khách hàng)
-                                </div>
-                                <div className='flex gap-2'>
-                                    <button
-                                        onClick={prevPage}
-                                        disabled={!pagination || pagination.currentPage <= 1}
-                                        className={`p-2 rounded-md border ${!pagination || pagination.currentPage <= 1
-                                            ? 'bg-gray-50 text-gray-300 cursor-not-allowed'
-                                            : 'bg-white text-gray-700 hover:bg-gray-50'
-                                            }`}
-                                    >
-                                        <ArrowLeft size={16} />
-                                    </button>
-                                    <span className='px-4 py-1.5 bg-white border rounded-md text-sm'>
-                                        Trang {pagination?.currentPage || 1}
-                                    </span>
-                                    <button
-                                        onClick={nextPage}
-                                        disabled={!pagination || !pagination.hasNextPage}
-                                        className={`p-2 rounded-md border ${!pagination || !pagination.hasNextPage
-                                            ? 'bg-gray-50 text-gray-300 cursor-not-allowed'
-                                            : 'bg-white text-gray-700 hover:bg-gray-50'
-                                            }`}
-                                    >
-                                        <ArrowRight size={16} />
-                                    </button>
+                            <div className='bg-white px-4 py-3 border-t border-gray-200 sm:px-6'>
+                                <div className='flex items-center justify-between'>
+                                    <div className='hidden sm:flex-1 sm:flex sm:items-center sm:justify-between'>
+                                        <div>
+                                            <p className='text-sm text-gray-700'>
+                                                Hiển thị <span className='font-medium'>
+                                                    {pagination.currentPage === pagination.totalPages ?
+                                                        (pagination.total - (pagination.currentPage - 1) * pagination.limit) :
+                                                        pagination.limit}
+                                                </span> trong số{' '}
+                                                <span className='font-medium'>{pagination.total}</span> khách hàng
+                                            </p>
+                                        </div>
+                                        <div>
+                                            <nav className='relative z-0 inline-flex rounded-md shadow-sm -space-x-px' aria-label='Pagination'>
+                                                <button
+                                                    onClick={prevPage}
+                                                    disabled={pagination.currentPage === 1}
+                                                    className={`relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium ${pagination.currentPage === 1
+                                                        ? 'text-gray-300 cursor-not-allowed'
+                                                        : 'text-gray-500 hover:bg-gray-50'
+                                                        }`}
+                                                >
+                                                    <span className='sr-only'>Previous</span>
+                                                    <ArrowLeft size={16} />
+                                                </button>
+
+                                                {/* Page numbers */}
+                                                {Array.from({ length: pagination.totalPages }, (_, i) => i + 1).map((page) => (
+                                                    <button
+                                                        key={page}
+                                                        onClick={() => fetchCustomers(page)}
+                                                        className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${page === pagination.currentPage
+                                                            ? 'bg-amber-50 border-amber-500 text-amber-600'
+                                                            : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+                                                            }`}
+                                                    >
+                                                        {page}
+                                                    </button>
+                                                ))}
+
+                                                <button
+                                                    onClick={nextPage}
+                                                    disabled={!pagination.hasNextPage}
+                                                    className={`relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium ${!pagination.hasNextPage
+                                                        ? 'text-gray-300 cursor-not-allowed'
+                                                        : 'text-gray-500 hover:bg-gray-50'
+                                                        }`}
+                                                >
+                                                    <span className='sr-only'>Next</span>
+                                                    <ArrowRight size={16} />
+                                                </button>
+                                            </nav>
+                                        </div>
+                                    </div>
+
+                                    {/* Mobile pagination */}
+                                    <div className='flex sm:hidden items-center justify-between'>
+                                        <button
+                                            onClick={prevPage}
+                                            disabled={pagination.currentPage === 1}
+                                            className={`relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md ${pagination.currentPage === 1
+                                                ? 'bg-white text-gray-300 cursor-not-allowed'
+                                                : 'bg-white text-gray-700 hover:bg-gray-50'
+                                                }`}
+                                        >
+                                            Trước
+                                        </button>
+
+                                        <p className='text-sm text-gray-700'>
+                                            <span className='font-medium'>{pagination.currentPage}</span> / {pagination.totalPages}
+                                        </p>
+
+                                        <button
+                                            onClick={nextPage}
+                                            disabled={!pagination.hasNextPage}
+                                            className={`relative inline-flex items-center px-4 py-2 ml-3 border border-gray-300 text-sm font-medium rounded-md ${!pagination.hasNextPage
+                                                ? 'bg-white text-gray-300 cursor-not-allowed'
+                                                : 'bg-white text-gray-700 hover:bg-gray-50'
+                                                }`}
+                                        >
+                                            Tiếp
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -810,8 +922,28 @@ export default function CustomerPage() {
                                     {activeTab === 'info' && (
                                         <div className='space-y-6'>
                                             <div className='flex justify-center'>
-                                                <div className='h-24 w-24 rounded-full overflow-hidden border border-gray-200 bg-amber-50 flex items-center justify-center text-amber-700 text-3xl font-medium'>
+                                                <div className={`h-24 w-24 rounded-full overflow-hidden border border-gray-200 ${selectedCustomer.isSvip ? 'bg-amber-50' : 'bg-gray-50'} flex items-center justify-center text-amber-700 text-3xl font-medium relative`}>
                                                     {selectedCustomer.firstName?.charAt(0)}{selectedCustomer.lastName?.charAt(0)}
+
+                                                    {/* SVIP Badge */}
+                                                    {selectedCustomer.isSvip && (
+                                                        <div className="absolute bottom-0 right-0 bg-gradient-to-r from-amber-600 to-amber-400 rounded-full p-1.5">
+                                                            <svg
+                                                                xmlns="http://www.w3.org/2000/svg"
+                                                                className="h-4 w-4 text-white"
+                                                                fill="none"
+                                                                viewBox="0 0 24 24"
+                                                                stroke="currentColor"
+                                                            >
+                                                                <path
+                                                                    strokeLinecap="round"
+                                                                    strokeLinejoin="round"
+                                                                    strokeWidth={2}
+                                                                    d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
+                                                                />
+                                                            </svg>
+                                                        </div>
+                                                    )}
                                                 </div>
                                             </div>
 
@@ -833,10 +965,10 @@ export default function CustomerPage() {
                                                     <p className='font-medium'>{selectedCustomer.phone || '-'}</p>
                                                 </div>
                                                 <div>
-                                                    <p className='text-sm text-gray-500'>Trạng thái</p>
+                                                    <p className='text-sm text-gray-500'>Trạng thái tài khoản</p>
                                                     <span
                                                         className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full 
-                            ${selectedCustomer.status.name === 'Active'
+                    ${selectedCustomer.status.name === 'Active'
                                                                 ? 'bg-green-100 text-green-800'
                                                                 : 'bg-red-100 text-red-800'}`}
                                                     >
@@ -848,6 +980,64 @@ export default function CustomerPage() {
                                                     <p className='font-medium'>
                                                         {format(new Date(selectedCustomer.createdAt), 'dd/MM/yyyy HH:mm', { locale: vi })}
                                                     </p>
+                                                </div>
+                                                {/* Add SVIP status */}
+                                                <div>
+                                                    <p className='text-sm text-gray-500'>Cấp độ khách hàng</p>
+                                                    {selectedCustomer.isSvip ? (
+                                                        <div className="flex items-center">
+                                                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gradient-to-r from-amber-600 to-amber-400 text-white mr-2">
+                                                                <svg
+                                                                    xmlns="http://www.w3.org/2000/svg"
+                                                                    className="h-3 w-3 mr-1"
+                                                                    fill="none"
+                                                                    viewBox="0 0 24 24"
+                                                                    stroke="currentColor"
+                                                                >
+                                                                    <path
+                                                                        strokeLinecap="round"
+                                                                        strokeLinejoin="round"
+                                                                        strokeWidth={2}
+                                                                        d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
+                                                                    />
+                                                                </svg>
+                                                                SVIP
+                                                            </span>
+                                                            <span className="text-xs text-amber-700">
+                                                                (Khách hàng VIP với {selectedCustomer.orderCount || 0}+ đơn hàng)
+                                                            </span>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="flex items-center">
+                                                            <span className="px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600 mr-2">
+                                                                Thành viên
+                                                            </span>
+                                                            <span className="text-xs text-gray-500">
+                                                                {selectedCustomer.orderCount !== undefined ? `(${selectedCustomer.orderCount}/20 đơn để đạt VIP)` : '(0/20 đơn để đạt VIP)'}
+                                                            </span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                {/* Add order count */}
+                                                <div>
+                                                    <p className='text-sm text-gray-500'>Đơn hàng đã đặt</p>
+                                                    <div className='flex items-center gap-2'>
+                                                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${(selectedCustomer.orderCount || 0) >= 20
+                                                            ? 'bg-amber-100 text-amber-800'
+                                                            : 'bg-gray-100 text-gray-600'
+                                                            }`}>
+                                                            {selectedCustomer.orderCount || 0} đơn
+                                                        </span>
+
+                                                        {(selectedCustomer.orderCount || 0) > 0 && (
+                                                            <button
+                                                                onClick={() => setActiveTab('orders')}
+                                                                className="text-xs text-amber-600 hover:text-amber-700 underline"
+                                                            >
+                                                                Xem tất cả
+                                                            </button>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
