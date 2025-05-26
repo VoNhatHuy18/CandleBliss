@@ -94,6 +94,7 @@ export default function FinancePage() {
    // Add this with your other refs at the top level of your component
 
    const needsRefresh = useRef(true); // Move this here, outside of useEffect
+   const prevPeriodFetchedRef = useRef(false); // Add this ref to track previous period fetch status
 
    // Your existing state declarations
    const [searchTerm, setSearchTerm] = useState('');
@@ -110,7 +111,8 @@ export default function FinancePage() {
    });
    const [orders, setOrders] = useState<Order[]>([]);
    const [loading, setLoading] = useState(true);
-   const [ordersLoading] = useState(true);
+   // Thêm biến state này thay vì sử dụng const
+   const [ordersLoading, setOrdersLoading] = useState(true);
    const [chartData, setChartData] = useState<{
       labels: string[];
       datasets: { label: string; data: number[]; backgroundColor: string; borderColor: string; borderWidth: number; }[];
@@ -168,19 +170,12 @@ export default function FinancePage() {
    const [currentPage, setCurrentPage] = useState(1);
    const [ordersPerPage] = useState(20);
 
-   const [productCategories, setProductCategories] = useState<Record<string, number>>({});
-   const [categoryStats, setCategoryStats] = useState<Array<{
+   const [categoryStats] = useState<Array<{
       id: number;
       name: string;
       count: number;
       totalSales: number;
    }>>([]);
-   const [categories] = useState<Array<{
-      id: number;
-      name: string;
-      description: string;
-   }>>([]);
-   const [, setCategoryStatsLoading] = useState(true);
    const [productGroups, setProductGroups] = useState<Record<string, {
       name: string,
       count: number,
@@ -318,106 +313,13 @@ export default function FinancePage() {
       )
    };
 
-
-
-   // Hàm lấy thông tin sản phẩm theo ID
-   const fetchProductDetails = async (productId: string) => {
-      try {
-         // Kiểm tra xem đã có thông tin về danh mục của sản phẩm này chưa
-         if (productCategories[productId]) {
-            return productCategories[productId];
-         }
-
-         // Nếu chưa có, fetch từ API
-         const response = await fetch(`${HOST}/api/products/${productId}`);
-         if (response.ok) {
-            const product = await response.json();
-            return product.category_id;
-         }
-      } catch (error) {
-         console.error(`Error fetching product details for ID ${productId}:`, error);
-      }
-      return null;
-   };
-
-
-   // Hàm phân tích và tạo thống kê danh mục
-   const analyzeCategoryStats = async () => {
-      if (orders.length === 0 || categories.length === 0) return;
-
-      setCategoryStatsLoading(true);
-
-      try {
-         // Chuẩn bị dữ liệu thống kê
-         const stats: Record<number, { count: number, totalSales: number }> = {};
-
-         // Khởi tạo tất cả danh mục với giá trị ban đầu là 0
-         categories.forEach(cat => {
-            stats[cat.id] = { count: 0, totalSales: 0 };
-         });
-
-         // Tạo một map để lưu trữ kết quả đã fetch để tránh fetch lặp lại
-         const productCategoryMap: Record<string, number> = {};
-
-         // Process each order
-         for (const order of orders) {
-            if (!order.item || !Array.isArray(order.item)) continue;
-
-            // Lọc những đơn có trạng thái hoàn thành
-            if (!isRevenueCountableStatus(order.status)) continue;
-
-            // Xử lý từng mục trong đơn hàng
-            for (const item of order.item) {
-               // Bỏ qua nếu không có product_id
-               if (!item.product_id) continue;
-
-               let categoryId;
-
-               // Kiểm tra xem đã có trong map chưa
-               if (productCategoryMap[item.product_id]) {
-                  categoryId = productCategoryMap[item.product_id];
-               } else {
-                  // Chưa có, fetch từ API
-                  categoryId = await fetchProductDetails(item.product_id);
-
-                  // Lưu lại để tái sử dụng
-                  if (categoryId) {
-                     productCategoryMap[item.product_id] = categoryId;
-                  }
-               }
-
-               // Nếu tìm thấy danh mục, cập nhật thống kê
-               if (categoryId && stats[categoryId]) {
-                  stats[categoryId].count += item.quantity;
-                  stats[categoryId].totalSales += parseInt(item.totalPrice);
-               }
-            }
-         }
-
-         // Lưu product-category map để tái sử dụng
-         setProductCategories(productCategoryMap);
-
-         // Chuyển đổi thống kê thành mảng để hiển thị
-         const categoryStatsArray = categories.map(category => ({
-            id: category.id,
-            name: category.name,
-            count: stats[category.id]?.count || 0,
-            totalSales: stats[category.id]?.totalSales || 0
-         })).sort((a, b) => b.count - a.count); // Sắp xếp theo số lượng giảm dần
-
-         setCategoryStats(categoryStatsArray);
-      } catch (error) {
-         console.error('Error analyzing category stats:', error);
-      } finally {
-         setCategoryStatsLoading(false);
-      }
-   };
-
    // Hàm phân tích sản phẩm trong đơn hàng (sửa lại)
    const analyzeProductGroups = useCallback(() => {
       if (orders.length === 0) return;
 
-      // Clone đối tượng productGroups hiện tại để tránh mất dữ liệu
+      console.log("Analyzing product groups - should run once per data change");
+
+      // Only proceed if we have data to analyze
       const groups: Record<string, {
          name: string,
          count: number,
@@ -461,7 +363,14 @@ export default function FinancePage() {
 
       console.log("Analyzed product groups:", groups); // Log để debug
 
-      setProductGroups(groups);
+      // Use functional update to prevent unnecessary renders
+      setProductGroups(prevGroups => {
+         // Only update if there are actually changes
+         if (JSON.stringify(prevGroups) === JSON.stringify(groups)) {
+            return prevGroups; // No change needed
+         }
+         return groups;
+      });
    }, [orders, productsInfo]); // Thêm productsInfo vào dependencies
 
    // Thêm hàm này sau fetchStatisticsData
@@ -702,124 +611,13 @@ export default function FinancePage() {
 
    // Thêm effect này để fetch categories và tính toán thống kê
    useEffect(() => {
-
-
-      // Thêm dòng này để phân tích dữ liệu sản phẩm
-      if (orders.length > 0) {
-         analyzeProductGroups();
-      }
-   }, [orders, analyzeCategoryStats, analyzeProductGroups]); // Thêm analyzeProductGroups vào dependencies
-
-   // Thêm effect này để reset về trang đầu tiên khi tìm kiếm thay đổi
-   useEffect(() => {
-      setCurrentPage(1);
-   }, [searchTerm]);
-   // Cập nhật useEffect sau khi fetch dữ liệu hiện tại xong
-   useEffect(() => {
-      if (statsData.totalRevenue !== 0 && chartView === 'current') {
-         fetchPreviousPeriodData();
-      }
-   }, [statsData, fetchPreviousPeriodData, chartView]);
-   // Thêm state để lưu tỷ lệ thay đổi
-   useEffect(() => {
-      // Kích hoạt animation khi component mount
-      setAnimateStats(true);
-      setupChartOptions();
-   }, []);  // Empty dependency array = run once
-
-   // For data loading - use a ref to track if it needs to reload
-   useEffect(() => {
-      // Use the ref, but don't declare it here
-
-      const loadData = async () => {
-         if (!needsRefresh.current && orders.length > 0) {
-            return;
-         }
-
-         needsRefresh.current = false;
-         setLoading(true);
-
-         try {
-            if (orders.length === 0) {
-               const controller = new AbortController();
-               await fetchOrdersData(controller.signal);
-            }
-
-            if (chartView === 'current') {
-               await fetchStatisticsData(null);
-            } else {
-               await fetchHistoricalData();
-            }
-
-            if (newCustomers.length === 0 && !newCustomersFetched) {
-               await fetchNewCustomers();
-            }
-         } catch (error) {
-            console.error("Error loading data:", error);
-         } finally {
-            setLoading(false);
-         }
-      };
-
-      loadData();
-
       // Reset needsRefresh when key params change
       return () => {
          needsRefresh.current = true;
       };
    }, [chartView, timeFilter, timeValue, year]);
 
-   // Sửa hàm fetchStatisticsData để tránh fetch không cần thiết
-   const fetchStatisticsData = useCallback(async (signal?: AbortSignal | null) => {
-      // Tránh fetch nếu đang fetch dữ liệu khác
-      if (loading) return;
 
-      try {
-         setLoading(true);
-
-         // Use different endpoint for custom date ranges
-         let response;
-         const fetchOptions = signal ? { signal } : undefined;
-
-         if (timeFilter === 'custom') {
-            const formattedStartDate = startDate.toISOString().split('T')[0];
-            const formattedEndDate = endDate.toISOString().split('T')[0];
-            response = await fetch(
-               `${HOST}/api/orders/statistics/date-to-date?startDate=${formattedStartDate}&endDate=${formattedEndDate}`,
-               fetchOptions
-            );
-         } else {
-            // Use the regular endpoint for standard time filters
-            response = await fetch(
-               `${HOST}/api/orders/statistics?timeFilter=${timeFilter}&timeValue=${timeValue}&year=${year}`,
-               fetchOptions
-            );
-         }
-
-         if (!response.ok) {
-            throw new Error('Failed to fetch statistics data');
-         }
-
-         const data = await response.json();
-
-         // Cập nhật dữ liệu thống kê
-         const statsData = {
-            totalRevenue: data.totalRevenue || 0,
-            totalOrderValue: data.totalOrderValue || 0,
-            totalShippingFee: data.totalShippingFee || 0,
-            totalOrders: data.totalOrders || 0
-         };
-
-         setStatsData(statsData);
-
-         // Cập nhật biểu đồ
-         updateCurrentPeriodChart(statsData);
-      } catch (error) {
-         console.error('Error fetching statistics data:', error);
-      } finally {
-         setLoading(false);
-      }
-   }, [timeFilter, timeValue, year, startDate, endDate]);
 
    // Sửa hàm fetchOrdersData để tránh fetch trùng lặp
    const fetchOrdersData = async (signal: AbortSignal) => {
@@ -834,122 +632,132 @@ export default function FinancePage() {
    };
 
    const fetchUserData = useCallback(async (orders: Order[]) => {
-      const token = localStorage.getItem('token');
-      if (!token) return;
+      try {
+         setOrdersLoading(true); // Bắt đầu tải
 
-      // Lấy danh sách user_id duy nhất từ các orders
-      const uniqueUserIds = [...new Set(
-         orders
-            .filter(order => !order.user && order.user_id && !fetchedUserIds[order.user_id])
-            .map(order => order.user_id)
-      )];
+         const token = localStorage.getItem('token');
+         if (!token) return;
 
-      if (uniqueUserIds.length === 0) return;
+         // Lấy danh sách user_id duy nhất từ các orders
+         const uniqueUserIds = [...new Set(
+            orders
+               .filter(order => !order.user && order.user_id && !fetchedUserIds[order.user_id])
+               .map(order => order.user_id)
+         )];
 
-      let hasUpdates = false;
-      const updatedOrders = [...orders];
-      const newFetchedUserIds = { ...fetchedUserIds };
+         if (uniqueUserIds.length === 0) return;
 
-      // Tạo mảng promises cho tất cả API calls
-      const userPromises = uniqueUserIds.map(async (userId) => {
-         try {
-            // Đánh dấu user_id này đã được xử lý
-            newFetchedUserIds[userId] = true;
+         let hasUpdates = false;
+         const updatedOrders = [...orders];
+         const newFetchedUserIds = { ...fetchedUserIds };
 
-            const userResponse = await fetch(
-               `${HOST}/api/v1/users/${userId}`,
-               {
-                  headers: { Authorization: `Bearer ${token}` },
-               }
-            );
+         // Tạo mảng promises cho tất cả API calls
+         const userPromises = uniqueUserIds.map(async (userId) => {
+            try {
+               // Đánh dấu user_id này đã được xử lý
+               newFetchedUserIds[userId] = true;
 
-            // Xử lý response và return thông tin người dùng
-            if (userResponse.ok) {
-               const contentType = userResponse.headers.get('content-type');
-               if (contentType && contentType.includes('application/json')) {
-                  const text = await userResponse.text();
-                  if (text && text.trim()) {
-                     try {
-                        return { userId, userData: JSON.parse(text) };
-                     } catch (jsonError) {
-                        console.error(`Invalid JSON for user ID ${userId}:`, jsonError);
+               const userResponse = await fetch(
+                  `${HOST}/api/v1/users/${userId}`,
+                  {
+                     headers: { Authorization: `Bearer ${token}` },
+                  }
+               );
+
+               console.log(`User response status for ID ${userId}:`, userResponse.status);
+               // Xử lý response và return thông tin người dùng
+               if (userResponse.ok) {
+                  const contentType = userResponse.headers.get('content-type');
+                  if (contentType && contentType.includes('application/json')) {
+                     const text = await userResponse.text();
+                     if (text && text.trim()) {
+                        try {
+                           return { userId, userData: JSON.parse(text) };
+                        } catch (jsonError) {
+                           console.error(`Invalid JSON for user ID ${userId}:`, jsonError);
+                        }
                      }
                   }
                }
+
+               // Return null nếu có lỗi
+               return { userId, userData: null };
+            } catch (error) {
+               console.error(`Failed to fetch user info for user ID ${userId}:`, error);
+               return { userId, userData: null };
+            }
+         });
+
+         // Đợi tất cả promises hoàn thành
+         const results = await Promise.all(userPromises);
+
+         // Cập nhật thông tin người dùng vào orders
+         results.forEach(({ userId, userData }) => {
+            // Bỏ qua nếu không có userData
+            if (!userData) {
+               // Cung cấp dữ liệu fallback
+               updatedOrders.forEach(order => {
+                  if (order.user_id === userId) {
+                     order.user = {
+                        id: userId,
+                        name: `Khách hàng #${userId}`,
+                        phone: 'Không có SĐT',
+                        email: 'Không có email',
+                     };
+                     hasUpdates = true;
+                  }
+               });
+               return;
             }
 
-            // Return null nếu có lỗi
-            return { userId, userData: null };
-         } catch (error) {
-            console.error(`Failed to fetch user info for user ID ${userId}:`, error);
-            return { userId, userData: null };
-         }
-      });
-
-      // Đợi tất cả promises hoàn thành
-      const results = await Promise.all(userPromises);
-
-      // Cập nhật thông tin người dùng vào orders
-      results.forEach(({ userId, userData }) => {
-         // Bỏ qua nếu không có userData
-         if (!userData) {
-            // Cung cấp dữ liệu fallback
+            // Cập nhật thông tin user cho tất cả orders phù hợp
             updatedOrders.forEach(order => {
                if (order.user_id === userId) {
                   order.user = {
-                     id: userId,
-                     name: `Khách hàng #${userId}`,
-                     phone: 'Không có SĐT',
-                     email: 'Không có email',
+                     id: userData.id,
+                     name: userData.firstName && userData.lastName
+                        ? `${userData.firstName} ${userData.lastName}`
+                        : userData.firstName || userData.lastName || 'Không có tên',
+                     phone: userData.phone ? userData.phone.toString() : 'Không có SĐT',
+                     email: userData.email || 'Không có email',
                   };
                   hasUpdates = true;
                }
             });
-            return;
-         }
+         });
 
-         // Cập nhật thông tin user cho tất cả orders phù hợp
-         updatedOrders.forEach(order => {
-            if (order.user_id === userId) {
-               order.user = {
-                  id: userData.id,
-                  name: userData.firstName && userData.lastName
-                     ? `${userData.firstName} ${userData.lastName}`
-                     : userData.firstName || userData.lastName || 'Không có tên',
-                  phone: userData.phone ? userData.phone.toString() : 'Không có SĐT',
-                  email: userData.email || 'Không có email',
+         if (hasUpdates) {
+            setOrders(updatedOrders);
+            setFetchedUserIds(newFetchedUserIds);
+
+            // Filter orders by valid statuses before mapping to completedOrders
+            const filtered = updatedOrders.filter(order => isRevenueCountableStatus(order.status));
+
+            const mappedOrders = filtered.map((order) => {
+               // Format date for display
+               const date = new Date(order.createdAt);
+               const formattedDate = `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getFullYear()}`;
+
+               return {
+                  id: order.id,
+                  orderId: order.order_code,
+                  customer: order.user?.name || `Khách hàng #${order.user_id}`,
+                  address: order.address,
+                  quantity: order.total_quantity,
+                  shippingFee: parseInt(order.ship_price),
+                  total: parseInt(order.total_price),
+                  status: order.status,
+                  date: formattedDate,
                };
-               hasUpdates = true;
-            }
-         });
-      });
+            });
 
-      if (hasUpdates) {
-         setOrders(updatedOrders);
-         setFetchedUserIds(newFetchedUserIds);
-
-         // Filter orders by valid statuses before mapping to completedOrders
-         const filtered = updatedOrders.filter(order => isRevenueCountableStatus(order.status));
-
-         const mappedOrders = filtered.map((order) => {
-            // Format date for display
-            const date = new Date(order.createdAt);
-            const formattedDate = `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getFullYear()}`;
-
-            return {
-               id: order.id,
-               orderId: order.order_code,
-               customer: order.user?.name || `Khách hàng #${order.user_id}`,
-               address: order.address,
-               quantity: order.total_quantity,
-               shippingFee: parseInt(order.ship_price),
-               total: parseInt(order.total_price),
-               status: order.status,
-               date: formattedDate,
-            };
-         });
-
-         setCompletedOrders(mappedOrders);
+            setCompletedOrders(mappedOrders);
+         }
+      } catch (error) {
+         console.error("Error in fetchUserData:", error);
+         setOrdersLoading(false); // Đảm bảo kết thúc trạng thái loading khi có lỗi
+      } finally {
+         setOrdersLoading(false); // Kết thúc tải
       }
    }, [fetchedUserIds]);
 
@@ -1480,6 +1288,67 @@ export default function FinancePage() {
       });
    }, [statsData, timeFilter, timeValue, year, startDate, endDate]);
 
+   // Sửa hàm fetchStatisticsData để tránh fetch không cần thiết
+   const fetchStatisticsData = useCallback(async (signal?: AbortSignal | null) => {
+      try {
+         console.log("Fetching statistics data...");
+
+         // Không nên kiểm tra loading state ở đây nữa
+         // if (loading) return;
+
+         // Đã gọi setLoading(true) ở đây trước
+         setLoading(true);
+
+         // Use different endpoint for custom date ranges
+         let response;
+         const fetchOptions = signal ? { signal } : undefined;
+
+         if (timeFilter === 'custom') {
+            const formattedStartDate = startDate.toISOString().split('T')[0];
+            const formattedEndDate = endDate.toISOString().split('T')[0];
+            response = await fetch(
+               `${HOST}/api/orders/statistics/date-to-date?startDate=${formattedStartDate}&endDate=${formattedEndDate}`,
+               fetchOptions
+            );
+         } else {
+            // Use the regular endpoint for standard time filters
+            response = await fetch(
+               `${HOST}/api/orders/statistics?timeFilter=${timeFilter}&timeValue=${timeValue}&year=${year}`,
+               fetchOptions
+            );
+         }
+
+         if (!response.ok) {
+            throw new Error('Failed to fetch statistics data');
+         }
+
+         const data = await response.json();
+         console.log("Statistics data received:", data);
+
+         // Cập nhật dữ liệu thống kê
+         const statsData = {
+            totalRevenue: data.totalRevenue || 0,
+            totalOrderValue: data.totalOrderValue || 0,
+            totalShippingFee: data.totalShippingFee || 0,
+            totalOrders: data.totalOrders || 0
+         };
+
+         setStatsData(statsData);
+
+         // Đảm bảo animation được kích hoạt sau khi có dữ liệu
+         setAnimateStats(false);
+         setTimeout(() => setAnimateStats(true), 100);
+
+         // Cập nhật biểu đồ
+         updateCurrentPeriodChart(statsData);
+
+         return data;  // Return data for chaining
+      } catch (error) {
+         console.error('Error fetching statistics data:', error);
+      } finally {
+         setLoading(false);
+      }
+   }, [timeFilter, timeValue, year, startDate, endDate, updateCurrentPeriodChart]);
    // Add this function for updating historical chart
    const updateHistoricalChart = (data?: Array<{
       timeValue: number;
@@ -1848,49 +1717,35 @@ export default function FinancePage() {
       }
    }, [orders, fetchProductsInfo]);
 
-   const [userDataProcessed, setUserDataProcessed] = useState(false);
-   const [productsInfoProcessed, setProductsInfoProcessed] = useState(false);
+   // Replace your existing refs with these clearer ones
+   const hasProcessedUserData = useRef(false);
+   const hasProcessedProductInfo = useRef(false);
+   const productAnalysisCompleted = useRef(false); // Add this ref
 
+   // Then update these effects
    useEffect(() => {
-      if (orders.length > 0 && !userDataProcessed) {
+      if (orders.length > 0 && !hasProcessedUserData.current) {
+         hasProcessedUserData.current = true;
          fetchUserData(orders);
-         setUserDataProcessed(true);
       }
-   }, [orders, fetchUserData, userDataProcessed]);
+   }, [orders, fetchUserData]);
 
    useEffect(() => {
-      if (orders.length > 0 && !productsInfoProcessed) {
-         fetchProductsInfo();
-         setProductsInfoProcessed(true);
-      }
-   }, [orders, fetchProductsInfo, productsInfoProcessed]);
-   const productsProcessedRef = useRef(false);
-
-   useEffect(() => {
-      if (orders.length > 0 && !productsProcessedRef.current) {
-         productsProcessedRef.current = true;
+      if (orders.length > 0 && !hasProcessedProductInfo.current &&
+         Object.keys(productsInfo).length === 0) {
+         hasProcessedProductInfo.current = true;
          fetchProductsInfo();
       }
-   }, [orders.length, fetchProductsInfo]);
+   }, [orders, fetchProductsInfo, productsInfo]);
 
+   // Reset refs when orders change significantly
    useEffect(() => {
-      if (Object.keys(productsInfo).length > 0 && orders.length > 0) {
-         analyzeProductGroups();
+      if (orders.length > 0) {
+         hasProcessedUserData.current = false;
+         hasProcessedProductInfo.current = false;
+         productAnalysisCompleted.current = false;
       }
-   }, [productsInfo, orders.length, analyzeProductGroups]);
-
-   // Add this at the component top level
-   const prevPeriodFetchedRef = useRef(false);
-
-   // Replace with this
-   useEffect(() => {
-      if (statsData.totalRevenue !== 0 &&
-         chartView === 'current' &&
-         !prevPeriodFetchedRef.current) {
-         prevPeriodFetchedRef.current = true;
-         fetchPreviousPeriodData();
-      }
-   }, [statsData.totalRevenue, chartView, fetchPreviousPeriodData]);
+   }, [orders.length]);
 
    // Reset the prevention flag when key inputs change
    useEffect(() => {
@@ -1901,6 +1756,87 @@ export default function FinancePage() {
    useEffect(() => {
       setupChartOptions();
    }, [chartView, timeFilter, timeValue, year]);
+
+   // Add this effect for initial data loading when component mounts
+   useEffect(() => {
+      const abortController = new AbortController();
+
+      async function fetchInitialData() {
+         try {
+            setLoading(true);
+            setOrdersLoading(true); // Thêm dòng này
+            console.log("Starting initial data load");
+
+            // First fetch orders
+            await fetchOrdersData(abortController.signal);
+
+            // Ngay sau khi có orders, gọi fetchUserData để tạo completedOrders
+            if (orders.length > 0) {
+               await fetchUserData(orders);
+            }
+
+            // After orders are loaded, fetch stats 
+            await fetchStatisticsData(null); // Đảm bảo không dùng signal ở đây để tránh lỗi
+
+            // Force fetch previous period data for comparison
+            await fetchPreviousPeriodData();
+
+            // Reset animation để tái kích hoạt
+            setAnimateStats(false);
+            setTimeout(() => setAnimateStats(true), 200);
+
+            // Then fetch other data
+            fetchNewCustomers();
+
+            // Reset our tracking refs to ensure analysis happens
+            hasProcessedUserData.current = false;
+            hasProcessedProductInfo.current = false;
+            productAnalysisCompleted.current = false;
+
+         } catch (error) {
+            if (!abortController.signal.aborted) {
+               console.error("Error loading initial data:", error);
+            }
+         } finally {
+            setLoading(false);
+            setOrdersLoading(false); // Thêm dòng này
+         }
+      }
+
+      fetchInitialData();
+
+      // Cleanup function
+      return () => {
+         abortController.abort();
+      };
+   }, []);
+
+   // Add this effect for product analysis
+   useEffect(() => {
+      if (Object.keys(productsInfo).length > 0 && orders.length > 0 &&
+         !productAnalysisCompleted.current) {
+         productAnalysisCompleted.current = true;
+         analyzeProductGroups();
+      }
+   }, [productsInfo, orders.length, analyzeProductGroups]);
+
+   // Add logging to check data flow
+   useEffect(() => {
+      console.log("Product Groups Updated:", Object.keys(productGroups).length);
+   }, [productGroups]);
+
+   // Thêm effect này để đảm bảo dữ liệu đơn hàng được tải khi chọn tab orders
+   useEffect(() => {
+      if (currentTab === 'orders' && orders.length > 0 && completedOrders.length === 0) {
+         console.log("Đang tải dữ liệu đơn hàng cho tab Orders");
+
+         // Reset flag để đảm bảo fetchUserData được gọi
+         hasProcessedUserData.current = false;
+
+         // Gọi trực tiếp fetchUserData để lấy dữ liệu
+         fetchUserData(orders);
+      }
+   }, [currentTab, orders, completedOrders.length, fetchUserData]);
 
    return (
       <div className='flex h-screen bg-gray-50'>
@@ -2028,8 +1964,7 @@ export default function FinancePage() {
                                  {stats.map((stat, index) => (
                                     <div
                                        key={stat.id}
-                                       className={`p-5 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-all duration-300 ${stat.bg
-                                          } ${animateStats ? 'animate-fade-in' : 'opacity-0'} relative group`}
+                                       className={`p-5 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-all duration-300 ${stat.bg} ${animateStats ? 'opacity-100' : 'opacity-0'} animate-fade-in relative group`}
                                        style={{ animationDelay: `${index * 100}ms` }}
                                     >
                                        <div className='flex items-center mb-3 justify-between'>
